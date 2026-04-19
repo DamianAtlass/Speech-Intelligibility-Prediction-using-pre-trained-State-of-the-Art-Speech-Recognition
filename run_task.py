@@ -1,7 +1,7 @@
 import sys
 from utils.config_dataclasses import get_config
 from pathlib import Path
-from utils.grid_utils import get_grid
+from utils.grid_utils import get_grid, apply_split
 
 
 def main():
@@ -13,5 +13,7 @@ if __name__ == '__main__':
     config = get_config("tmp_config.ini")
 
     cwd = Path.cwd()
-    grid = get_grid()
+    dataset = get_grid()
+    dataset = apply_split(dataset, config)
+
     print()

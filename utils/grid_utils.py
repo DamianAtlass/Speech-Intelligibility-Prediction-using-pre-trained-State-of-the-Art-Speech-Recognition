@@ -5,6 +5,8 @@ from shutil import rmtree
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
 
+from utils.config_dataclasses import Config
+
 SAMPLE_RATE = 16000
 import wave
 import tqdm
@@ -15,7 +17,7 @@ SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
 
 def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid"):
     try:
-        return load_from_disk(dataset_directory/"saved_datasetdict")
+        return load_from_disk(dataset_directory/"saved_dataset")
 
     except FileNotFoundError:
         try:
@@ -84,7 +86,7 @@ def get_sample_rate_of_mp3(file_path : str) -> float:
     with wave.open(file_path, "rb") as wave_file:
         return wave_file.getframerate()
 
-def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> DatasetDict:
+def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Dataset:
     print("Parse and save GRID.")
     download_folder = "downloaded_grid_files"
     align_folder = grid_folder / download_folder / "align"
@@ -129,22 +131,23 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
     dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=SAMPLE_RATE))
 
-    dataset = dataset.train_test_split(test_size=0.3, seed=0)
-    temp = dataset["test"].train_test_split(test_size=0.5, seed=0)
+    assert len(dataset) == SAMPLES_PER_SPEAKER * 34
+
+    data_path = grid_folder/"saved_dataset"
+    dataset.save_to_disk(data_path)
+
+    return dataset
+
+def apply_split(dataset : Dataset = None, config: Config = None) -> DatasetDict:
+    dataset = dataset.train_test_split(test_size=1-config.train_split, seed=0)
+    temp = dataset["test"].train_test_split(test_size=config.test_split/(1-config.train_split), seed=0)
 
     dataset_dict = DatasetDict({
         "train": dataset["train"],
         "test": temp["test"],
         "val": temp["train"],
     })
-
-    assert len(dataset_dict["train"]) + len(dataset_dict["test"]) + len(dataset_dict["val"]) == SAMPLES_PER_SPEAKER * 34, "Unexpected number of samples" #todo different splits
-
-    data_path = grid_folder/"saved_datasetdict"
-    dataset_dict.save_to_disk(data_path)
-
     return dataset_dict
-
 
 def main():
     get_grid(Path.cwd().parent/"datasets"/"grid")

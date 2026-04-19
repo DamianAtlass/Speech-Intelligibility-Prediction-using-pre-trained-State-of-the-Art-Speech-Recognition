@@ -5,6 +5,9 @@ from typing import Union
 @dataclass(frozen=True, kw_only=True)
 class Config:
     dataset_path: str
+    train_split: float
+    test_split: float
+    val_split: float = None
 
 @dataclass(frozen=True, kw_only=True)
 class TrainingConfig(Config):
@@ -12,6 +15,9 @@ class TrainingConfig(Config):
 
     def __post_init__(self):
         object.__setattr__(self, "epochs", int(self.epochs))
+        object.__setattr__(self, "train_split", float(self.train_split))
+        object.__setattr__(self, "test_split", float(self.test_split))
+        object.__setattr__(self, "val_split", float(self.val_split) if self.val_split else None)
 
 def get_config(path: str = None) -> Union[TrainingConfig, ...]:
     config_parser = configparser.RawConfigParser()
