@@ -19,22 +19,22 @@ def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid"):
 
     except FileNotFoundError:
         try:
-            return parse_and_save_grid()
+            return parse_and_save_grid(dataset_directory)
         except FileNotFoundError:
-            download_grid()
-            return parse_and_save_grid()
+            download_grid(dataset_directory)
+            return parse_and_save_grid(dataset_directory)
 
 
 def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> None:
     # Create directories
-    parent = Path(dataset_directory, "downloaded_grid_files")
+    download_folder = Path(dataset_directory, "downloaded_grid_files")
 
     #os.makedirs(Path(*parent, "/raw/audio"), exist_ok=True)
-    (parent/"raw"/"audio").mkdir(exist_ok=True, parents=True)
-    (parent/"raw"/"align").mkdir(exist_ok=True, parents=True)
+    (download_folder/"raw"/"audio").mkdir(exist_ok=True, parents=True)
+    (download_folder/"raw"/"align").mkdir(exist_ok=True, parents=True)
 
-    (parent/"audio").mkdir(exist_ok=True, parents=True)
-    (parent/"align").mkdir(exist_ok=True, parents=True)
+    (download_folder/"audio").mkdir(exist_ok=True, parents=True)
+    (download_folder/"align").mkdir(exist_ok=True, parents=True)
 
     extract_files = "y"
 
@@ -43,18 +43,18 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
 
         # Download audio files
         subprocess.run(["curl", f"https://spandh.dcs.shef.ac.uk/gridcorpus/s{i}/audio/s{i}.tar", "-o",
-                        (parent/"raw"/"audio"/f"s{i}.tar")])
+                        (download_folder/"raw"/"audio"/f"s{i}.tar")])
         subprocess.run(["curl", f"https://spandh.dcs.shef.ac.uk/gridcorpus/s{i}/align/s{i}.tar", "-o",
-                        (parent/"raw"/"align"/f"s{i}.tar")])
+                        (download_folder/"raw"/"align"/f"s{i}.tar")])
 
         # Extract files if requested
         if extract_files.lower() == "y":
-            with tarfile.open((parent/"raw"/"audio"/f"s{i}.tar"), 'r') as tar_ref:
-                tar_ref.extractall((parent/"audio"/f"s{i}"))
-            with tarfile.open((parent/"raw"/"align"/f"s{i}.tar"), 'r') as tar_ref:
-                tar_ref.extractall((parent/"align"/f"s{i}"))
+            with tarfile.open((download_folder/"raw"/"audio"/f"s{i}.tar"), 'r') as tar_ref:
+                tar_ref.extractall((download_folder/"audio"/f"s{i}"))
+            with tarfile.open((download_folder/"raw"/"align"/f"s{i}.tar"), 'r') as tar_ref:
+                tar_ref.extractall((download_folder/"align"/f"s{i}"))
 
-    rmtree((parent/"raw"))
+    rmtree((download_folder/"raw"))
 
     print("Download completed.")
 
@@ -85,6 +85,7 @@ def get_sample_rate_of_mp3(file_path : str) -> float:
         return wave_file.getframerate()
 
 def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> DatasetDict:
+    print("Parse and save GRID.")
     download_folder = "downloaded_grid_files"
     align_folder = grid_folder / download_folder / "align"
     audio_folder = grid_folder / download_folder / "audio"
@@ -139,14 +140,14 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
     assert len(dataset_dict["train"]) + len(dataset_dict["test"]) + len(dataset_dict["val"]) == SAMPLES_PER_SPEAKER * 34, "Unexpected number of samples" #todo different splits
 
-    data_path = Path.cwd()/"datasets"/"grid"/"saved_datasetdict"
+    data_path = grid_folder/"saved_datasetdict"
     dataset_dict.save_to_disk(data_path)
 
     return dataset_dict
 
 
 def main():
-    pass
+    get_grid(Path.cwd().parent/"datasets"/"grid")
 
 if __name__ == '__main__':
     main()
