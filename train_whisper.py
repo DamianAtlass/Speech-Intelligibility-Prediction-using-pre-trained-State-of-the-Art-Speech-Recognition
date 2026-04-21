@@ -41,18 +41,22 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 
 def train_whisper(config: TrainingConfig, dataset: DatasetDict):
-    model_type = config.model_type
+    #model_type = config.model
+    full_model_name = f"{config.model}-{config.model_type}"
     #output_dir = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
 
-    if model_type.split("-")[1] not in available_models():
+    if config.model != "whisper":
+        raise ValueError("Wrong model.")
+
+    if config.model_type not in available_models():
         raise ValueError("That is not an available model!")
 
-    feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{model_type}")
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{full_model_name}")
 
-    lang_for_tokenizer = None if "en" in model_type else "English"
-    tokenizer = WhisperTokenizer.from_pretrained(f"openai/{model_type}", language=lang_for_tokenizer, task="transcribe")
+    lang_for_tokenizer = None if "en" in config.model_type else "English"
+    tokenizer = WhisperTokenizer.from_pretrained(f"openai/{full_model_name}", language=lang_for_tokenizer, task="transcribe")
 
-    processor = WhisperProcessor.from_pretrained(f"openai/{model_type}", language="English", task="transcribe")
+    processor = WhisperProcessor.from_pretrained(f"openai/{full_model_name}", language="English", task="transcribe")
 
     #dataset = dataset.cast_column("audio", Audio(sampling_rate=16000)) pretty sure thats not needed, see parsing
 
@@ -72,7 +76,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict):
                           load_from_cache_file=True
                           )  # set cache to false for debugging
 
-    model = WhisperForConditionalGeneration.from_pretrained(f"openai/{model_type}")
+    model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}")
     model.generation_config.language = "english"
     model.generation_config.task = "transcribe"
 
