@@ -1,2 +1,4 @@
 /datasets/
 /.idea/
+/trained_models/
+/inferences/
