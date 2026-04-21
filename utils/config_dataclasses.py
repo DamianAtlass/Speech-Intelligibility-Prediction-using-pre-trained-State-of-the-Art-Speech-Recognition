@@ -48,8 +48,13 @@ class TrainingConfig(Config):
 
 @dataclass(frozen=True, kw_only=True)
 class InferenceConfig(Config):
+    extract_logits: bool = True
+    word_timestamps: bool = True
+
     def __post_init__(self):
         super().__post_init__()
+        object.__setattr__(self, "extract_logits", self.extract_logits == "True")
+        object.__setattr__(self, "word_timestamps", self.word_timestamps == "True")
 
 def get_config(path: str) -> TrainingConfig | InferenceConfig:
     config_parser = configparser.RawConfigParser()

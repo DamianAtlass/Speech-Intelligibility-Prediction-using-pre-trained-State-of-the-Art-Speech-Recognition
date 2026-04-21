@@ -1,5 +1,13 @@
 print("Import libraries...")
 import sys
+
+try:
+    import sip_whisper
+except ModuleNotFoundError as e:
+    print(e)
+    print("sip_whisper module not found, please install it! (see readme.md)")
+    sys.exit(1)
+
 from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig
 from pathlib import Path
 from utils.grid_utils import get_grid, apply_split

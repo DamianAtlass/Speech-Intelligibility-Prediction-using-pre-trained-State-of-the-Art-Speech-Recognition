@@ -1,10 +1,11 @@
-import whisper as whisper
+import whisper
+import sip_whisper
 import re
 import torch
 import os
 from safetensors.torch import load_file
 from pathlib import Path
-from typing import Union
+from utils.config_dataclasses import InferenceConfig
 
 WHISPER_OPENAI_MODEL_NAME = "whisper_openai_format.pt"
 
@@ -67,30 +68,38 @@ def convert_hf_model_to_openai_whisper(
         "model_state_dict": hf_state_dict
     }, hf_checkpoint_file_path/safe_file)
 
-def load_whisper_from_hf_checkpoint(path_to_checkpoint : Path, model_type: str = None):
+def load_whisper_from_hf_checkpoint(config: InferenceConfig):
+    model_type = config.model_type
     if model_type is None:
-        type_list = [s for s in whisper.available_models() if s in path_to_checkpoint]
+        type_list = [s for s in whisper.available_models() if s in config.model_path]
 
         if len(type_list) == 0:
-            raise ValueError(f"Can't derive model type/size from path, no keyword: {path_to_checkpoint}")
+            raise ValueError(f"Can't derive model type/size from path, no keyword: {config.model_path}")
         else:
             model_type = type_list[0]
 
-    if not (path_to_checkpoint/WHISPER_OPENAI_MODEL_NAME).is_file():
-        convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=path_to_checkpoint, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
+    if not (config.model_path/WHISPER_OPENAI_MODEL_NAME).is_file():
+        convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=config.model_path, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
 
-    model = whisper.load_model(str(path_to_checkpoint/WHISPER_OPENAI_MODEL_NAME))
-    model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type]) # see last line of whisper/__init__.load_model()
+    if config.extract_logits:
+        model = sip_whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
+    else:
+        model = whisper.load_model(str(config.model_path / WHISPER_OPENAI_MODEL_NAME))
 
-    if not isinstance(model, whisper.model.Whisper):
-        raise ValueError(f"Loading the model from {path_to_checkpoint} wasn't successful!")
+    model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
+
+    if not isinstance(model, sip_whisper.model.Whisper if config.extract_logits else whisper.model.Whisper):
+        raise ValueError(f"Loading the model from {config.model_path} wasn't successful!")
     return model
 
-def load_whisper_model(model_type_or_path: Union[Path, str], explicit_model_type: str = None):
-    if model_type_or_path in whisper.available_models():
-        return whisper.load_model(model_type_or_path)
+def load_whisper_model(config: InferenceConfig):
+    if not config.model_path:
+        if config.extract_logits:
+            return sip_whisper.load_model(config.model_type)
+        else:
+            return whisper.load_model(config.model_type)
     else:
-        return load_whisper_from_hf_checkpoint(model_type_or_path, model_type=explicit_model_type)
+        return load_whisper_from_hf_checkpoint(config)
 
 
 
