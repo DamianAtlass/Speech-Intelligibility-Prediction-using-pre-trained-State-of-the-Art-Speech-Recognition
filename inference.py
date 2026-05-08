@@ -24,9 +24,9 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset) -> No
         # results will not be equal (therefore not deterministic) if temperature=!0.0
         #  https://github.com/openai/whisper/discussions/81
         if config.extract_logits:
-            result: dict = sip_whisper.transcribe(model, audio_array, fp16=False, beam_size=5, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
+            result: dict = sip_whisper.transcribe(model, audio_array, fp16=False, beam_size=config.beam_size, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
         else:
-            result: dict = whisper.transcribe(model, audio_array, fp16=False, beam_size=5, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
+            result: dict = whisper.transcribe(model, audio_array, fp16=False, beam_size=config.beam_size, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
 
         audio_path = Path(sample["audio_path"])
         file_name = f"{audio_path.parent.stem}_{audio_path.stem}"
@@ -42,6 +42,8 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset) -> No
         file_path = config.output_dir / "data" / f"{file_name}.json"
         with open(file_path, 'w') as f:
             json.dump(sample_dict, f, indent=4)
+
+        break
 
 def inference(config: InferenceConfig, dataset: DatasetDict):
     model = load_whisper_model(config)
