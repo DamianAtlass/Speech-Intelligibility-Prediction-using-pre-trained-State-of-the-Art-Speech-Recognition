@@ -49,7 +49,21 @@ class Config:
             '',
         ]
 
-        save_to_file(self, path, printing_template)
+        if path.exists():
+            raise FileExistsError(f"Config file already exists! \nPath: {path}")
+
+        save_to_file(self, path, printing_template, len(fields(Config)) )
+
+    def get_list_fields(self) -> list[str]:
+        """
+        Returns fields, which are given multiple values.
+        """
+
+        fields_with_lists = []
+        for field in fields(self):
+            if isinstance(getattr(self, field.name), list):
+                fields_with_lists.append(field.name)
+        return fields_with_lists
 
 @dataclass(kw_only=True)
 class TrainingConfig(Config):
@@ -65,12 +79,24 @@ class TrainingConfig(Config):
         self.warmup_steps = int(self.warmup_steps)
         self.perform_training = self.perform_training=="True"
 
+    def save_to_file(self, path: Path) -> None:
+        super().save_to_file(path)
+
+        printing_template = [
+            '[TrainingConfig]',
+            'perform_training',
+            'learning_rate',
+            'num_train_epochs',
+            'warmup_steps',
+        ]
+
+        save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config) ))
+
 @dataclass(kw_only=True)
 class InferenceConfig(Config):
     extract_logits: bool = True
     word_timestamps: bool = True
     beam_size: int | list[int] = 5
-    value: int | list[int] = 5
 
 
     def __post_init__(self):
@@ -83,11 +109,6 @@ class InferenceConfig(Config):
         else:
             self.beam_size = int(self.beam_size)
 
-        if "," in self.value:
-            self.value = list(map(int, self.value.split(",")))
-        else:
-            self.value = int(self.value)
-
     def save_to_file(self, path: Path) -> None:
         super().save_to_file(path)
 
@@ -95,11 +116,12 @@ class InferenceConfig(Config):
             '[InferenceConfig]',
             'extract_logits',
             'word_timestamps',
+            'beam_size',
         ]
 
-        save_to_file(self, path, printing_template)
+        save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config)) )
 
-def get_config(path: str) -> TrainingConfig | InferenceConfig:
+def get_config(path: Path) -> TrainingConfig | InferenceConfig:
     config_parser = configparser.RawConfigParser()
     # configParser.optionxform = str  # preserve original case
     config_parser.read(path)
@@ -115,19 +137,31 @@ def get_config(path: str) -> TrainingConfig | InferenceConfig:
 
     raise ValueError("Not a valid config file!")
 
-def save_to_file(config: Config | TrainingConfig | InferenceConfig, path: Path, printing_template: list[str]) -> None:
+def save_to_file(config: TrainingConfig | InferenceConfig,
+                 path: Path,
+                 printing_template: list[str],
+                 num_args_to_write: int) -> None:
 
-    #if not set(f.name for f in fields(type(config))).issubset(set(printing_template)):
-    #    raise NotImplementedError("You probably forgot to add some values here!")
-
+    value_counter = 0
     with open(path, "a") as f:
-        for line in printing_template:
-            if line == "":
-                f.write("\n")
-            elif any(word in line for word in ["[", "#"]):
-                f.write(line + "\n")
+
+        for entry in printing_template:
+            if entry == "":
+                line = "\n"
+            elif any(word in entry for word in ["[", "#"]):
+                line = entry + "\n"
             else:
-                f.write(f"{line} = {getattr(config, line)}" + "\n")
+                if isinstance(getattr(config, entry), list):
+                    value = str(getattr(config, entry))[1:-1]
+                else:
+                    value = getattr(config, entry)
+
+                line = f"{entry} = {value}" + "\n"
+                value_counter = value_counter + 1
+
+            f.write(line)
+
+    assert num_args_to_write == value_counter, "Wrong number of arguments written to config file!"
 
 if __name__ == '__main__':
     pass
