@@ -10,7 +10,7 @@ class Config:
     model_type: str
     model_path: Path = None
 
-    output_dir: Path
+    output_path: Path
 
     dataset_path: Path
     train_split: float
@@ -27,7 +27,7 @@ class Config:
         self.test_split = float(self.test_split)
         self.val_split = float(self.val_split) if self.val_split else None
         self.dataset_scaling = float(self.dataset_scaling)
-        self.output_dir = Path.cwd()/self.output_dir
+        self.output_path = Path.cwd()/self.output_path
         self.model_path = Path.cwd()/self.model_path if self.model_path else None
         self.debug = self.debug == "True"
 
@@ -37,7 +37,7 @@ class Config:
             'model',
             'model_type',
             'model_path',
-            'output_dir',
+            'output_path',
             '',
             'dataset_path',
             'train_split',
@@ -141,7 +141,7 @@ def get_config(path: Path) -> TrainingConfig | InferenceConfig:
 
     raise ValueError("Not a valid config file!")
 
-def save_to_file(config: TrainingConfig | InferenceConfig,
+def save_to_file(config: Config | TrainingConfig | InferenceConfig,
                  path: Path,
                  printing_template: list[str],
                  num_args_to_write: int) -> None:
@@ -155,10 +155,12 @@ def save_to_file(config: TrainingConfig | InferenceConfig,
             elif any(word in entry for word in ["[", "#"]):
                 line = entry + "\n"
             else:
-                if isinstance(getattr(config, entry), list):
-                    value = str(getattr(config, entry))[1:-1]
-                else:
-                    value = getattr(config, entry)
+                value = getattr(config, entry)
+                if isinstance(value, list):
+                    value = str(value)[1:-1]
+                elif "path" in entry:
+                    value = Path(value).relative_to(Path.cwd()) if value else ""
+
 
                 line = f"{entry} = {value}" + "\n"
                 value_counter = value_counter + 1
