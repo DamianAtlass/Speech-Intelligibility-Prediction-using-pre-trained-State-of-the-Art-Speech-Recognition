@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, fields
 import configparser
 from typing import Union
@@ -50,7 +51,10 @@ class Config:
         ]
 
         if path.exists():
-            raise FileExistsError(f"Config file already exists! \nPath: {path}")
+            if self.debug:
+                os.remove(path)
+            else:
+                raise FileExistsError(f"Config file already exists! \nPath: {path}")
 
         save_to_file(self, path, printing_template, len(fields(Config)) )
 

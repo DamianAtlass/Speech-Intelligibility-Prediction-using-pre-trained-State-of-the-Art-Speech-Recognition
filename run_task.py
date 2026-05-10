@@ -32,7 +32,7 @@ def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
         level=logging.INFO, #dont set to DEBUG
         format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
         handlers=[
-            logging.FileHandler(config.output_dir / "logfile.log", mode='w'),
+            logging.FileHandler(config.output_path / "logfile.log", mode='w'),
             #logging.StreamHandler(sys.stdout)
         ]
     )
@@ -56,8 +56,8 @@ def main():
     config_path = Path(Path.cwd()/"tmp_training_config.ini")
     config = get_config(config_path)
 
-    Path.mkdir(config.output_dir.parent, exist_ok=True)
-    Path.mkdir(config.output_dir, exist_ok=config.debug)
+    Path.mkdir(config.output_path.parent, exist_ok=True)
+    Path.mkdir(config.output_path, exist_ok=config.debug)
 
     logger = create_logger(config)
 
@@ -74,17 +74,17 @@ def main():
             setattr(updated_config, field, value)
             name_tail.append(f"{field}_{value}")
 
-        updated_config.output_dir = Path(updated_config.output_dir) / "_".join(name_tail)
+        updated_config.output_path = Path(updated_config.output_path) / "_".join(name_tail)
         configs.append(updated_config)
 
 
     if len(configs) > 1:
-        copyfile(Path.cwd()/config_path, config.output_dir/"config.ini")
+        copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
 
     for current_config in configs:
-        logger.info(f"Execute new task, save to {config.output_dir.relative_to(Path.cwd())}")
-        Path.mkdir(current_config.output_dir, exist_ok=current_config.debug)
-        current_config.save_to_file(current_config.output_dir/"config.ini")
+        logger.info(f"Execute new task, save to {config.output_path.relative_to(Path.cwd())}")
+        Path.mkdir(current_config.output_path, exist_ok=current_config.debug)
+        current_config.save_to_file(current_config.output_path/"config.ini")
 
         dataset = get_grid()
         dataset = apply_split(dataset, current_config)

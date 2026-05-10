@@ -12,8 +12,8 @@ from pathlib import Path
 def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset) -> None:
 
     if config.extract_logits:
-        (config.output_dir/"logits").mkdir(exist_ok=config.debug)
-    (config.output_dir / "data").mkdir(exist_ok=config.debug)
+        (config.output_path/"logits").mkdir(exist_ok=config.debug)
+    (config.output_path / "data").mkdir(exist_ok=config.debug)
 
     for sample in tqdm.tqdm(dataset):
 
@@ -33,13 +33,13 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset) -> No
 
         if config.extract_logits:
             extracted_logprobs = result.pop("extracted_logprobs")
-            file_path = config.output_dir/"logits"/f"{file_name}.pt"
+            file_path = config.output_path/"logits"/f"{file_name}.pt"
             torch.save(extracted_logprobs, file_path)
 
             result["logprobs_path"] = str(file_path)
 
         sample_dict["result"] = result
-        file_path = config.output_dir / "data" / f"{file_name}.json"
+        file_path = config.output_path / "data" / f"{file_name}.json"
         with open(file_path, 'w') as f:
             json.dump(sample_dict, f, indent=4)
 

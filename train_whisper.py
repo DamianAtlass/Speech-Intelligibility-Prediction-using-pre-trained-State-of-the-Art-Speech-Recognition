@@ -43,7 +43,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 def train_whisper(config: TrainingConfig, dataset: DatasetDict):
     #model_type = config.model
     full_model_name = f"{config.model}-{config.model_type}"
-    #output_dir = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
+    #output_path = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
 
     if config.model != "whisper":
         raise ValueError("Wrong model.")
@@ -92,7 +92,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict):
     )
 
     training_args = Seq2SeqTrainingArguments(
-        output_dir=str(config.output_dir),
+        output_dir=str(config.output_path),
         per_device_train_batch_size=16,
         gradient_accumulation_steps=1,  # increase by 2x for every 2x decrease in batch size
         learning_rate=config.learning_rate,
@@ -144,7 +144,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict):
     if config.perform_training:
         trainer.train()
 
-    trainer.save_model(str(config.output_dir))
+    trainer.save_model(str(config.output_path))
 
 if __name__ == '__main__':
         train_whisper()
