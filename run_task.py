@@ -24,11 +24,6 @@ from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
 
-#logging
-import logging
-import sys
-
-
 print("Imports done!")
 
 def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
@@ -93,7 +88,9 @@ def main():
 
     for current_config in configs:
         logger.info(f"Execute new task, save to {config.output_path.relative_to(Path.cwd())}")
-        Path.mkdir(current_config.output_path, exist_ok=current_config.debug)
+        if len(configs) > 1:
+            Path.mkdir(current_config.output_path, exist_ok=config.debug)
+
         current_config.save_to_file(current_config.output_path/"config.ini")
 
         dataset = get_grid()
