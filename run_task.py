@@ -12,6 +12,11 @@ from shutil import copyfile
 import copy
 from itertools import product
 from pathlib import Path
+import argparse
+
+#logging
+import logging
+import sys
 
 # custom imports
 from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, Config
@@ -53,7 +58,12 @@ def main():
     if sys.version_info[0] < 3 and sys.version_info[1] < 12:
         raise Exception("Must be using Python 3.12 or later!")
 
-    config_path = Path(Path.cwd()/"tmp_training_config.ini")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', help="config file path")
+
+    if not (config_path:=parser.parse_args().f):
+        config_path = "tmp_inference_config.ini"
+
     config = get_config(config_path)
 
     Path.mkdir(config.output_path.parent, exist_ok=True)
