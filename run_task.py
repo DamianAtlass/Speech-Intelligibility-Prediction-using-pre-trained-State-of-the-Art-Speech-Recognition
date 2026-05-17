@@ -29,6 +29,10 @@ from utils.cuda_utils import manage_device
 print("Imports done!")
 
 def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
+    """
+    Create a logger. Needs to happen in this file!
+    config: InferenceConfig | TrainingConfig, contains output path
+    """
     # create logger
     logging.basicConfig(
         level=logging.INFO, #dont set to DEBUG
@@ -64,45 +68,45 @@ def main():
         config_path = "tmp_inference_config.ini"
 
     config = get_config(config_path)
-    logger = create_logger(config)
-
 
     Path.mkdir(config.output_path.parent, exist_ok=True)
     Path.mkdir(config.output_path, exist_ok=config.debug)
 
+    logger = create_logger(config)
+    logger.info("Logger instantiated")
 
     # check for fields that are lists, implying multiple tasks / group task
 
-        updated_config = copy.deepcopy(config)
-        name_tail = []
-        for field, value in zip(fields_with_lists, v):
-            setattr(updated_config, field, value)
-            name_tail.append(f"{field}_{value}")
-
-        updated_config.output_path = Path(updated_config.output_path) / "_".join(name_tail)
-        configs.append(updated_config)
-
+    logger.info("Unfold configs")
     configs = unfold_config(config)
 
     if len(configs) > 1:
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
 
-    manage_device(os.getenv("GPU_DEVICE"))
+    logger.info("Set devices")
+    device = manage_device(int(os.getenv("GPU_DEVICE")))
 
-    for current_config in configs:
-        logger.info(f"Execute new task, save to {config.output_path.relative_to(Path.cwd())}")
+    for i, current_config in enumerate(configs):
+        logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
         if len(configs) > 1:
             Path.mkdir(current_config.output_path, exist_ok=config.debug)
 
         current_config.save_to_file(current_config.output_path/"config.ini")
 
+        logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
         dataset = get_grid()
+
+        logger.info(f"Task: {i+1}/{len(configs)}, apply split")
         dataset = apply_split(dataset, current_config)
 
         if isinstance(current_config, TrainingConfig):
+            logger.info(f"Task: {i + 1}/{len(configs)}, enter training")
             train_whisper(current_config, dataset)
         if isinstance(current_config, InferenceConfig):
+            logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
             inference(current_config, dataset)
+
+    logger.info(f"All tasks are finished!")
 
 
 if __name__ == '__main__':
