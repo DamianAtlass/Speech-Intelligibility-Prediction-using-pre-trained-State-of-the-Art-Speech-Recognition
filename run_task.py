@@ -9,8 +9,7 @@ except ModuleNotFoundError as e:
     sys.exit(1)
 
 from shutil import copyfile
-import copy
-from itertools import product
+
 from pathlib import Path
 import argparse
 from dotenv import load_dotenv
@@ -21,7 +20,7 @@ import logging
 import sys
 
 # custom imports
-from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, Config
+from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, unfold_config
 from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
@@ -73,11 +72,6 @@ def main():
 
 
     # check for fields that are lists, implying multiple tasks / group task
-    fields_with_lists = config.get_list_fields()
-    configs: list[Config] = []
-
-    # make individual, independent configs files of the group file with lists as values
-    for v in product(*[getattr(config, field) for field in fields_with_lists]): #returns each possible combination of list fields
 
         updated_config = copy.deepcopy(config)
         name_tail = []
@@ -88,6 +82,7 @@ def main():
         updated_config.output_path = Path(updated_config.output_path) / "_".join(name_tail)
         configs.append(updated_config)
 
+    configs = unfold_config(config)
 
     if len(configs) > 1:
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")

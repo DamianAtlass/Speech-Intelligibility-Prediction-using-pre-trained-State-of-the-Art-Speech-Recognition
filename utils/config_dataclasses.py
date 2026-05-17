@@ -1,8 +1,9 @@
 import os
 from dataclasses import dataclass, fields
 import configparser
-from typing import Union
 from pathlib import Path
+import copy
+from itertools import product
 
 @dataclass(kw_only=True)
 class Config:
@@ -168,6 +169,33 @@ def save_to_file(config: Config | TrainingConfig | InferenceConfig,
             f.write(line)
 
     assert num_args_to_write == value_counter, "Wrong number of arguments written to config file!"
+
+def unfold_config(config: TrainingConfig | InferenceConfig) -> list[Config]:
+    """
+    If a config file has multiple values for specific parameters, this function will unfold them into multiple individual configs.
+    If it is a 'normal' config file, it should be returned as only object in the list.
+    config: TrainingConfig | InferenceConfig
+
+    Returns: list[Config], the list of individual configs
+    """
+
+    fields_with_lists = config.get_list_fields()
+    configs: list[Config] = []
+
+    # make individual, independent configs files of the group file with lists as values
+    for v in product(*[getattr(config, field) for field in
+                       fields_with_lists]):  # returns each possible combination of list fields
+
+        updated_config = copy.deepcopy(config)
+        name_tail = []
+        for field, value in zip(fields_with_lists, v):
+            setattr(updated_config, field, value)
+            name_tail.append(f"{field}_{value}")
+
+        updated_config.output_path = Path(updated_config.output_path) / "_".join(name_tail)
+        configs.append(updated_config)
+
+    return configs
 
 if __name__ == '__main__':
     pass
