@@ -139,13 +139,16 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
     return dataset
 
 def apply_split(dataset : Dataset = None, config: Config = None) -> DatasetDict:
-    dataset = dataset.train_test_split(test_size=1-config.train_split, shuffle=True, seed=0)
-    temp = dataset["test"].train_test_split(test_size=config.test_split/(1-config.train_split), shuffle=True, seed=0)
+    l = len(dataset)
+    dataset = dataset.train_test_split(test_size=int((config.test_split + config.val_split)*l),
+                                       shuffle=True,
+                                       seed=0)
+    temp = dataset["test"].train_test_split(test_size=int(l*config.val_split), shuffle=True, seed=0)
 
     dataset_dict = DatasetDict({
         "train": dataset["train"],
-        "test": temp["test"],
-        "val": temp["train"],
+        "test": temp["train"],
+        "val": temp["test"],
     })
 
     if config.dataset_scaling!=1:
