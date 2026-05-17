@@ -1,4 +1,3 @@
-
 from datasets import DatasetDict
 from transformers import WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor, WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
 import torch
@@ -8,7 +7,6 @@ from typing import Any, Dict, List, Union
 import evaluate
 metric = evaluate.load("wer")
 from utils.config_dataclasses import TrainingConfig
-#import datetime
 
 
 @dataclass

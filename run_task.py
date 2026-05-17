@@ -13,6 +13,8 @@ import copy
 from itertools import product
 from pathlib import Path
 import argparse
+from dotenv import load_dotenv
+import os
 
 #logging
 import logging
@@ -23,6 +25,7 @@ from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig
 from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
+from utils.cuda_utils import manage_device
 
 print("Imports done!")
 
@@ -56,15 +59,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', help="config file path")
 
+    load_dotenv()
+
     if not (config_path:=parser.parse_args().f):
         config_path = "tmp_inference_config.ini"
 
     config = get_config(config_path)
+    logger = create_logger(config)
+
 
     Path.mkdir(config.output_path.parent, exist_ok=True)
     Path.mkdir(config.output_path, exist_ok=config.debug)
 
-    logger = create_logger(config)
 
     # check for fields that are lists, implying multiple tasks / group task
     fields_with_lists = config.get_list_fields()
@@ -85,6 +91,8 @@ def main():
 
     if len(configs) > 1:
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
+
+    manage_device(os.getenv("GPU_DEVICE"))
 
     for current_config in configs:
         logger.info(f"Execute new task, save to {config.output_path.relative_to(Path.cwd())}")
