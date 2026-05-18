@@ -26,7 +26,7 @@ class Config:
         self.dataset_path = Path.cwd()/self.dataset_path
         self.train_split = float(self.train_split)
         self.test_split = float(self.test_split)
-        self.val_split = float(self.val_split) if self.val_split else None
+        self.val_split = float(self.val_split) if (self.val_split is not None) else None
         self.dataset_scaling = float(self.dataset_scaling)
         self.output_path = Path.cwd()/self.output_path
         self.model_path = Path.cwd()/self.model_path if self.model_path else None
