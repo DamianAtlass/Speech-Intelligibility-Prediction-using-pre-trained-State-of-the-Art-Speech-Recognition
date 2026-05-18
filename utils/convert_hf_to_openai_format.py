@@ -5,38 +5,66 @@ import torch
 import os
 from safetensors.torch import load_file
 from pathlib import Path
-from utils.config_dataclasses import InferenceConfig
+
+from whisper import Whisper
+from sip_whisper import Whisper as sip_Whisper
+
+from utils.config_dataclasses import Config, InferenceConfig
 
 WHISPER_OPENAI_MODEL_NAME = "whisper_openai_format.pt"
 
-# based on https://github.com/openai/whisper/discussions/830
-def hf_to_whisper_states(text):
-    text = re.sub('.layers.', '.blocks.', text)
-    text = re.sub('.self_attn.', '.attn.', text)
-    text = re.sub('.q_proj.', '.query.', text)
-    text = re.sub('.k_proj.', '.key.', text)
-    text = re.sub('.v_proj.', '.value.', text)
-    text = re.sub('.out_proj.', '.out.', text)
-    text = re.sub('.fc1.', '.mlp.0.', text)
-    text = re.sub('.fc2.', '.mlp.2.', text)
-    text = re.sub('.fc3.', '.mlp.3.', text)
-    text = re.sub('.fc3.', '.mlp.3.', text)
-    text = re.sub('.encoder_attn.', '.cross_attn.', text)
-    text = re.sub('.cross_attn.ln.', '.cross_attn_ln.', text)
-    text = re.sub('.embed_positions.weight', '.positional_embedding', text)
-    text = re.sub('.embed_tokens.', '.token_embedding.', text)
-    text = re.sub('model.', '', text)
-    text = re.sub('attn.layer_norm.', 'attn_ln.', text)
-    text = re.sub('.final_layer_norm.', '.mlp_ln.', text)
-    text = re.sub('encoder.layer_norm.', 'encoder.ln_post.', text)
-    text = re.sub('decoder.layer_norm.', 'decoder.ln.', text)
-    text = re.sub('proj_out.weight', 'decoder.token_embedding.weight', text)
-    return text
+def load_whisper_model(config: InferenceConfig) -> Whisper | sip_Whisper:
+    """
+    Load a model from whisper or sip_whipser depending on the config.
+
+    config: Config
+
+    Returns: Whisper | sip_Whisper
+    """
+    if not config.model_path:
+        if config.extract_logits:
+            return sip_whisper.load_model(config.model_type)
+        else:
+            return whisper.load_model(config.model_type)
+    else:
+        return load_whisper_from_hf_checkpoint(config)
+
+def load_whisper_from_hf_checkpoint(config: InferenceConfig) -> Whisper | sip_Whisper:
+    """
+    Load a Whisper isntance from a HF checkpoint.
+
+    config: Config
+    """
+    model_type = config.model_type
+    if model_type is None:
+        type_list = [s for s in whisper.available_models() if s in config.model_path]
+
+        if len(type_list) == 0:
+            raise ValueError(f"Can't derive model type/size from path, no keyword: {config.model_path}")
+        else:
+            model_type = type_list[0]
+
+    if not (config.model_path/WHISPER_OPENAI_MODEL_NAME).is_file():
+        convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=config.model_path, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
+
+    if config.extract_logits:
+        model = sip_whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
+    else:
+        model = whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
+
+    model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
+
+    if not isinstance(model, sip_Whisper if config.extract_logits else Whisper):
+        raise ValueError(f"Loading the model from {config.model_path} wasn't successful!")
+    return model
 
 def convert_hf_model_to_openai_whisper(
         hf_checkpoint_file_path: Path,
         safe_file: str = WHISPER_OPENAI_MODEL_NAME,
-        model_type: str = None) -> None:
+        model_type: str = None) -> Path:
+    """
+    Converts a hf model (.safetensors) to a whisper compatible .pt file and saves it on the disk.
+    """
 
     hf_model_path = os.path.join(os.getcwd(), hf_checkpoint_file_path, "model.safetensors")
     if not os.path.isfile(hf_model_path):
@@ -62,44 +90,42 @@ def convert_hf_model_to_openai_whisper(
         if module_state[k].shape != hf_state_dict[k].shape:
             print(f"{k}: {module_state[k].shape, hf_state_dict[k].shape}")
 
+    saved_model_path = hf_checkpoint_file_path/safe_file
+
     # Save it with the adapted hf_state_dict
     torch.save({
         "dims": model_from_module.dims.__dict__,
         "model_state_dict": hf_state_dict
-    }, hf_checkpoint_file_path/safe_file)
+    }, saved_model_path)
 
-def load_whisper_from_hf_checkpoint(config: InferenceConfig):
-    model_type = config.model_type
-    if model_type is None:
-        type_list = [s for s in whisper.available_models() if s in config.model_path]
+    return saved_model_path
 
-        if len(type_list) == 0:
-            raise ValueError(f"Can't derive model type/size from path, no keyword: {config.model_path}")
-        else:
-            model_type = type_list[0]
+# based on https://github.com/openai/whisper/discussions/830
+def hf_to_whisper_states(text):
+    text = re.sub('.layers.', '.blocks.', text)
+    text = re.sub('.self_attn.', '.attn.', text)
+    text = re.sub('.q_proj.', '.query.', text)
+    text = re.sub('.k_proj.', '.key.', text)
+    text = re.sub('.v_proj.', '.value.', text)
+    text = re.sub('.out_proj.', '.out.', text)
+    text = re.sub('.fc1.', '.mlp.0.', text)
+    text = re.sub('.fc2.', '.mlp.2.', text)
+    text = re.sub('.fc3.', '.mlp.3.', text)
+    text = re.sub('.fc3.', '.mlp.3.', text)
+    text = re.sub('.encoder_attn.', '.cross_attn.', text)
+    text = re.sub('.cross_attn.ln.', '.cross_attn_ln.', text)
+    text = re.sub('.embed_positions.weight', '.positional_embedding', text)
+    text = re.sub('.embed_tokens.', '.token_embedding.', text)
+    text = re.sub('model.', '', text)
+    text = re.sub('attn.layer_norm.', 'attn_ln.', text)
+    text = re.sub('.final_layer_norm.', '.mlp_ln.', text)
+    text = re.sub('encoder.layer_norm.', 'encoder.ln_post.', text)
+    text = re.sub('decoder.layer_norm.', 'decoder.ln.', text)
+    text = re.sub('proj_out.weight', 'decoder.token_embedding.weight', text)
+    return text
 
-    if not (config.model_path/WHISPER_OPENAI_MODEL_NAME).is_file():
-        convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=config.model_path, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
 
-    if config.extract_logits:
-        model = sip_whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
-    else:
-        model = whisper.load_model(str(config.model_path / WHISPER_OPENAI_MODEL_NAME))
 
-    model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
-
-    if not isinstance(model, sip_whisper.model.Whisper if config.extract_logits else whisper.model.Whisper):
-        raise ValueError(f"Loading the model from {config.model_path} wasn't successful!")
-    return model
-
-def load_whisper_model(config: InferenceConfig):
-    if not config.model_path:
-        if config.extract_logits:
-            return sip_whisper.load_model(config.model_type)
-        else:
-            return whisper.load_model(config.model_type)
-    else:
-        return load_whisper_from_hf_checkpoint(config)
 
 
 
