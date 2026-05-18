@@ -60,7 +60,7 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
 
     print("Download completed.")
 
-def get_sentence_and_alignments(align_file_path: Path):
+def get_sentence_and_alignments(align_file_path: Path) -> tuple[list[tuple[str]], str]:
     with open(align_file_path, "r") as f:
         start = []
         end = []
@@ -94,6 +94,7 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
     data = {
         "audio": [],
+        "sample_rate": [],
         "sentence": [],
         "alignment": [],
         "audio_path": [],
@@ -108,9 +109,8 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
         assert audio.is_dir()
 
         for file in audio.iterdir():
-            file_name_without_ending = file.name.split(".")[0]
             audio_file_path = audio/file.name
-            align_file_path = align/f"{file_name_without_ending}.align"
+            align_file_path = align/f"{file.stem}.align"
 
             if not audio_file_path.is_file():
                 raise FileNotFoundError(f"Filepath {audio_file_path} does not exist")
@@ -122,12 +122,13 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
             reference, alignments = get_sentence_and_alignments(align_file_path)
 
-            assert len(reference.split(" ")) == 6, f"A GRID sentence has to be 6 word-long! ({reference})"
+            assert len(reference.split(" ")) == 6, f"A GRID sentence has to be 6 words-long! ({reference})"
 
             data["sentence"].append(reference)
             data["alignment"].append(alignments)
             data["audio_path"].append(str(audio_file_path))
             data["align_path"].append(str(align_file_path))
+            data["sample_rate"].append(SAMPLE_RATE)
 
     dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=SAMPLE_RATE))
 
