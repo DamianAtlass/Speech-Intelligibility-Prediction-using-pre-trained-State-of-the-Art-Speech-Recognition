@@ -31,7 +31,7 @@ def load_whisper_model(config: InferenceConfig) -> Whisper | sip_Whisper:
 
 def load_whisper_from_hf_checkpoint(config: InferenceConfig) -> Whisper | sip_Whisper:
     """
-    Load a Whisper isntance from a HF checkpoint.
+    Load a Whisper instance from an HF checkpoint.
 
     config: Config
     """

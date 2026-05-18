@@ -3,3 +3,4 @@
 /trained_models/
 /inferences/
 /.env
+/tests/model.safetensors
