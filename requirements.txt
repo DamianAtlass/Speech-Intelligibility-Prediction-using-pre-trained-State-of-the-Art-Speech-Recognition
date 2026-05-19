@@ -134,7 +134,7 @@ seaborn==0.13.2
 semantic-version==2.10.0
 setuptools==82.0.0
 shellingham==1.5.4
--e git+ssh://git@github.com/DamianAtlass/sip_whisper.git@f24c187dc0fee49f77161d9617c0cfd883268c10#egg=sip_openai_whisper
+-e git+ssh://git@github.com/DamianAtlass/sip_whisper.git@23d30e2dca962cb69ed9e911faa7f91562994799#egg=sip_openai_whisper
 six==1.17.0
 soundfile==0.13.1
 soxr==1.0.0
