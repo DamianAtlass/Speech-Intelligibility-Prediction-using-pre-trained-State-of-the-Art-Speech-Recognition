@@ -28,14 +28,15 @@ def test_apply_split(split: tuple, resulting_size: tuple):
     assert len(dataset_dict["val"]) == resulting_size[2]
 
 @pytest.mark.parametrize("file_path",[
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s1/align/bbaf2n.align"),
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s1/align/bbaf3s.align"),
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s13/align/bbae1s.align"),
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s26/align/srwz9n.align"),
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s34/align/lwwi9p.align"),
-    Path("/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/datasets/grid/downloaded_grid_files/align/s4/align/sbim7p.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s1/align/bbaf2n.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s1/align/bbaf3s.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s13/align/bbae1s.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s26/align/srwz9n.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s34/align/lwwi9p.align"),
+    Path("datasets/grid/downloaded_grid_files/align/s4/align/sbim7p.align"),
 ])
 def test_get_sentence_and_alignments(file_path):
+    file_path = Path.cwd() / file_path
     sentence, alignment = get_sentence_and_alignments(file_path)
 
     assert isinstance(sentence, str)
