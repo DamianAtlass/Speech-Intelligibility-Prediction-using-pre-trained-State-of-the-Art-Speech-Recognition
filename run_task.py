@@ -19,12 +19,15 @@ import os
 import logging
 import sys
 
+load_dotenv() # needs to be before 'import torch'!
+import torch
+
 # custom imports
 from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, unfold_config
 from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
-from utils.cuda_utils import select_gpu
+from utils.cuda_utils import select_device
 
 print("Imports done!")
 
@@ -84,7 +87,7 @@ def main():
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
 
     logger.info("Set devices")
-    device = select_gpu()
+    device = select_device()
 
     for i, current_config in enumerate(configs):
         logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")

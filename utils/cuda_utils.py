@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 
 # mostly from https://stackoverflow.com/questions/67707828/how-to-get-every-seconds-gpu-usage-in-python
-def check_gpu_memory_usage(gpu_index_to_check: list = None, threshold: float = 0.1, gpu_mem=None):
+def check_gpu_memory_usage(gpu_index: int, threshold: float = 0.05, gpu_mem=None):
     """
     Checks if a GPU's memory usage is above a certain threshold.
 
@@ -44,23 +44,31 @@ def check_gpu_memory_usage(gpu_index_to_check: list = None, threshold: float = 0
             logger.info(f"Memory usage GPU {i}: {memory_use_values[i]}")
 
         #check usage threshold
-        for n in gpu_index_to_check:
-            if memory_use_values[n] > gpu_mem[n]*threshold:
-                raise RuntimeError(f"GPU {n} busy.")
-            else:
-                logger.info(f"GPU {n} not busy.")
 
-def select_gpu() -> torch.device:
-
-    if gpu_index:=os.getenv("CUDA_VISIBLE_DEVICES") is None:
+        if memory_use_values[gpu_index] > gpu_mem[gpu_index]*threshold:
+            raise RuntimeError(f"GPU {gpu_index} busy.")
+        else:
+            logger.info(f"Usage of GPU {gpu_index} is under {threshold}%.")
+#os.environ["DEVICE_HAS_USABLE_GPU"]
+def get_gpu_index() -> int:
+    if (gpu_index:=os.getenv("CUDA_VISIBLE_DEVICES", None)) is None:
         raise RuntimeError("CUDA_VISIBLE_DEVICES is not set! Create a .env with 'CUDA_VISIBLE_DEVICES=[GPU_ID_HERE]'or pass it via thecommand line.")
+    gpu_index = int(gpu_index)
+
+    return gpu_index
+
+def select_device() -> torch.device:
+
+    gpu_index = get_gpu_index()
 
     if torch.cuda.is_available():
         logger.info("Cuda available")
 
-        check_gpu_memory_usage([4])
-        device = torch.device(f"cuda")
-        logger.info("Use GPU with index", gpu_index)
+        check_gpu_memory_usage(gpu_index)
+        device = torch.device("cuda")
+        # cuda will automatically use index CUDA_VISIBLE_DEVICES from now
+        # this is needed for functions, which use cuda automatically and won't allow specific device asignment
+        logger.info(f"Use GPU with index {gpu_index}", )
 
     else:
         logger.info("Cuda not available. Use cpu.")
