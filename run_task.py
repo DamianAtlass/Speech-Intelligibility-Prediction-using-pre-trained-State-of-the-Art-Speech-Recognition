@@ -65,7 +65,7 @@ def main():
     load_dotenv()
 
     if not (config_path:=parser.parse_args().f):
-        config_path = "tmp_inference_config.ini"
+        config_path = Path("tmp_training_config.ini")
 
     config = get_config(config_path)
 
@@ -84,7 +84,7 @@ def main():
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
 
     logger.info("Set devices")
-    device = manage_device(int(os.getenv("GPU_DEVICE")))
+    device = select_gpu(int(os.getenv("GPU_DEVICE")))
 
     for i, current_config in enumerate(configs):
         logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
@@ -94,14 +94,14 @@ def main():
         current_config.save_to_file(current_config.output_path/"config.ini")
 
         logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
-        dataset = get_grid()
+        dataset = get_grid(device=device)
 
         logger.info(f"Task: {i+1}/{len(configs)}, apply split")
         dataset = apply_split(dataset, current_config)
 
         if isinstance(current_config, TrainingConfig):
             logger.info(f"Task: {i + 1}/{len(configs)}, enter training")
-            train_whisper(current_config, dataset)
+            train_whisper(current_config, dataset, device)
         if isinstance(current_config, InferenceConfig):
             logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
             inference(current_config, dataset)
