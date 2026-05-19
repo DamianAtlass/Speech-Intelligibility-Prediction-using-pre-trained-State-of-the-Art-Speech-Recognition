@@ -75,6 +75,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
                           )  # set cache to false for debugging
 
     model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}")
+    model.to(device) # necessary?
     model.generation_config.language = "english"
     model.generation_config.task = "transcribe"
 
@@ -145,4 +146,4 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     trainer.save_model(str(config.output_path))
 
 if __name__ == '__main__':
-        train_whisper()
+        pass
