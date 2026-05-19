@@ -2,11 +2,11 @@ import pytest
 import os
 import whisper
 from dotenv import load_dotenv
-from utils.cuda_utils import manage_device
+from utils.cuda_utils import select_gpu
 
 def test_cuda_with_whisper_module():
     load_dotenv()
-    device = manage_device(int(os.getenv("GPU_DEVICE")))
+    device = select_gpu(int(os.getenv("GPU_DEVICE")))
 
     model = whisper.load_model("tiny", device=device)
 

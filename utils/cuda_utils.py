@@ -46,7 +46,7 @@ def check_gpu_memory_usage(gpu_index_to_check: list = None, threshold: float = 0
             else:
                 print(f"GPU {n} not busy.")
 
-def manage_device(gpu_index: int = None) -> torch.device:
+def select_gpu(gpu_index: int = None) -> torch.device:
     if torch.cuda.is_available():
         print("Cuda available")
         if not isinstance(gpu_index, int):
@@ -57,8 +57,6 @@ def manage_device(gpu_index: int = None) -> torch.device:
     else:
         print("Cuda not available. Use cpu.")
         device = torch.device("cpu")
-
-        return device
 
     return device
 
