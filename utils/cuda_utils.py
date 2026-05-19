@@ -1,5 +1,9 @@
 import subprocess as sp
 import torch
+import logging
+import os
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
 
 # mostly from https://stackoverflow.com/questions/67707828/how-to-get-every-seconds-gpu-usage-in-python
 def check_gpu_memory_usage(gpu_index_to_check: list = None, threshold: float = 0.1, gpu_mem=None):
@@ -37,25 +41,29 @@ def check_gpu_memory_usage(gpu_index_to_check: list = None, threshold: float = 0
         memory_use_values = [int(x.split()[0]) for i, x in enumerate(memory_use_info)]
 
         for i in range(len(memory_use_values)):
-            print(f"Memory usage GPU {i}: {memory_use_values[i]}")
+            logger.info(f"Memory usage GPU {i}: {memory_use_values[i]}")
 
         #check usage threshold
         for n in gpu_index_to_check:
             if memory_use_values[n] > gpu_mem[n]*threshold:
                 raise RuntimeError(f"GPU {n} busy.")
             else:
-                print(f"GPU {n} not busy.")
+                logger.info(f"GPU {n} not busy.")
 
-def select_gpu(gpu_index: int = None) -> torch.device:
+def select_gpu() -> torch.device:
+
+    if gpu_index:=os.getenv("CUDA_VISIBLE_DEVICES") is None:
+        raise RuntimeError("CUDA_VISIBLE_DEVICES is not set! Create a .env with 'CUDA_VISIBLE_DEVICES=[GPU_ID_HERE]'or pass it via thecommand line.")
+
     if torch.cuda.is_available():
-        print("Cuda available")
-        if not isinstance(gpu_index, int):
-            raise RuntimeError(f"You need to specify a GPU to use. Create an .env and specify 'GPU_DEVICE=_' !")
+        logger.info("Cuda available")
 
-        check_gpu_memory_usage([gpu_index])
-        device = torch.device(f"cuda:{gpu_index}")
+        check_gpu_memory_usage([4])
+        device = torch.device(f"cuda")
+        logger.info("Use GPU with index", gpu_index)
+
     else:
-        print("Cuda not available. Use cpu.")
+        logger.info("Cuda not available. Use cpu.")
         device = torch.device("cpu")
 
     return device

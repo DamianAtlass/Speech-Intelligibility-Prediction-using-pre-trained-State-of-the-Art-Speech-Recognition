@@ -84,7 +84,7 @@ def main():
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
 
     logger.info("Set devices")
-    device = select_gpu(int(os.getenv("GPU_DEVICE")))
+    device = select_gpu()
 
     for i, current_config in enumerate(configs):
         logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
