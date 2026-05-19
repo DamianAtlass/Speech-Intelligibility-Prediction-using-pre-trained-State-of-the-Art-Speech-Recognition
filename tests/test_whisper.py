@@ -3,7 +3,7 @@ import os
 import whisper
 
 def test_whisper_module():
-    model = whisper.load_model("tiny")
+    model = whisper.load_model("tiny", device="cpu")
     audio = whisper.load_audio("tests/sample_audio_small.mp3", 16_000)
     audio = whisper.pad_or_trim(audio)
 

@@ -24,7 +24,7 @@ from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig
 from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
-from utils.cuda_utils import manage_device
+from utils.cuda_utils import select_gpu
 
 print("Imports done!")
 

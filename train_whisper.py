@@ -38,7 +38,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         return batch
 
 
-def train_whisper(config: TrainingConfig, dataset: DatasetDict):
+def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.device):
     #model_type = config.model
     full_model_name = f"{config.model}-{config.model_type}"
     #output_path = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
