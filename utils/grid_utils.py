@@ -4,7 +4,7 @@ from shutil import rmtree
 
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
-
+from typing import cast
 from utils.config_dataclasses import Config
 
 SAMPLE_RATE = 16000
@@ -12,12 +12,13 @@ import wave
 import tqdm
 from datasets import Audio
 from pathlib import Path
+import torch
 
 SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
 
-def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid"):
+def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid", device: torch.device = torch.device("cpu")) -> Dataset:
     try:
-        return load_from_disk(dataset_directory/"saved_dataset")
+        return cast(Dataset, load_from_disk(dataset_directory/"saved_dataset"))
 
     except FileNotFoundError:
         try:
