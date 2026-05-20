@@ -9,14 +9,14 @@ from itertools import product
 class Config:
     model: str
     model_type: str
-    model_path: Path = None
+    model_path: Path | None = None
 
     output_path: Path
 
     dataset_path: Path
-    train_split: float
-    test_split: float
-    val_split: float = None
+    train_split: int | float
+    test_split: int | float
+    val_split: int | float = None
 
     #for debugging
     dataset_scaling: float = 1
@@ -24,13 +24,19 @@ class Config:
 
     def __post_init__(self):
         self.dataset_path = Path.cwd()/self.dataset_path
-        self.train_split = float(self.train_split)
-        self.test_split = float(self.test_split)
-        self.val_split = float(self.val_split) if (self.val_split is not None) else None
+        self.train_split = to_int_or_float(self.train_split)
+        self.test_split = to_int_or_float(self.test_split)
+        self.val_split = to_int_or_float(self.val_split) if (self.val_split is not None) else None
         self.dataset_scaling = float(self.dataset_scaling)
         self.output_path = Path.cwd()/self.output_path
         self.model_path = Path.cwd()/self.model_path if self.model_path else None
-        self.debug = self.debug == "True"
+
+        if isinstance(self.debug, str):
+            self.debug = self.debug == "True"
+
+        if not (all(isinstance(t, int) for t in [self.train_split, self.test_split, self.val_split]) or
+                all(isinstance(t, float) for t in [self.train_split, self.test_split, self.val_split])):
+            raise ValueError("self.train_split, self.test_split, self.val_split must all be either int of float!")
 
     def save_to_file(self, path: Path) -> None:
         printing_template = [
@@ -82,7 +88,8 @@ class TrainingConfig(Config):
         self.learning_rate = float(self.learning_rate)
         self.num_train_epochs = int(self.num_train_epochs)
         self.warmup_steps = int(self.warmup_steps)
-        self.perform_training = self.perform_training=="True"
+        if isinstance(self.perform_training, str):
+            self.perform_training = self.perform_training=="True"
 
     def save_to_file(self, path: Path) -> None:
         super().save_to_file(path)
@@ -106,13 +113,16 @@ class InferenceConfig(Config):
 
     def __post_init__(self):
         super().__post_init__()
-        self.extract_logits = self.extract_logits == "True"
-        self.word_timestamps = self.word_timestamps == "True"
+        if isinstance(self.extract_logits, str):
+            self.extract_logits = self.extract_logits == "True"
+        if isinstance(self.word_timestamps, str):
+            self.word_timestamps = self.word_timestamps == "True"
 
-        if "," in self.beam_size:
-            self.beam_size = list(map(int, self.beam_size.split(",")))
-        else:
-            self.beam_size = int(self.beam_size)
+        if isinstance(self.beam_size, str):
+            if "," in self.beam_size:
+                self.beam_size = list(map(int, self.beam_size.split(",")))
+            else:
+                self.beam_size = int(self.beam_size)
 
     def save_to_file(self, path: Path) -> None:
         super().save_to_file(path)
@@ -130,6 +140,8 @@ def get_config(path: Path) -> TrainingConfig | InferenceConfig:
     config_parser = configparser.RawConfigParser()
     # configParser.optionxform = str  # preserve original case
     config_parser.read(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Config file does not exist! \nPath: {path}")
 
     tmp = {}
     for section in config_parser.sections():
@@ -196,6 +208,16 @@ def unfold_config(config: TrainingConfig | InferenceConfig) -> list[Config]:
         configs.append(updated_config)
 
     return configs
+
+def to_int_or_float(string: str | int | float):
+    if not isinstance(string, str):
+        return string
+    try:
+        num = int(string)
+    except ValueError:
+        num = float(string)
+    return num
+
 
 if __name__ == '__main__':
     pass
