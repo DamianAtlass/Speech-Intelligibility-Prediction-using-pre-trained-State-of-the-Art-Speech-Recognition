@@ -107,7 +107,7 @@ def main():
             train_whisper(current_config, dataset, device)
         if isinstance(current_config, InferenceConfig):
             logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
-            inference(current_config, dataset)
+            inference(current_config, dataset, device)
 
     logger.info(f"All tasks are finished!")
 

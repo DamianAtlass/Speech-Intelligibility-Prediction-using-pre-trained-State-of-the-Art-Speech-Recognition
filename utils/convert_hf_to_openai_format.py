@@ -13,7 +13,7 @@ from utils.config_dataclasses import Config, InferenceConfig
 
 WHISPER_OPENAI_MODEL_NAME = "whisper_openai_format.pt"
 
-def load_whisper_model(config: InferenceConfig) -> Whisper | sip_Whisper:
+def load_whisper_model(config: InferenceConfig, device: torch.device) -> Whisper | sip_Whisper:
     """
     Load a model from whisper or sip_whipser depending on the config.
 
@@ -23,13 +23,13 @@ def load_whisper_model(config: InferenceConfig) -> Whisper | sip_Whisper:
     """
     if not config.model_path:
         if config.extract_logits:
-            return sip_whisper.load_model(config.model_type)
+            return sip_whisper.load_model(config.model_type, device=device)
         else:
-            return whisper.load_model(config.model_type)
+            return whisper.load_model(config.model_type, device=device)
     else:
-        return load_whisper_from_hf_checkpoint(config)
+        return load_whisper_from_hf_checkpoint(config, device=device)
 
-def load_whisper_from_hf_checkpoint(config: InferenceConfig) -> Whisper | sip_Whisper:
+def load_whisper_from_hf_checkpoint(config: InferenceConfig, device: torch.device) -> Whisper | sip_Whisper:
     """
     Load a Whisper instance from an HF checkpoint.
 
@@ -48,9 +48,9 @@ def load_whisper_from_hf_checkpoint(config: InferenceConfig) -> Whisper | sip_Wh
         convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=config.model_path, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
 
     if config.extract_logits:
-        model = sip_whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
+        model = sip_whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME), device=device)
     else:
-        model = whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME))
+        model = whisper.load_model(str(config.model_path/WHISPER_OPENAI_MODEL_NAME), device=device)
 
     model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
 
