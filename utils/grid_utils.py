@@ -16,7 +16,7 @@ import torch
 
 SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
 
-def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid", device: torch.device = torch.device("cpu")) -> Dataset:
+def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Dataset:
     try:
         return cast(Dataset, load_from_disk(dataset_directory/"saved_dataset"))
 
@@ -142,10 +142,13 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
 def apply_split(dataset : Dataset = None, config: Config = None) -> DatasetDict:
     l = len(dataset)
-    dataset = dataset.train_test_split(test_size=int((config.test_split + config.val_split)*l),
+    dataset = dataset.train_test_split(train_size=int(config.train_split*l) if isinstance(config.train_split, float) else config.train_split,
                                        shuffle=True,
                                        seed=0)
-    temp = dataset["test"].train_test_split(test_size=int(l*config.val_split), shuffle=True, seed=0)
+    temp = dataset["test"].train_test_split(train_size=int(l*config.test_split) if isinstance(config.test_split, float) else config.test_split,
+                                            test_size=int(l*config.val_split) if isinstance(config.val_split, float) else config.val_split,
+                                            shuffle=True,
+                                            seed=0)
 
     dataset_dict = DatasetDict({
         "train": dataset["train"],
