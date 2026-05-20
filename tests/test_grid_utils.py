@@ -6,7 +6,8 @@ from pathlib import Path
 @pytest.mark.parametrize(("split", "resulting_size"), [
         ((0.7, 0.2, 0.1), (23_800, 6800, 3400)),
         ((0.5, 0.35, 0.15), (17000, 11900, 5100)),
-    #        "test_group_training_config.ini",
+        ((0.5, 0.1, 0.1), (17000, 3400, 3400)),
+        ((1, 2, 3), (1, 2, 3)),
 ])
 def test_apply_split(split: tuple, resulting_size: tuple):
     train_split, test_split, val_split = split
@@ -15,7 +16,7 @@ def test_apply_split(split: tuple, resulting_size: tuple):
     config = Config(model="",
                     model_type="",
                     model_path=Path(""),
-                    output_path=Path(""),
+                    output_path=Path("tests/inference_test"),
                     dataset_path=Path("datasets/grid/"),
                     train_split=train_split,
                     test_split=test_split,
