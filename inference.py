@@ -23,11 +23,11 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
     Returns: None
     """
 
-    if config.extract_logits:
+    if config.extract_logprobs:
         (config.output_path/"logprobs").mkdir(exist_ok=config.debug)
     (config.output_path / "data").mkdir(exist_ok=config.debug)
 
-    transcribe_fn = sip_whisper.transcribe if config.extract_logits else whisper.transcribe
+    transcribe_fn = sip_whisper.transcribe if config.extract_logprobs else whisper.transcribe
     counter = 0
     with torch.inference_mode():
         for sample in tqdm.tqdm(dataset):
@@ -48,7 +48,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             audio_path = Path(sample["audio_path"])
             file_name = f"{audio_path.parent.stem}_{audio_path.stem}"
 
-            if config.extract_logits:
+            if config.extract_logprobs:
                 extracted_logprobs = result.pop("extracted_logprobs")
                 file_path = config.output_path/"logprobs"/f"{file_name}.pt"
                 logger.info(f"Save logprobs to {file_path}")

@@ -106,15 +106,15 @@ class TrainingConfig(Config):
 
 @dataclass(kw_only=True)
 class InferenceConfig(Config):
-    extract_logits: bool = True
+    extract_logprobs: bool = True
     word_timestamps: bool = True
     beam_size: int | list[int] = 5
 
 
     def __post_init__(self):
         super().__post_init__()
-        if isinstance(self.extract_logits, str):
-            self.extract_logits = self.extract_logits == "True"
+        if isinstance(self.extract_logprobs, str):
+            self.extract_logprobs = self.extract_logprobs == "True"
         if isinstance(self.word_timestamps, str):
             self.word_timestamps = self.word_timestamps == "True"
 
@@ -129,7 +129,7 @@ class InferenceConfig(Config):
 
         printing_template = [
             '[InferenceConfig]',
-            'extract_logits',
+            'extract_logprobs',
             'word_timestamps',
             'beam_size',
         ]
