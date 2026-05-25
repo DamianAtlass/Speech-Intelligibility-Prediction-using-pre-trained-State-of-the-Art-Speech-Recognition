@@ -12,7 +12,8 @@ import wave
 import tqdm
 from datasets import Audio
 from pathlib import Path
-import torch
+import logging
+logger = logging.getLogger(__name__)
 
 SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
 
@@ -42,7 +43,7 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
     extract_files = "y"
 
     for i in range(1, 34 + 1):
-        print(f"\n\n------------------------- Downloading {i}th speaker -------------------------\n\n")
+        logger.info(f"\n\n------------------------- Downloading {i}th speaker -------------------------\n\n")
 
         # Download audio files
         subprocess.run(["curl", f"https://spandh.dcs.shef.ac.uk/gridcorpus/s{i}/audio/s{i}.tar", "-o",
@@ -59,7 +60,7 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
 
     rmtree((download_folder/"raw"))
 
-    print("Download completed.")
+    logger.info("Download completed.")
 
 def get_sentence_and_alignments(align_file_path: Path) -> tuple[list[tuple[str]], str]:
     with open(align_file_path, "r") as f:
@@ -88,7 +89,7 @@ def get_sample_rate_of_mp3(file_path : str) -> float:
         return wave_file.getframerate()
 
 def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Dataset:
-    print("Parse and save GRID.")
+    logger.info("Parse and save GRID.")
     download_folder = "downloaded_grid_files"
     align_folder = grid_folder / download_folder / "align"
     audio_folder = grid_folder / download_folder / "audio"
