@@ -4,3 +4,4 @@
 /inferences/
 /.env
 /tests/model.safetensors
+/tests/inference_test/*
