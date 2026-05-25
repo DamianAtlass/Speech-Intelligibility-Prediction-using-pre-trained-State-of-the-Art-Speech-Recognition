@@ -3,7 +3,6 @@ import torch
 import logging
 import os
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
 
 # mostly from https://stackoverflow.com/questions/67707828/how-to-get-every-seconds-gpu-usage-in-python
 def check_gpu_memory_usage(gpu_index: int, threshold: float = 0.05, gpu_mem=None):
@@ -31,7 +30,7 @@ def check_gpu_memory_usage(gpu_index: int, threshold: float = 0.05, gpu_mem=None
         command_executed_successfully = True
     except FileNotFoundError as e:
         if e.filename == "nvidia-smi":
-            print("Nvidia-SMI command not found")
+            logger.info("Nvidia-SMI command not found")
         else:
             raise RuntimeError("Something went wrong.")
     except sp.CalledProcessError as e:

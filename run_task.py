@@ -28,6 +28,7 @@ from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
 from utils.cuda_utils import select_device
+from utils.utils import catch_time
 
 print("Imports done!")
 
@@ -39,16 +40,17 @@ def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
     # create logger
     logging.basicConfig(
         level=logging.INFO, #dont set to DEBUG
-        format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
+        format='%(asctime)s:%(name)s:%(levelname)s: %(message)s',
         handlers=[
             logging.FileHandler(config.output_path / "logfile.log", mode='w'),
-            #logging.StreamHandler(sys.stdout)
+            logging.StreamHandler(sys.stdout)
         ]
     )
     logger = logging.getLogger(__name__)
 
     # handle uncaught exceptions, see: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python
     def handle_exception(exc_type, exc_value, exc_traceback):
+        print(exc_type, exc_value, exc_traceback)
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
@@ -68,7 +70,7 @@ def main():
     load_dotenv()
 
     if not (config_path:=parser.parse_args().f):
-        config_path = Path("tmp_training_config.ini")
+        config_path = Path("tmp_inference_config.ini")
 
     config = get_config(config_path)
 
@@ -82,6 +84,8 @@ def main():
 
     logger.info("Unfold configs")
     configs = unfold_config(config)
+    logger.info(f"New configs: {len(configs)}")
+
 
     if len(configs) > 1:
         copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
@@ -89,26 +93,31 @@ def main():
     logger.info("Set devices")
     device = select_device()
 
-    for i, current_config in enumerate(configs):
-        logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
-        if len(configs) > 1:
-            Path.mkdir(current_config.output_path, exist_ok=config.debug)
+    with catch_time() as t:
+        for i, current_config in enumerate(configs):
+            logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
+            logger.info(f"Task config: {config}")
+            if len(configs) > 1:
+                Path.mkdir(current_config.output_path, exist_ok=config.debug)
 
-        current_config.save_to_file(current_config.output_path/"config.ini")
+            current_config.save_to_file(current_config.output_path/"config.ini")
 
-        logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
-        dataset = get_grid(device=device)
+            logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
+            dataset = get_grid()
 
-        logger.info(f"Task: {i+1}/{len(configs)}, apply split")
-        dataset = apply_split(dataset, current_config)
+            logger.info(f"Task: {i+1}/{len(configs)}, apply split")
+            dataset = apply_split(dataset, current_config)
 
-        if isinstance(current_config, TrainingConfig):
-            logger.info(f"Task: {i + 1}/{len(configs)}, enter training")
-            train_whisper(current_config, dataset, device)
-        if isinstance(current_config, InferenceConfig):
-            logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
-            inference(current_config, dataset, device)
+            with catch_time() as t2:
+                if isinstance(current_config, TrainingConfig):
+                    logger.info(f"Task: {i + 1}/{len(configs)}, enter training")
+                    train_whisper(current_config, dataset, device)
+                if isinstance(current_config, InferenceConfig):
+                    logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
+                    inference(current_config, dataset, device)
+            logger.info(f"Execution time of task: {i + 1}: {t2():.4f} secs")
 
+    logger.info(f"Execution time of all tasks: {t2()/360:.4f} h")
     logger.info(f"All tasks are finished!")
 
 

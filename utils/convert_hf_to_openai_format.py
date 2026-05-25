@@ -11,6 +11,9 @@ from sip_whisper import Whisper as sip_Whisper
 
 from utils.config_dataclasses import Config, InferenceConfig
 
+import logging
+logger = logging.getLogger(__name__)
+
 WHISPER_OPENAI_MODEL_NAME = "whisper_openai_format.pt"
 
 def load_whisper_model(config: InferenceConfig, device: torch.device) -> Whisper | sip_Whisper:
@@ -88,7 +91,7 @@ def convert_hf_model_to_openai_whisper(
 
     for k in hf_state_dict.keys():
         if module_state[k].shape != hf_state_dict[k].shape:
-            print(f"{k}: {module_state[k].shape, hf_state_dict[k].shape}")
+            logger.info(f"{k}: {module_state[k].shape, hf_state_dict[k].shape}")
 
     saved_model_path = hf_checkpoint_file_path/safe_file
 
@@ -141,14 +144,14 @@ def main():
 
     # detect the spoken language
     #_, probs = model.detect_language(mel)
-    #print(f"Detected language: {max(probs, key=probs.get)}")
+    #logger.info(f"Detected language: {max(probs, key=probs.get)}")
 
     # decode the audio
     options = whisper.DecodingOptions(without_timestamps=False)
     result = whisper.decode(model, mel, options)
 
     # print the recognized text
-    print(result.text)
+    logger.info(result.text)
 
 if __name__ == '__main__':
     main()
