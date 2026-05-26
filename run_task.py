@@ -69,7 +69,9 @@ def main():
 
     load_dotenv()
 
-    if not (config_path:=parser.parse_args().f):
+    if parser.parse_args().f:
+        config_path = Path(parser.parse_args().f)
+    else:
         config_path = Path("tmp_inference_config.ini")
 
     config = get_config(config_path)
