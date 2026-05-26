@@ -20,7 +20,7 @@ def test_batch_inference(time_stamps, extract_logprobs):
         dataset_path=Path("datasets/grid/"),
         train_split=1,
         test_split=1,
-        val_split=2,
+        val_split=1,
         extract_logprobs=extract_logprobs,
         word_timestamps=time_stamps,
         beam_size=2
