@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Union
 import evaluate
 metric = evaluate.load("wer")
 from utils.config_dataclasses import TrainingConfig
+from utils.utils import capture_stdout, catch_time
+import logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -70,12 +73,16 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         batch["labels"] = tokenizer(batch["sentence"]).input_ids
         return batch
 
-    dataset = dataset.map(prepare_dataset, remove_columns=dataset.column_names["train"], num_proc=12,
-                          load_from_cache_file=True
-                          )  # set cache to false for debugging
+    with catch_time() as t:
+        dataset = dataset.map(prepare_dataset, remove_columns=dataset.column_names["train"], num_proc=12,
+                              load_from_cache_file=True
+                              )  # set cache to false for debugging
+    logger.info(f"Execution time of dataset mapping: {t():.4f} secs")
+
+    logger.info(f"Define model")
 
     model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}")
-    model.to(device) # necessary?
+    model.to(device)
     model.generation_config.language = "english"
     model.generation_config.task = "transcribe"
 
@@ -141,7 +148,11 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     )
 
     if config.perform_training:
-        trainer.train()
+
+        logger.info(f"Start training")
+        with capture_stdout(logger.info, __name__):
+            trainer.train()
+        logger.info(f"Training done")
 
     trainer.save_model(str(config.output_path))
 

@@ -5,3 +5,6 @@
 /.env
 /tests/model.safetensors
 /tests/inference_test/*
+/.venv/
+/tests/inference_test/
+/tests/training_test/

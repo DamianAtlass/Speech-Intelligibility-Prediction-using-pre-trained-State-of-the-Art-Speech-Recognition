@@ -141,7 +141,7 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
     return dataset
 
-def apply_split(dataset : Dataset = None, config: Config = None) -> DatasetDict:
+def apply_split(dataset : Dataset, config: Config) -> DatasetDict:
     l = len(dataset)
     dataset = dataset.train_test_split(train_size=int(config.train_split*l) if isinstance(config.train_split, float) else config.train_split,
                                        shuffle=True,

@@ -117,7 +117,7 @@ def main():
                     inference(current_config, dataset, device)
             logger.info(f"Execution time of task: {i + 1}: {t2():.4f} secs")
 
-    logger.info(f"Execution time of all tasks: {t2()/360:.4f} h")
+    logger.info(f"Execution time of all tasks: {t()/360:.1f} h")
     logger.info(f"All tasks are finished!")
 
 
