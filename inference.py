@@ -38,10 +38,10 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             sample_dict.pop("audio")
             audio_array = torch.tensor(sample["audio"]["array"]).to(device)
 
-            # results will not be equal (therefore not deterministic) if temperature=!0.0
-            #  https://github.com/openai/whisper/discussions/81
-
+            audio_array = whisper.pad_or_trim(audio_array)
             with catch_time() as t:
+                # results will not be equal (therefore not deterministic) if temperature=!0.0
+                #  https://github.com/openai/whisper/discussions/81
                 result: dict = transcribe_fn(model, audio_array, fp16=False, beam_size=config.beam_size, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
             logger.info(f"Transcription time for sample {counter}/{len(dataset)}: {t():.4f} secs")
 

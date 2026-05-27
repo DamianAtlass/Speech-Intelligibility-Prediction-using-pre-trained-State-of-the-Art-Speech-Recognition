@@ -13,13 +13,13 @@ from shutil import copyfile
 from pathlib import Path
 import argparse
 from dotenv import load_dotenv
-import os
+from datasets import Dataset, DatasetDict
 
 #logging
 import logging
 import sys
 
-load_dotenv() # needs to be before 'import torch'!
+load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
 
 # custom imports
@@ -105,10 +105,10 @@ def main():
             current_config.save_to_file(current_config.output_path/"config.ini")
 
             logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
-            dataset = get_grid()
+            dataset: Dataset= get_grid()
 
             logger.info(f"Task: {i+1}/{len(configs)}, apply split")
-            dataset = apply_split(dataset, current_config)
+            dataset: DatasetDict= apply_split(dataset, current_config)
 
             with catch_time() as t2:
                 if isinstance(current_config, TrainingConfig):
@@ -117,7 +117,7 @@ def main():
                 if isinstance(current_config, InferenceConfig):
                     logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
                     inference(current_config, dataset, device)
-            logger.info(f"Execution time of task: {i + 1}: {t2():.4f} secs")
+            logger.info(f"Execution time of task: {i + 1}: {t2():.4f} s")
 
     logger.info(f"Execution time of all tasks: {t()/360:.1f} h")
     logger.info(f"All tasks are finished!")
