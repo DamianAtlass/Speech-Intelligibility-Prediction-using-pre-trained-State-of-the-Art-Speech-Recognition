@@ -8,3 +8,4 @@
 /.venv/
 /tests/inference_test/
 /tests/training_test/
+__pycache__/
