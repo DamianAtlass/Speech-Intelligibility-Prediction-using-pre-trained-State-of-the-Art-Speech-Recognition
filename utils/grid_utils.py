@@ -128,8 +128,8 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
             data["sentence"].append(reference)
             data["alignment"].append(alignments)
-            data["audio_path"].append(str(audio_file_path))
-            data["align_path"].append(str(align_file_path))
+            data["audio_path"].append(str(audio_file_path.relative_to(Path.cwd())))
+            data["align_path"].append(str(align_file_path.relative_to(Path.cwd())))
             data["sample_rate"].append(SAMPLE_RATE)
 
     dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=SAMPLE_RATE))
