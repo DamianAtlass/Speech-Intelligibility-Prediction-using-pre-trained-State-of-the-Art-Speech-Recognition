@@ -4,8 +4,6 @@ from shutil import rmtree
 
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
-from typing import cast
-from utils.config_dataclasses import Config
 
 SAMPLE_RATE = 16000
 import wave
@@ -14,6 +12,7 @@ from datasets import Audio
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
+from typing import cast
 
 SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
 
@@ -141,27 +140,49 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
 
     return dataset
 
-def apply_split(dataset : Dataset, config: Config) -> DatasetDict:
-    l = len(dataset)
-    dataset = dataset.train_test_split(train_size=int(config.train_split*l) if isinstance(config.train_split, float) else config.train_split,
-                                       shuffle=True,
-                                       seed=0)
-    temp = dataset["test"].train_test_split(train_size=int(l*config.test_split) if isinstance(config.test_split, float) else config.test_split,
-                                            test_size=int(l*config.val_split) if isinstance(config.val_split, float) else config.val_split,
-                                            shuffle=True,
-                                            seed=0)
+def apply_split(dataset : Dataset,
+                train_split: int | float,
+                test_split: int | float,
+                val_split: int | float,
+                dataset_scaling: int | float ) -> DatasetDict:
+    """
+    Split the dataset depending on the given parameters.
 
-    dataset_dict = DatasetDict({
-        "train": dataset["train"],
-        "test": temp["train"],
-        "val": temp["test"],
-    })
+    Returns:
+        DatasetDict
+    """
+    def calculate_size(len_:int, n: float | int) -> int:
+        return cast(int, int(n * len_) if isinstance(n, float) else n)
 
-    if config.dataset_scaling!=1:
+
+    if not (train_split==0 and test_split==0 and val_split==1):
+        l = len(dataset)
+        dataset = dataset.train_test_split(train_size=calculate_size(l, train_split),
+                                           shuffle=True,
+                                           seed=0)
+
+        temp = dataset["test"].train_test_split(train_size=calculate_size(l, test_split),
+                                                test_size=calculate_size(l, val_split),
+                                                shuffle=True,
+                                                seed=0)
+        dataset_dict = DatasetDict({
+            "train": dataset["train"],
+            "test": temp["train"],
+            "val": temp["test"],
+        })
+    else:
+        dataset_dict = DatasetDict({
+            "val": dataset,
+        })
+
+    if dataset_scaling != 1:
         for split in ["train", "test", "val"]:
-            dataset_dict[split] = dataset_dict[split].select(range(
-                int(len(dataset_dict[split]) * config.dataset_scaling)
-            ))
+            try:
+                dataset_dict[split] = dataset_dict[split].select(range(
+                    int(len(dataset_dict[split]) * dataset_scaling)
+                ))
+            except KeyError as e:
+                pass
 
     return dataset_dict
 

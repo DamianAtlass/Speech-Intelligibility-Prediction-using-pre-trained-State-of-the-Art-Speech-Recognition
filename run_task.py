@@ -108,7 +108,11 @@ def main():
             dataset: Dataset= get_grid()
 
             logger.info(f"Task: {i+1}/{len(configs)}, apply split")
-            dataset: DatasetDict= apply_split(dataset, current_config)
+            dataset: DatasetDict= apply_split(dataset,
+                                              current_config.train_split,
+                                              current_config.test_split,
+                                              current_config.val_split,
+                                              current_config.dataset_scaling)
 
             with catch_time() as t2:
                 if isinstance(current_config, TrainingConfig):

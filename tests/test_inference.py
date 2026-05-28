@@ -31,7 +31,7 @@ def test_batch_inference(time_stamps, extract_logprobs):
         shutil.rmtree(config.output_path)
 
     dataset = get_grid(config.dataset_path)
-    dataset = apply_split(dataset, config)
+    dataset = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset, torch.device("cpu"))
 

@@ -31,7 +31,7 @@ def test_whisper_training():
         shutil.rmtree(config.output_path)
 
     dataset = get_grid(config.dataset_path)
-    dataset = apply_split(dataset, config)
+    dataset = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
     config.output_path.mkdir(exist_ok=config.debug)
     device = select_device()
 
