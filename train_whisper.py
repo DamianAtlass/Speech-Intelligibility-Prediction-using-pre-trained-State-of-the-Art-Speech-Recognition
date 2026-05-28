@@ -8,6 +8,7 @@ import evaluate
 metric = evaluate.load("wer")
 from utils.config_dataclasses import TrainingConfig
 from utils.utils import capture_stdout, catch_time
+import os
 import logging
 logger = logging.getLogger(__name__)
 
@@ -45,21 +46,31 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     #model_type = config.model
     full_model_name = f"{config.model}-{config.model_type}"
     #output_path = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        logger.warning("No HF_TOKEN!")
 
     if config.model != "whisper":
         raise ValueError("Wrong model.")
 
     if config.model_type not in available_models():
         raise ValueError("That is not an available model!")
-
-    feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{full_model_name}")
+    logger.info("load feature extractor")
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{full_model_name}", token=hf_token)
 
     lang_for_tokenizer = None if "en" in config.model_type else "English"
-    tokenizer = WhisperTokenizer.from_pretrained(f"openai/{full_model_name}", language=lang_for_tokenizer, task="transcribe")
+    tokenizer = WhisperTokenizer.from_pretrained(f"openai/{full_model_name}",
+                                                 language=lang_for_tokenizer,
+                                                 task="transcribe",
+                                                 token=hf_token)
 
-    processor = WhisperProcessor.from_pretrained(f"openai/{full_model_name}", language="English", task="transcribe")
+    processor = WhisperProcessor.from_pretrained(f"openai/{full_model_name}",
+                                                 language="English",
+                                                 task="transcribe",
+                                                 token=hf_token)
 
     #dataset = dataset.cast_column("audio", Audio(sampling_rate=16000)) pretty sure thats not needed, see parsing
+    logger.info("prepare dataset")
 
     def prepare_dataset(batch):
         # load and resample audio data from 48 to 16kHz
@@ -74,14 +85,16 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         return batch
 
     with catch_time() as t:
-        dataset = dataset.map(prepare_dataset, remove_columns=dataset.column_names["train"], num_proc=12,
-                              load_from_cache_file=True
+        dataset = dataset.map(prepare_dataset,
+                              remove_columns=dataset.column_names["train"],
+                              num_proc=4,
+                              load_from_cache_file=False,
                               )  # set cache to false for debugging
     logger.info(f"Execution time of dataset mapping: {t():.4f} secs")
 
     logger.info(f"Define model")
 
-    model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}")
+    model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}", token=hf_token)
     model.to(device)
     model.generation_config.language = "english"
     model.generation_config.task = "transcribe"
@@ -117,7 +130,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         # max_steps=5,
         greater_is_better=False,
         num_train_epochs=config.num_train_epochs,
-        eval_on_start=True
+        eval_on_start=True,
 
     )
 
