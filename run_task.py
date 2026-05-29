@@ -72,7 +72,7 @@ def main():
     if parser.parse_args().f:
         config_path = Path(parser.parse_args().f)
     else:
-        config_path = Path("tmp_inference_config.ini")
+        config_path = Path("inference_config_template.ini")
 
     config = get_config(config_path)
 
