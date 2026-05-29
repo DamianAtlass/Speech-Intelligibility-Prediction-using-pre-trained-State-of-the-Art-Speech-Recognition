@@ -45,6 +45,7 @@ def test_loading_bad_file(file_name = "test_training_config_bad.ini"):
 @pytest.mark.parametrize(("file_name", "length"), [
         ("test_inference_config.ini", 1),
         ("test_group_inference_config.ini", 3),
+        ("test_group_inference_config2.ini", 9),
         ("test_training_config.ini", 1),
 #        "test_group_training_config.ini",
 ])

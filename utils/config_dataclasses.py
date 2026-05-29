@@ -4,10 +4,11 @@ import configparser
 from pathlib import Path
 import copy
 from itertools import product
+from typing import cast
 
 @dataclass(kw_only=True)
 class Config:
-    model: str
+    model: str | list
     model_type: str
     model_path: Path | None = None
 
@@ -23,6 +24,7 @@ class Config:
     debug: bool = False
 
     def __post_init__(self):
+        self.model_type = cast(str, self.model_type).split(",") if "," in self.model_type else self.model_type
         self.dataset_path = Path.cwd()/self.dataset_path
         self.train_split = to_int_or_float(self.train_split)
         self.test_split = to_int_or_float(self.test_split)
