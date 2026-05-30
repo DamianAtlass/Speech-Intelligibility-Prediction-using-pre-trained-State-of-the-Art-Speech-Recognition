@@ -28,7 +28,7 @@ from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
 from utils.cuda_utils import select_device
-from utils.utils import catch_time
+from utils.logging_utils import catch_time
 
 print("Imports done!")
 
@@ -97,10 +97,10 @@ def main():
 
     with catch_time() as t:
         for i, current_config in enumerate(configs):
-            logger.info(f"Task: {i+1}/{len(configs)}, save to {config.output_path.relative_to(Path.cwd())}")
-            logger.info(f"Task config: {config}")
+            logger.info(f"Task: {i+1}/{len(configs)}, save to {current_config.output_path.relative_to(Path.cwd())}")
+            logger.info(f"Task config: {current_config}")
             if len(configs) > 1:
-                Path.mkdir(current_config.output_path, exist_ok=config.debug)
+                Path.mkdir(current_config.output_path, exist_ok=current_config.debug)
 
             current_config.save_to_file(current_config.output_path/"config.ini")
 
@@ -121,9 +121,9 @@ def main():
                 if isinstance(current_config, InferenceConfig):
                     logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
                     inference(current_config, dataset, device)
-            logger.info(f"Execution time of task: {i + 1}: {t2():.4f} s")
+            logger.info(f"Task: {i+1} - execution time: {i + 1}: {t2():.4f} s")
 
-    logger.info(f"Execution time of all tasks: {t()/360:.1f} h")
+    logger.info(f"Execution time of all tasks: {t()/360} h")
     logger.info(f"All tasks are finished!")
 
 

@@ -3,7 +3,7 @@ import torch
 import whisper
 import sip_whisper
 from utils.convert_hf_to_openai_format import load_whisper_model
-from utils.utils import catch_time
+from utils.logging_utils import catch_time
 from datasets import Dataset, DatasetDict
 from utils.config_dataclasses import InferenceConfig
 from typing import Any
@@ -61,6 +61,8 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             logger.info(f"Save result data to {file_path}")
             with open(file_path, 'w') as f:
                 json.dump(sample_dict, f, indent=4)
+
+            logger.info("--------------------")
 
 def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.device) -> None:
     model = load_whisper_model(config, device)

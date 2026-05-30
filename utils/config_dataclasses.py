@@ -8,8 +8,8 @@ from typing import cast
 
 @dataclass(kw_only=True)
 class Config:
-    model: str | list
-    model_type: str
+    model: str
+    model_type: str | list
     model_path: Path | None = None
 
     output_path: Path
