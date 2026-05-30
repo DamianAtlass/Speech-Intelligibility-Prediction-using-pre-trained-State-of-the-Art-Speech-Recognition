@@ -5,7 +5,9 @@ from shutil import rmtree
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
 
-SAMPLE_RATE = 16000
+SAMPLE_RATE_DOWNLOADED_FILES = 25_000
+WANTED_SAMPLE_RATE = 16_000
+
 import wave
 import tqdm
 from datasets import Audio
@@ -61,7 +63,7 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
 
     logger.info("Download completed.")
 
-def get_sentence_and_alignments(align_file_path: Path) -> tuple[list[tuple[str]], str]:
+def get_sentence_and_alignments(align_file_path: Path) -> tuple[str, list[tuple[int, int, str]]]:
     with open(align_file_path, "r") as f:
         start = []
         end = []
@@ -73,6 +75,9 @@ def get_sentence_and_alignments(align_file_path: Path) -> tuple[list[tuple[str]]
             end.append(line[1])
             keyword_or_utterance.append(line[2])
 
+    start = [int(s/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in start]
+    end = [int(s/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in end]
+
     alignment = [(s,e,k) for s,e,k in zip(start,end,keyword_or_utterance)]
 
     sentence = [w for w in keyword_or_utterance if not w in ["sil", "sp"]]
@@ -80,7 +85,7 @@ def get_sentence_and_alignments(align_file_path: Path) -> tuple[list[tuple[str]]
     return sentence, alignment
 
 def process_audio(audio_file_path):
-    array, sample_rate = librosa.load(audio_file_path, sr=SAMPLE_RATE)
+    array, sample_rate = librosa.load(audio_file_path, sr=WANTED_SAMPLE_RATE)
     return array
 
 def get_sample_rate_of_mp3(file_path : str) -> float:
@@ -129,9 +134,9 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
             data["alignment"].append(alignments)
             data["audio_path"].append(str(audio_file_path.relative_to(Path.cwd())))
             data["align_path"].append(str(align_file_path.relative_to(Path.cwd())))
-            data["sample_rate"].append(SAMPLE_RATE)
+            data["sample_rate"].append(WANTED_SAMPLE_RATE)
 
-    dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=SAMPLE_RATE))
+    dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=WANTED_SAMPLE_RATE))
 
     assert len(dataset) == SAMPLES_PER_SPEAKER * 34
 
