@@ -62,4 +62,4 @@ if __name__ == '__main__':
                 if (file_or_dir / "data").is_dir():
                     data_folder = file_or_dir / "data"
                     for json_path in tqdm(data_folder.iterdir()):
-                        replace_file(file_or_dir)
+                        correct_file(file_or_dir)
