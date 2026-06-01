@@ -153,7 +153,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
 
     dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=WANTED_SAMPLE_RATE))
 
-    assert len(dataset) == max_files_per_speaker * max_speaker
+    assert len(dataset) == (max_files_per_speaker or 1000) * (max_speaker or 34)
     if save_at is None:
         save_at = grid_folder / "saved_dataset"
 
