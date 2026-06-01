@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+pytest
+pytest tests/_test_training.py
+pytest tests/_test_training2.py

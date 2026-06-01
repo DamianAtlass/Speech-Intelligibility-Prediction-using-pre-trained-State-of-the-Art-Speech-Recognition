@@ -25,4 +25,13 @@ It is required to set up a .env file, the .env_template can be used as a templat
 
 ### pytest
 
-After the venv is set up, it is encouraged to run the __pytest__ command. This will check the functionality
+To check the functionality, first the file __my_pytest__ needs to be made executable:
+```bash
+chmod +x my_pytest
+```
+The file exists, because pytest that run cuda won't run in a chain and will get stuck.
+
+Run the tests with:
+```bash
+bash my_pytest
+```
