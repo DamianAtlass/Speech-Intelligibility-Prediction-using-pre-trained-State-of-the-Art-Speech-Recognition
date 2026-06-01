@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Union
 import evaluate
 metric = evaluate.load("wer")
 from utils.config_dataclasses import TrainingConfig
-from utils.utils import capture_stdout, catch_time
+from utils.logging_utils import capture_stdout, catch_time
 import os
 import logging
 logger = logging.getLogger(__name__)

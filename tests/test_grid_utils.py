@@ -1,7 +1,27 @@
 import pytest
-from utils.grid_utils import get_grid, apply_split, get_sentence_and_alignments
+from utils.grid_utils import get_grid, apply_split, get_sentence_and_alignments, parse_and_save_grid, download_grid
 from utils.config_dataclasses import Config
 from pathlib import Path
+import shutil
+
+downloaded_grid_files = Path.cwd() / "tests" / "grid_downloaded"
+
+def test_download_grid():
+    download_grid(downloaded_grid_files, max_speaker=2)
+    assert downloaded_grid_files.is_dir()
+
+def test_parse_and_save_grid():
+    # should take only a couple of seconds with good internet connection
+    save_at = Path.cwd()/"tests"/"grid_parsed"
+    parse_and_save_grid(grid_folder=downloaded_grid_files,
+                        max_speaker=2,
+                        max_files_per_speaker=10,
+                        save_at=save_at
+                        )
+    assert save_at.is_dir()
+    shutil.rmtree(save_at)
+    shutil.rmtree(downloaded_grid_files)
+
 
 @pytest.mark.parametrize(("split", "resulting_size"), [
         ((0.7, 0.2, 0.1, 1), (23_800, 6800, 3400)),
@@ -13,7 +33,6 @@ from pathlib import Path
 ])
 def test_apply_split(split: tuple, resulting_size: tuple):
     dataset = get_grid() # len == 34,000
-
 
     dataset_dict = apply_split(dataset, *split)
 
@@ -40,8 +59,8 @@ def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int)
                     dataset_scaling=scale)
 
     dataset_dict = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
-
     assert len(dataset_dict["val"]) == resulting_size
+
 
 @pytest.mark.parametrize("file_path",[
     Path("datasets/grid/downloaded_grid_files/align/s1/align/bbaf2n.align"),
