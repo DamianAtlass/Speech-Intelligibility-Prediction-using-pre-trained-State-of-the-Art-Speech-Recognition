@@ -54,7 +54,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
                 logger.info(f"Save logprobs to {file_path}")
                 torch.save(extracted_logprobs, file_path)
 
-                result["logprobs_path"] = str(file_path)
+                result["logprobs_path"] = str(file_path.relative_to(Path.cwd()))
 
             sample_dict["result"] = result
             file_path = config.output_path / "data" / f"{file_name}.json"
