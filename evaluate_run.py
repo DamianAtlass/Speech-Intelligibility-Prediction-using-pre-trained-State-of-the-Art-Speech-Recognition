@@ -52,14 +52,15 @@ def plot_metric(array: list[torch.Tensor],
              )
     plt.xticks(positions, x_label)
 
-    #plt.ylim(0, 1)
+
     ax.legend([tmp["means"][0]], ["Mean"], loc="upper right")
     if metric_name== "WER":
         plt.ylim(0,2)
 
     if output_path:
         plt.savefig(output_path/f'{title}.png')
-    plt.show()
+    #plt.show()
+    plt.close()
 
 def get_data(output_path: Path) -> tuple:
     data_path = output_path / "data"
@@ -105,7 +106,7 @@ def evaluate_run(path: Path):
     if len(unfolded_configs)==1:
         with catch_time() as t:
             summary, avg_logprobs, wers = get_data(config.output_path)
-        print(f"Execution time of do_something: {t():.4f} s")
+        print(f"Reading the generated files took: {t():.4f} s")
 
         for s, metric in zip(summary, [avg_logprobs, wers]):
             plot_metric(metric, f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
@@ -117,7 +118,7 @@ def evaluate_run(path: Path):
         for c in unfolded_configs:
             with catch_time() as t:
                 summary, avg_logprobs, wers = get_data(c.output_path)
-            print(f"Execution time of do_something: {t():.4f} s")
+            print(f"Reading the generated files took: {t():.4f} s")
 
             for s, metric in zip(summary, [avg_logprobs, wers]):
                 plot_metric([metric],
