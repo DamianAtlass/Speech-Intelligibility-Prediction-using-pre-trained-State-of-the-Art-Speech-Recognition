@@ -16,8 +16,6 @@ import logging
 logger = logging.getLogger(__name__)
 from typing import cast
 
-SAMPLES_PER_SPEAKER = 1000 # samples a speaker recorded
-
 def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Dataset:
     try:
         return cast(Dataset, load_from_disk(dataset_directory/"saved_dataset"))
@@ -30,7 +28,9 @@ def get_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Dataset:
             return parse_and_save_grid(dataset_directory)
 
 
-def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> None:
+def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid",
+                  #for testing
+                  max_speaker: int = 34) -> None:
     # Create directories
     download_folder = Path(dataset_directory, "downloaded_grid_files")
 
@@ -43,7 +43,7 @@ def download_grid(dataset_directory: Path = Path.cwd()/"datasets"/"grid") -> Non
 
     extract_files = "y"
 
-    for i in range(1, 34 + 1):
+    for i in range(1, max_speaker + 1):
         logger.info(f"\n\n------------------------- Downloading {i}th speaker -------------------------\n\n")
 
         # Download audio files
@@ -75,10 +75,10 @@ def get_sentence_and_alignments(align_file_path: Path) -> tuple[str, list[tuple[
             end.append(line[1])
             keyword_or_utterance.append(line[2])
 
-    start = [int(s/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in start]
-    end = [int(s/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in end]
+    start = [str(int(s)/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in start]
+    end = [str(int(s)/(SAMPLE_RATE_DOWNLOADED_FILES/WANTED_SAMPLE_RATE)) for s in end]
 
-    alignment = [(s,e,k) for s,e,k in zip(start,end,keyword_or_utterance)]
+    alignment = [(s,e,k) for s,e,k in zip(start, end, keyword_or_utterance)]
 
     sentence = [w for w in keyword_or_utterance if not w in ["sil", "sp"]]
     sentence = " ".join(sentence)
@@ -92,7 +92,11 @@ def get_sample_rate_of_mp3(file_path : str) -> float:
     with wave.open(file_path, "rb") as wave_file:
         return wave_file.getframerate()
 
-def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Dataset:
+def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
+                        save_at: Path = None,
+                        #for debugging
+                        max_speaker: int | None = None,
+                        max_files_per_speaker: int | None = None) -> Dataset:
     logger.info("Parse and save GRID.")
     download_folder = "downloaded_grid_files"
     align_folder = grid_folder / download_folder / "align"
@@ -106,14 +110,17 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
         "audio_path": [],
         "align_path": [],
     }
+    counter_speaker = 0
     for speaker in tqdm.tqdm(audio_folder.iterdir()):
         speaker = speaker.name
         align = align_folder/speaker/"align"
         audio = audio_folder/speaker/speaker
 
+
         assert align.is_dir()
         assert audio.is_dir()
 
+        counter_file = 0
         for file in audio.iterdir():
             audio_file_path = audio/file.name
             align_file_path = align/f"{file.stem}.align"
@@ -136,12 +143,21 @@ def parse_and_save_grid(grid_folder = Path.cwd() / "datasets" / "grid" ) -> Data
             data["align_path"].append(str(align_file_path.relative_to(Path.cwd())))
             data["sample_rate"].append(WANTED_SAMPLE_RATE)
 
+            counter_file+=1
+            if counter_file==max_files_per_speaker:
+                break
+
+        counter_speaker += 1
+        if counter_speaker == max_speaker:
+            break
+
     dataset = Dataset.from_dict(data).cast_column("audio", Audio(sampling_rate=WANTED_SAMPLE_RATE))
 
-    assert len(dataset) == SAMPLES_PER_SPEAKER * 34
+    assert len(dataset) == (max_files_per_speaker or 1000) * (max_speaker or 34)
+    if save_at is None:
+        save_at = grid_folder / "saved_dataset"
 
-    data_path = grid_folder/"saved_dataset"
-    dataset.save_to_disk(data_path)
+    dataset.save_to_disk(save_at)
 
     return dataset
 
