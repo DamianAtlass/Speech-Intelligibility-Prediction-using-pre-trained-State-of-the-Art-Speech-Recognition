@@ -11,7 +11,7 @@ from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
 import logging
 logger = logging.getLogger(__name__)
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+
 
 def plot_metric(array: list[torch.Tensor],
                 title: str,
@@ -22,7 +22,7 @@ def plot_metric(array: list[torch.Tensor],
     #sort
 
     if len(array)>1:
-        order = torch.tensor([a.median() for a in array])
+        order = torch.tensor([a.mean() for a in array])
         order = torch.argsort(order)
 
         array = [array[i] for i in order]
@@ -43,6 +43,7 @@ def plot_metric(array: list[torch.Tensor],
     positions = range(1, len(x_label)+1)
     #print(list(positions))
     #print(len(array))
+    array = [a.cpu() for a in array]
     tmp = ax.boxplot(array,
                #notch=False,
                positions=positions,
@@ -60,32 +61,26 @@ def plot_metric(array: list[torch.Tensor],
         plt.savefig(output_path/f'{title}.png')
     plt.show()
 
-def evaluate_config(output_path: Path) -> tuple:
+def get_data(output_path: Path) -> tuple:
     data_path = output_path / "data"
+    device = select_device()
 
     avg_logprobs = []
-    device = "cpu"
-
     references = []
     transcripts = []
-    counter = 0
-    with catch_time() as t:
-        for file in tqdm(data_path.iterdir()):
-            with open(file) as f:
-                j = json.load(f)
 
-                avg_logprobs.append(j["result"]["segments"][0]["avg_logprob"])
-                references.append(j["sentence"])
-                transcripts.append(j["result"]["text"])
-            counter+=1
-            if counter ==100:
-                break
+    for file in data_path.iterdir():
+        with open(file) as f:
+            json_file = json.load(f)
 
+            avg_logprobs.append(json_file["result"]["segments"][0]["avg_logprob"])
+            references.append(json_file["sentence"])
+            transcripts.append(json_file["result"]["text"])
 
     transcripts = additional_normalization(transcripts)
 
-    wers = calculate_wers_with_norm(transcripts, references)
-    avg_logprobs = torch.Tensor(avg_logprobs, device=device)
+    wers = calculate_wers_with_norm(transcripts, references).to(device)
+    avg_logprobs = torch.Tensor(avg_logprobs).to(device)
 
     summary = []
     for name, values in zip(["Logprob(per sequence)", "WER"], [avg_logprobs, wers]):
@@ -97,40 +92,38 @@ def evaluate_config(output_path: Path) -> tuple:
             "n": values.shape[0]
         })
 
-    print(f"Reading all files took: {t():.1f} s")
-    print(summary)
     with open(output_path/"summary.json", 'w') as f:
         json.dump(summary, f, indent=4)
     return summary, avg_logprobs, wers
 
-def evaluate():
-    if False:
-        path = Path("inferences/check_if_all_transcribed")
-        config = get_config(path/"config.ini")
+def evaluate_run(path: Path):
 
-    else:
-        path = Path("inferences/full_data_all_models")
-        config = get_config(path/"config.ini")
-        config.model_type = ['tiny.en', 'tiny', 'base.en']
+    config = get_config(path / "config.ini")
 
-
-
-    print(config)
     unfolded_configs = unfold_config(config)
 
     if len(unfolded_configs)==1:
-        summary, avg_logprobs, wers = evaluate_config(config.output_path)
+        with catch_time() as t:
+            summary, avg_logprobs, wers = get_data(config.output_path)
+        print(f"Execution time of do_something: {t():.4f} s")
 
         for s, metric in zip(summary, [avg_logprobs, wers]):
             plot_metric(metric, f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
 
     else:
         summary_arr, avg_logprobs_arr, wers_arr = [], [], []
-        for c in unfolded_configs:
+        list_field = config.get_list_fields()[0]
 
-            summary, avg_logprobs, wers = evaluate_config(c.output_path)
+        for c in unfolded_configs:
+            with catch_time() as t:
+                summary, avg_logprobs, wers = get_data(c.output_path)
+            print(f"Execution time of do_something: {t():.4f} s")
+
             for s, metric in zip(summary, [avg_logprobs, wers]):
-                plot_metric([metric], f"Average {s["metric_name"]}s", s["metric_name"], ["tiny"],
+                plot_metric([metric],
+                            f"Average {s["metric_name"]}s",
+                            s["metric_name"],
+                            [getattr(c, list_field)],
                             c.output_path)
 
             summary_arr.append(summary)
@@ -138,9 +131,12 @@ def evaluate():
             wers_arr.append(wers)
 
         for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_arr]):
-            plot_metric(metric_arr, f"Average {s_arr[0]['metric_name']}s", s_arr[0]["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
+            plot_metric(metric_arr,
+                        f"Average {s_arr[0]['metric_name']}s",
+                        s_arr[0]["metric_name"],
+                        [c.model_type for c in unfolded_configs],
+                        config.output_path)
 
 
 if __name__ == '__main__':
-    #plot_metric([torch.tensor([1,1,1]), torch.tensor([2,2,2]), torch.tensor([3,3,3])], "titel", "metric name",["1", "2", "3"], None)
-    evaluate()
+    evaluate_run(Path("inferences/full_data_all_models"))

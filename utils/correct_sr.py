@@ -42,24 +42,28 @@ def correct_file(path: Path) -> None:
     with open(path, 'w') as f:
         json.dump(j, f, indent=4)
 
-if __name__ == '__main__':
-    #path_single_file = Path("s3_bwbg6n.json")
-    #replace_file(path_single_file)
+def main():
+    # path_single_file = Path("s3_bwbg6n.json")
+    # replace_file(path_single_file)
 
-    path = Path("inferences/_")
+    path = Path.cwd() / "inferences/tmp"
 
-    #if not group
-    if (path/"data").is_dir():
-        raise RuntimeError() # is here to prevent accidental execution
+    # if not group
+    if (path / "data").is_dir():
+        #raise RuntimeError()  # is here to prevent accidental execution
 
-        for json_path in tqdm((path/"data").iterdir()):
+        for json_path in tqdm((path / "data").iterdir()):
             correct_file(json_path)
-    #if group
+    # if group
     else:
-        raise RuntimeError() # is here to prevent accidental execution
+        # raise RuntimeError() # is here to prevent accidental execution
         for file_or_dir in path.iterdir():
             if file_or_dir.is_dir():
                 if (file_or_dir / "data").is_dir():
                     data_folder = file_or_dir / "data"
                     for json_path in tqdm(data_folder.iterdir()):
-                        correct_file(file_or_dir)
+                        correct_file(json_path)
+
+
+if __name__ == '__main__':
+    main()
