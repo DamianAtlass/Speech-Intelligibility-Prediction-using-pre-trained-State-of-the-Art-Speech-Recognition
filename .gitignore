@@ -9,4 +9,3 @@
 /tests/inference_test/
 /tests/training_test/
 __pycache__/
-tmp.pt
