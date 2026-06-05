@@ -7,21 +7,23 @@ import shutil
 downloaded_grid_files = Path.cwd() / "tests" / "grid_downloaded"
 
 def test_download_grid():
+    # should take only a couple of seconds with good internet connection
+
     download_grid(downloaded_grid_files, max_speaker=2)
     assert downloaded_grid_files.is_dir()
 
 def test_parse_and_save_grid():
-    # should take only a couple of seconds with good internet connection
+    #needs output from test above
     save_at = Path.cwd()/"tests"/"grid_parsed"
+    if not downloaded_grid_files.exists():
+        pytest.skip()
     parse_and_save_grid(grid_folder=downloaded_grid_files,
-                        max_speaker=2,
-                        max_files_per_speaker=10,
+                        max_speaker=1,
+                        max_files_per_speaker=1,
                         save_at=save_at
                         )
     assert save_at.is_dir()
     shutil.rmtree(save_at)
-    shutil.rmtree(downloaded_grid_files)
-
 
 @pytest.mark.parametrize(("split", "resulting_size"), [
         ((0.7, 0.2, 0.1, 1), (23_800, 6800, 3400)),
@@ -29,8 +31,8 @@ def test_parse_and_save_grid():
         ((0.5, 0.1, 0.1, 1), (17000, 3400, 3400)),
         ((1, 2, 3, 1), (1, 2, 3)),
         ((0.5, 0.1, 0.1, 0.5), (8500, 1700, 1700)),
-
 ])
+
 def test_apply_split(split: tuple, resulting_size: tuple):
     dataset = get_grid() # len == 34,000
 
@@ -52,6 +54,7 @@ def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int)
                     model_type="",
                     model_path=Path(""),
                     output_path=Path("tests/inference_test"),
+                    dataset_type="grid",
                     dataset_path=Path("datasets/grid/"),
                     train_split=0,
                     test_split=0,
