@@ -9,7 +9,7 @@ SAMPLE_RATE_DOWNLOADED_FILES = 25_000
 WANTED_SAMPLE_RATE = 16_000
 
 import wave
-import tqdm
+from tqdm import tqdm
 from datasets import Audio
 from pathlib import Path
 import logging
@@ -111,7 +111,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
         "align_path": [],
     }
     counter_speaker = 0
-    for speaker in tqdm.tqdm(audio_folder.iterdir()):
+    for speaker in tqdm(audio_folder.iterdir()):
         speaker = speaker.name
         align = align_folder/speaker/"align"
         audio = audio_folder/speaker/speaker
