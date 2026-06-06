@@ -10,4 +10,5 @@
 /tests/training_test/
 __pycache__/
 /nohup.out
-/tests/grid_downloaded/
+/tests/grid/
+/tests/grid_bc/

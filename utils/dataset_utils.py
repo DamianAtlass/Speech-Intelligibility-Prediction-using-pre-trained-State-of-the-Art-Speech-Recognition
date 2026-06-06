@@ -19,8 +19,8 @@ WANTED_SAMPLE_RATE = 16_000
 
 
 default_dataset_paths = {
-    "grid": Path("datasets/grid"),
-    "grid_bc": Path("datasets/GridIntelligibilityDatabase")
+    "grid": Path.cwd()/"datasets/grid",
+    "grid_bc": Path.cwd()/"datasets/GridIntelligibilityDatabase"
 }
 
 def get_dataset(dataset_type: str, dataset_path: Path = None):
