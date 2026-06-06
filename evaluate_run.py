@@ -109,7 +109,7 @@ def evaluate_run(path: Path):
         print(f"Reading the generated files took: {t():.4f} s")
 
         for s, metric in zip(summary, [avg_logprobs, wers]):
-            plot_metric(metric, f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
+            plot_metric([metric], f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
 
     else:
         summary_arr, avg_logprobs_arr, wers_arr = [], [], []
