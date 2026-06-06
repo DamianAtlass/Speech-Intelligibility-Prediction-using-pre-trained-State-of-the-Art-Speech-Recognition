@@ -56,7 +56,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
                 result["logprobs_path"] = str(file_path.relative_to(Path.cwd()))
 
-            sample_dict["result"] = result
+            sample_dict["prediction_result"] = result
             file_path = config.output_path / "data" / f"{file_name}.json"
             logger.info(f"Save result data to {file_path}")
             with open(file_path, 'w') as f:

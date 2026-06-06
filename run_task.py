@@ -30,6 +30,7 @@ from inference import inference
 from utils.cuda_utils import select_device
 from utils.logging_utils import catch_time
 from utils.dataset_utils import get_dataset
+from evaluate_run import evaluate_run
 
 print("Imports done!")
 
@@ -126,6 +127,8 @@ def main():
 
     logger.info(f"Execution time of all tasks: {t()/360:.4f} h")
     logger.info(f"All tasks are finished!")
+    logger.info("Evalute run.")
+    evaluate_run(config.output_path)
 
 
 if __name__ == '__main__':

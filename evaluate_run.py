@@ -74,9 +74,9 @@ def get_data(output_path: Path) -> tuple:
         with open(file) as f:
             json_file = json.load(f)
 
-            avg_logprobs.append(json_file["result"]["segments"][0]["avg_logprob"])
+            avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
             references.append(json_file["sentence"])
-            transcripts.append(json_file["result"]["text"])
+            transcripts.append(json_file["prediction_result"]["text"])
 
     transcripts = additional_normalization(transcripts)
 
