@@ -12,6 +12,14 @@ import logging
 logger = logging.getLogger(__name__)
 import matplotlib.pyplot as plt
 
+def get_only_keywords(string) -> str:
+    """
+    Return only the words at the keyword indices
+    """
+    keywords_index = [1, 3, 4]
+    string = string.split(" ")
+    string = [s for i,s in enumerate(string) if i in keywords_index]
+    return " ".join(string)
 
 def plot_metric(array: list[torch.Tensor],
                 title: str,
@@ -62,13 +70,14 @@ def plot_metric(array: list[torch.Tensor],
     #plt.show()
     plt.close()
 
-def get_data(output_path: Path) -> tuple:
+def get_data(output_path: Path, dataset_type: str) -> tuple:
     data_path = output_path / "data"
     device = select_device()
 
     avg_logprobs = []
     references = []
-    transcripts = []
+    machine_transcripts = []
+    human_transcripts = []
 
     for file in data_path.iterdir():
         with open(file) as f:
@@ -76,15 +85,20 @@ def get_data(output_path: Path) -> tuple:
 
             avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
             references.append(json_file["sentence"])
-            transcripts.append(json_file["prediction_result"]["text"])
+            machine_transcripts.append(json_file["prediction_result"]["text"])
+            human_transcripts.append(json_file["human_recognized_words"])
 
-    transcripts = additional_normalization(transcripts)
+    machine_transcripts = additional_normalization(machine_transcripts)
+    human_transcripts = additional_normalization(human_transcripts)
+    references_keywords = [get_only_keywords(o) for o in references]
 
-    wers = calculate_wers_with_norm(transcripts, references).to(device)
+    wers = calculate_wers_with_norm(machine_transcripts, references).to(device)
+    wers_human = calculate_wers_with_norm(human_transcripts, references_keywords).to(device)
+
     avg_logprobs = torch.Tensor(avg_logprobs).to(device)
 
     summary = []
-    for name, values in zip(["Logprob(per sequence)", "WER"], [avg_logprobs, wers]):
+    for name, values in zip(["Logprob(per sequence)", "WER (machine)", "WER (human study)"], [avg_logprobs, wers, wers_human]):
         summary.append({
             "metric_name": name,
             "mean": values.mean().item(),
@@ -95,7 +109,7 @@ def get_data(output_path: Path) -> tuple:
 
     with open(output_path/"summary.json", 'w') as f:
         json.dump(summary, f, indent=4)
-    return summary, avg_logprobs, wers
+    return summary, avg_logprobs, wers, wers_human
 
 def evaluate_run(path: Path):
 
@@ -105,22 +119,22 @@ def evaluate_run(path: Path):
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, avg_logprobs, wers = get_data(config.output_path)
+            summary, avg_logprobs, wers, wers_human = get_data(config.output_path, config.dataset_type)
         print(f"Reading the generated files took: {t():.4f} s")
 
-        for s, metric in zip(summary, [avg_logprobs, wers]):
+        for s, metric in zip(summary, [avg_logprobs, wers, wers_human]):
             plot_metric([metric], f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
 
     else:
-        summary_arr, avg_logprobs_arr, wers_arr = [], [], []
+        summary_arr, avg_logprobs_arr, wers_arr, wers_human_arr = [], [], [], []
         list_field = config.get_list_fields()[0]
 
         for c in unfolded_configs:
             with catch_time() as t:
-                summary, avg_logprobs, wers = get_data(c.output_path)
+                summary, avg_logprobs, wers, wers_human = get_data(c.output_path, c.dataset_type)
             print(f"Reading the generated files took: {t():.4f} s")
 
-            for s, metric in zip(summary, [avg_logprobs, wers]):
+            for s, metric in zip(summary, [avg_logprobs, wers, wers_human]):
                 plot_metric([metric],
                             f"Average {s["metric_name"]}s",
                             s["metric_name"],
@@ -130,8 +144,9 @@ def evaluate_run(path: Path):
             summary_arr.append(summary)
             avg_logprobs_arr.append(avg_logprobs)
             wers_arr.append(wers)
+            wers_human_arr.append(wers_human)
 
-        for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_arr]):
+        for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_arr, wers_human_arr]):
             plot_metric(metric_arr,
                         f"Average {s_arr[0]['metric_name']}s",
                         s_arr[0]["metric_name"],
@@ -140,4 +155,4 @@ def evaluate_run(path: Path):
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/full_data_all_models"))
+    evaluate_run(Path("inferences/tmp"))
