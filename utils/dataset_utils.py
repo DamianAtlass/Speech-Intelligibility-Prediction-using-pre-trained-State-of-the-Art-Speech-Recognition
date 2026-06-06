@@ -31,5 +31,5 @@ def get_dataset(dataset_type: str, dataset_path: Path = None):
     if dataset_type=="grid":
         return get_grid(dataset_path if dataset_path else default_dataset_paths[dataset_type])
     elif dataset_type=="grid_bc":
-        get_grid_bc()
+        return get_grid_bc(dataset_path if dataset_path else default_dataset_paths[dataset_type])
     raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
