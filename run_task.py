@@ -29,6 +29,8 @@ from train_whisper import train_whisper
 from inference import inference
 from utils.cuda_utils import select_device
 from utils.logging_utils import catch_time
+from utils.dataset_utils import get_dataset
+from evaluate_run import evaluate_run
 
 print("Imports done!")
 
@@ -105,7 +107,7 @@ def main():
             current_config.save_to_file(current_config.output_path/"config.ini")
 
             logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
-            dataset: Dataset= get_grid()
+            dataset: Dataset= get_dataset(current_config.dataset_type)
 
             logger.info(f"Task: {i+1}/{len(configs)}, apply split")
             dataset: DatasetDict= apply_split(dataset,
@@ -121,10 +123,12 @@ def main():
                 if isinstance(current_config, InferenceConfig):
                     logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
                     inference(current_config, dataset, device)
-            logger.info(f"Task: {i+1} - execution time: {i + 1}: {t2():.4f} s")
+            logger.info(f"Task: {i+1} - execution time: {i + 1}: {t2()/360:.4f} h")
 
-    logger.info(f"Execution time of all tasks: {t()/360} h")
+    logger.info(f"Execution time of all tasks: {t()/360:.4f} h")
     logger.info(f"All tasks are finished!")
+    logger.info("Evalute run.")
+    evaluate_run(config.output_path)
 
 
 if __name__ == '__main__':

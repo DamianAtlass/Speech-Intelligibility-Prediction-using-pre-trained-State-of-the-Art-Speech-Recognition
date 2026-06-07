@@ -14,6 +14,7 @@ class Config:
 
     output_path: Path
 
+    dataset_type: str
     dataset_path: Path
     train_split: int | float
     test_split: int | float
@@ -48,6 +49,7 @@ class Config:
             'model_path',
             'output_path',
             '',
+            'dataset_type',
             'dataset_path',
             'train_split',
             'test_split',

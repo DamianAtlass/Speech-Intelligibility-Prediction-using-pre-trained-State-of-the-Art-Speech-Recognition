@@ -17,6 +17,7 @@ def test_whisper_training():
         model_type="tiny",
         model_path=None,
         output_path=Path("tests/training_test"),
+        dataset_type="grid",
         dataset_path=Path("datasets/grid/"),
         train_split=10,
         test_split=5,

@@ -19,6 +19,7 @@ def test_batch_inference(time_stamps, extract_logprobs):
         model_type="tiny",
         model_path=None,
         output_path=Path("tests/inference_test"),
+        dataset_type="grid",
         dataset_path=Path("datasets/grid/"),
         train_split=1,
         test_split=1,

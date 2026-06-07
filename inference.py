@@ -42,7 +42,14 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             with catch_time() as t:
                 # results will not be equal (therefore not deterministic) if temperature=!0.0
                 #  https://github.com/openai/whisper/discussions/81
-                result: dict = transcribe_fn(model, audio_array, fp16=False, beam_size=config.beam_size, temperature=0, word_timestamps=config.word_timestamps, condition_on_previous_text=False)
+                result: dict = transcribe_fn(model,
+                                             audio_array,
+                                             fp16=False,
+                                             beam_size=config.beam_size,
+                                             temperature=0,
+                                             word_timestamps=config.word_timestamps,
+                                             condition_on_previous_text=False,
+                                             language="en")
             logger.info(f"Transcription time for sample {counter}/{len(dataset)}: {t():.4f} secs")
 
             audio_path = Path(sample["audio_path"])
@@ -56,7 +63,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
                 result["logprobs_path"] = str(file_path.relative_to(Path.cwd()))
 
-            sample_dict["result"] = result
+            sample_dict["prediction_result"] = result
             file_path = config.output_path / "data" / f"{file_name}.json"
             logger.info(f"Save result data to {file_path}")
             with open(file_path, 'w') as f:
