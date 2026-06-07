@@ -62,6 +62,17 @@ def plot_metric(array: list[torch.Tensor],
     #plt.show()
     plt.close()
 
+def mtd(t: torch.Tensor):
+    t = torch.exp(t)
+    t1 = t[:,:-1]
+    t2 = t[:,1:]
+
+    t3 = t1 - t2
+
+    t3 = torch.sum(t3**2, dim=1)
+    return t3.sum()
+
+
 def get_data(output_path: Path) -> tuple:
     data_path = output_path / "data"
     device = select_device()
