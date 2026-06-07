@@ -140,9 +140,11 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
             if not align_file_path.is_file():
                 raise FileNotFoundError(f"Filepath {align_file_path} does not exist")
 
-            data["audio"].append(str(audio_file_path)) #will be converted to Audio() later, see below
+            data["audio"].append(str(audio_file_path)) #will be resampled and converted to Audio() later, see below
 
-            reference, alignments = get_sentence_and_alignments(align_file_path, SAMPLE_RATE_DOWNLOADED_FILES, WANTED_SAMPLE_RATE)
+            reference, alignments = get_sentence_and_alignments(align_file_path,
+                                                                original_sr=SAMPLE_RATE_DOWNLOADED_FILES,
+                                                                new_sr=WANTED_SAMPLE_RATE)
             assert len(reference.split(" ")) == 6, f"A GRID sentence has to be 6 words-long! ({reference})"
 
             data["sentence"].append(reference)

@@ -73,7 +73,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
 
                 speaker = audio_file.stem.split("_")[0]
 
-                data["audio"].append(str(audio_file))  # will be converted to Audio() later, see below
+                data["audio"].append(str(audio_file))  # will be resampled and converted to Audio() later, see below
                 data["sample_rate"].append(WANTED_SAMPLE_RATE)
                 data["audio_path"].append(str(audio_file.relative_to(project_root)))
                 data["noise_level_db"].append(str(convert_noise_level(BC2007_noise_level.name)))
@@ -82,7 +82,9 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
                 alignment_file_path = grid_bc_folder / "word16kHz" / speaker / alignment_file_name
                 data["align_path"].append(str(alignment_file_path.relative_to(project_root)))
 
-                reference, alignments = get_sentence_and_alignments(alignment_file_path, SAMPLE_RATE_DOWNLOADED_FILES, WANTED_SAMPLE_RATE)
+                reference, alignments = get_sentence_and_alignments(alignment_file_path,
+                                                                    original_sr=WANTED_SAMPLE_RATE,
+                                                                    new_sr=WANTED_SAMPLE_RATE)
                 assert len(reference.split(" ")) == 6, f"A GRID sentence has to be 6 words-long! ({reference})"
                 data["sentence"].append(reference)
                 data["alignment"].append(alignments)

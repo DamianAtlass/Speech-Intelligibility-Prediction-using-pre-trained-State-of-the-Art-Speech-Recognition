@@ -1,4 +1,4 @@
-from utils.config_dataclasses import InferenceConfig, get_config, unfold_config
+from utils.config_dataclasses import get_config, unfold_config
 from pathlib import Path
 import json
 from utils.logging_utils import catch_time
@@ -9,66 +9,10 @@ import torch
 from utils.cuda_utils import select_device
 from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
 import logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-import matplotlib.pyplot as plt
+from utils.evaluate_utils import calc_pearson_corr, calc_spearman_corr, get_only_keywords, plot_metrics, plot_correlations
 
-def get_only_keywords(string) -> str:
-    """
-    Return only the words at the keyword indices
-    """
-    keywords_index = [1, 3, 4]
-    string = string.split(" ")
-    string = [s for i,s in enumerate(string) if i in keywords_index]
-    return " ".join(string)
-
-def plot_metric(array: list[torch.Tensor],
-                title: str,
-                metric_name: str,
-                x_label: list[str],
-                output_path: Path | None
-                ) -> None:
-    #sort
-
-    if len(array)>1:
-        order = torch.tensor([a.mean() for a in array])
-        order = torch.argsort(order)
-
-        array = [array[i] for i in order]
-        x_label = [x_label[i] for i in order]
-
-
-    fig, ax = plt.subplots(figsize=(4+len(array)*2,7))
-    ax.grid()
-    #tmp = ax.boxplot(array, showmeans=True)
-
-    #plt.legend(loc='upper right')
-
-
-    plt.title(title)
-    #plt.xlabel(x_label)
-    plt.ylabel(metric_name)
-
-    positions = range(1, len(x_label)+1)
-    #print(list(positions))
-    #print(len(array))
-    array = [a.cpu() for a in array]
-    tmp = ax.boxplot(array,
-               #notch=False,
-               positions=positions,
-               meanline=True,
-             showmeans=True
-             )
-    plt.xticks(positions, x_label)
-
-
-    ax.legend([tmp["means"][0]], ["Mean"], loc="upper right")
-    if metric_name== "WER":
-        plt.ylim(0,2)
-
-    if output_path:
-        plt.savefig(output_path/f'{title}.png')
-    #plt.show()
-    plt.close()
 
 def get_data(output_path: Path, dataset_type: str) -> tuple:
     data_path = output_path / "data"
@@ -77,28 +21,39 @@ def get_data(output_path: Path, dataset_type: str) -> tuple:
     avg_logprobs = []
     references = []
     machine_transcripts = []
-    human_transcripts = []
+    human_transcripts_kw = []
 
     for file in data_path.iterdir():
         with open(file) as f:
             json_file = json.load(f)
 
-            avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
+            if json_file["prediction_result"]["text"] == "" : #nothing recognized!
+                avg_logprobs.append(torch.nan)
+                machine_transcripts.append("")
+            else:
+                avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
+                machine_transcripts.append(json_file["prediction_result"]["text"])
+
+            human_transcripts_kw.append(json_file["human_recognized_words"])
             references.append(json_file["sentence"])
-            machine_transcripts.append(json_file["prediction_result"]["text"])
-            human_transcripts.append(json_file["human_recognized_words"])
+
 
     machine_transcripts = additional_normalization(machine_transcripts)
-    human_transcripts = additional_normalization(human_transcripts)
-    references_keywords = [get_only_keywords(o) for o in references]
+    machine_transcripts_kw = [get_only_keywords(o) for o in machine_transcripts]
 
-    wers = calculate_wers_with_norm(machine_transcripts, references).to(device)
-    wers_human = calculate_wers_with_norm(human_transcripts, references_keywords).to(device)
+    human_transcripts_kw = additional_normalization(human_transcripts_kw)
+
+    references_kw = [get_only_keywords(o) for o in references]
+
+    wers_machine = calculate_wers_with_norm(machine_transcripts, references).to(device)
+    wers_machine_kw = calculate_wers_with_norm(machine_transcripts_kw, references_kw).to(device)
+    wers_human_kw = calculate_wers_with_norm(human_transcripts_kw, references_kw).to(device)
 
     avg_logprobs = torch.Tensor(avg_logprobs).to(device)
 
     summary = []
-    for name, values in zip(["Logprob(per sequence)", "WER (machine)", "WER (human study)"], [avg_logprobs, wers, wers_human]):
+    for name, values in zip(["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)", "WER (human study, kw only)"],
+                            [avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw]):
         summary.append({
             "metric_name": name,
             "mean": values.mean().item(),
@@ -109,7 +64,7 @@ def get_data(output_path: Path, dataset_type: str) -> tuple:
 
     with open(output_path/"summary.json", 'w') as f:
         json.dump(summary, f, indent=4)
-    return summary, avg_logprobs, wers, wers_human
+    return summary, avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw
 
 def evaluate_run(path: Path):
 
@@ -119,40 +74,49 @@ def evaluate_run(path: Path):
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, avg_logprobs, wers, wers_human = get_data(config.output_path, config.dataset_type)
+            summary, avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw = get_data(config.output_path, config.dataset_type)
         print(f"Reading the generated files took: {t():.4f} s")
 
-        for s, metric in zip(summary, [avg_logprobs, wers, wers_human]):
-            plot_metric([metric], f"Average {s["metric_name"]}s for {config.model}({config.model_type})", s["metric_name"], [c.model_type for c in unfolded_configs], config.output_path)
+        for s, metric in zip(summary, [avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw]):
+            plot_metrics([metric],
+                         f"Average {s["metric_name"]}s for {config.model}({config.model_type})",
+                         s["metric_name"],
+                         [config.model_type],
+                         config.output_path)
+
+        plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config)
 
     else:
-        summary_arr, avg_logprobs_arr, wers_arr, wers_human_arr = [], [], [], []
+        summary_arr, avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr, wers_human_kw_arr = [], [], [], [], []
         list_field = config.get_list_fields()[0]
 
         for c in unfolded_configs:
             with catch_time() as t:
-                summary, avg_logprobs, wers, wers_human = get_data(c.output_path, c.dataset_type)
+                summary, avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw = get_data(c.output_path, c.dataset_type)
             print(f"Reading the generated files took: {t():.4f} s")
 
-            for s, metric in zip(summary, [avg_logprobs, wers, wers_human]):
-                plot_metric([metric],
+            for s, metric in zip(summary, [avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw]):
+                plot_metrics([metric],
                             f"Average {s["metric_name"]}s",
-                            s["metric_name"],
-                            [getattr(c, list_field)],
-                            c.output_path)
+                             s["metric_name"],
+                             [getattr(c, list_field)],
+                             c.output_path)
+            plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, c)
 
             summary_arr.append(summary)
             avg_logprobs_arr.append(avg_logprobs)
-            wers_arr.append(wers)
-            wers_human_arr.append(wers_human)
+            wers_machine_arr.append(wers_machine)
+            wers_machine_kw_arr.append(wers_machine_kw)
+            wers_human_kw_arr.append(wers_human_kw)
 
-        for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_arr, wers_human_arr]):
-            plot_metric(metric_arr,
+        for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr, wers_human_kw_arr]):
+            plot_metrics(metric_arr,
                         f"Average {s_arr[0]['metric_name']}s",
-                        s_arr[0]["metric_name"],
-                        [c.model_type for c in unfolded_configs],
-                        config.output_path)
+                         s_arr[0]["metric_name"],
+                         [c.model_type for c in unfolded_configs],
+                         config.output_path)
+        logger.info("Finished evaluation")
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/tmp"))
+    evaluate_run(Path("inferences/dummy_data3"))
