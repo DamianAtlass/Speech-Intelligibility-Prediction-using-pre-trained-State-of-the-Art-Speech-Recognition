@@ -44,19 +44,21 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
     project_root = Path.cwd().parent if Path.cwd().name == "tests" else Path.cwd()
 
     counter_noise = 0
-    for BC2007_noise_level in tqdm(BC2007.iterdir()):
+    for BC2007_noiseLevel in tqdm(BC2007.iterdir()):
         if counter_noise == max_noise_folders:
             break
         listener_counter = 0
-        if not BC2007_noise_level.is_dir():
+        if not BC2007_noiseLevel.is_dir():
             continue
 
-        for BC2007_noiselevel_listener in BC2007_noise_level.iterdir():
+        for BC2007_noiseLevel_listener in BC2007_noiseLevel.iterdir():
+            if BC2007_noiseLevel_listener.name =="18":
+                continue # skip bc data for that listener at SNR 2 was missing
             if listener_counter == max_listener:
                 break
-            if not BC2007_noiselevel_listener.is_dir():
+            if not BC2007_noiseLevel_listener.is_dir():
                 continue
-            listenerData_json_path = listenerData_folder / BC2007_noise_level.name / f"{BC2007_noiselevel_listener.name}.json"
+            listenerData_json_path = listenerData_folder / BC2007_noiseLevel.name / f"{BC2007_noiseLevel_listener.name}.json"
 
             with open(listenerData_json_path) as f:
                 l_data = json.load(f)
@@ -65,7 +67,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
 
             counter_audio_file =  0
 
-            for audio_file in BC2007_noiselevel_listener.iterdir():
+            for audio_file in BC2007_noiseLevel_listener.iterdir():
                 if counter_audio_file == max_files_per_listener:
                     break
                 if not audio_file.name in tested_files:
@@ -76,7 +78,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
                 data["audio"].append(str(audio_file))  # will be resampled and converted to Audio() later, see below
                 data["sample_rate"].append(WANTED_SAMPLE_RATE)
                 data["audio_path"].append(str(audio_file.relative_to(project_root)))
-                data["noise_level_db"].append(str(convert_noise_level(BC2007_noise_level.name)))
+                data["noise_level_db"].append(str(convert_noise_level(BC2007_noiseLevel.name)))
 
                 alignment_file_name = audio_file.stem.split("_")[1] + ".align"
                 alignment_file_path = grid_bc_folder / "word16kHz" / speaker / alignment_file_name

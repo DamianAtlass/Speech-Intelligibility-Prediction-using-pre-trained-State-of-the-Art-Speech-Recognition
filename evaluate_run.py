@@ -9,9 +9,8 @@ import torch
 from utils.cuda_utils import select_device
 from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import calc_pearson_corr, calc_spearman_corr, get_only_keywords, plot_metrics, plot_correlations
+from utils.evaluate_utils import get_only_keywords, plot_metrics, plot_correlations
 
 
 def get_data(output_path: Path, dataset_type: str) -> tuple:
@@ -61,9 +60,6 @@ def get_data(output_path: Path, dataset_type: str) -> tuple:
             "std": values.std().item(),
             "n": values.shape[0]
         })
-
-    with open(output_path/"summary.json", 'w') as f:
-        json.dump(summary, f, indent=4)
     return summary, avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw
 
 def evaluate_run(path: Path):
@@ -84,7 +80,10 @@ def evaluate_run(path: Path):
                          [config.model_type],
                          config.output_path)
 
-        plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config)
+        summary2 = plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config)
+
+        with open(config.output_path / "summary.json", 'w') as f:
+            json.dump({"summary1:": summary, "correlation:": summary2}, f, indent=4)
 
     else:
         summary_arr, avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr, wers_human_kw_arr = [], [], [], [], []
@@ -101,7 +100,10 @@ def evaluate_run(path: Path):
                              s["metric_name"],
                              [getattr(c, list_field)],
                              c.output_path)
-            plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, c)
+            summary2 = plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, c)
+
+            with open(c.output_path / "summary.json", 'w') as f:
+                json.dump({"summary1:": summary, "correlation:": summary2}, f, indent=4)
 
             summary_arr.append(summary)
             avg_logprobs_arr.append(avg_logprobs)
@@ -109,6 +111,7 @@ def evaluate_run(path: Path):
             wers_machine_kw_arr.append(wers_machine_kw)
             wers_human_kw_arr.append(wers_human_kw)
 
+        # plot subplots
         for s_arr, metric_arr in zip(zip(*summary_arr), [avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr, wers_human_kw_arr]):
             plot_metrics(metric_arr,
                         f"Average {s_arr[0]['metric_name']}s",
@@ -119,4 +122,4 @@ def evaluate_run(path: Path):
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/dummy_data3"))
+    evaluate_run(Path("inferences/tmp3"))

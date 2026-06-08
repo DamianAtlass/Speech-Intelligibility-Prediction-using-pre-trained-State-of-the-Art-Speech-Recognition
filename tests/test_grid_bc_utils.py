@@ -33,3 +33,4 @@ def test_get_grid_bc():
 
     dataset = get_grid_bc(test_grid_bc_folder)
     assert isinstance(dataset, Dataset)
+# whole actual grid_bc should be 22800 long (12×19×100)

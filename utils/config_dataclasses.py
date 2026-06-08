@@ -25,7 +25,7 @@ class Config:
     debug: bool = False
 
     def __post_init__(self):
-        self.model_type = cast(str, self.model_type).split(",") if "," in self.model_type else self.model_type
+        self.model_type = cast(str, self.model_type).replace(" ", "").split(",") if "," in self.model_type else self.model_type
         self.dataset_path = Path.cwd()/self.dataset_path
         self.train_split = to_int_or_float(self.train_split)
         self.test_split = to_int_or_float(self.test_split)
@@ -124,7 +124,7 @@ class InferenceConfig(Config):
 
         if isinstance(self.beam_size, str):
             if "," in self.beam_size:
-                self.beam_size = list(map(int, self.beam_size.split(",")))
+                self.beam_size = list(map(int, self.beam_size.replace(" ", "").split(",")))
             else:
                 self.beam_size = int(self.beam_size)
 
