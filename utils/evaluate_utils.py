@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import scipy.stats as stats
 import torch
 from pathlib import Path
@@ -14,53 +15,53 @@ def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Te
     return x[~is_nan], y[~is_nan]
 
 
-def calc_pearson_corr(x: torch.Tensor,
-                      y: torch.Tensor,
+def calc_pearson_corr(df: pd.DataFrame,
                       name: str,
                       xlabel: str,
                       ylabel: str,
                       output_path: Path | None = None,
                       ) -> tuple:
-    x, y = x.cpu(), y.cpu()
-    x, y = remove_nan(x, y)
+    df = df.dropna()
+    x = df.iloc[:, 0]
+    y = df.iloc[:, 1]
     # test for normality:
     normality_x = stats.normaltest(x)
     normality_y = stats.normaltest(y)
 
     regr = stats.linregress(x, y)
-    logger.info(regr)
+
     plt.figure(figsize=(10, 5))
     plt.plot(x, y, "o", label="original data")
-    plt.grid(True)
-    title = f"Regression line and Pearson correlation coefficient of {name}"
-    plt.suptitle(title)
-    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}")
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    if ("WER" in xlabel) and ("WER" in ylabel):
-        plt.ylim(0)
-        plt.ylim(0)
     plt.plot(x,
              regr.intercept + regr.slope * x,
              "r",
              label=f"Regression line: y={regr.intercept:.2f}+{regr.slope:.2f}x")
-    plt.legend()
 
+    if ("WER" in xlabel) and ("WER" in ylabel):
+        plt.ylim(0)
+        plt.ylim(0)
+    title = f"Regression line and Pearson correlation coefficient of {name}"
+    plt.suptitle(title)
+    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}")
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.grid(True)
+    plt.legend()
+    plt.show()
     if output_path:
         plt.savefig(output_path/f'{title}.png')
-    plt.show()
     plt.close()
 
     return regr.rvalue, regr.pvalue, normality_x.pvalue, normality_y.pvalue
 
-def calc_spearman_corr(x: torch.Tensor,
-                      y: torch.Tensor,
+def calc_spearman_corr(df: pd.DataFrame,
                       name: str,
                        xlabel: str,
                        ylabel: str,
                        output_path: Path | None = None) -> tuple:
-    x, y = x.cpu(), y.cpu()
-    x, y = remove_nan(x, y)
+    df = df.dropna()
+    x = df.iloc[:, 0]
+    y = df.iloc[:, 1]
 
     x_ranked = stats.rankdata(x)
     y_ranked = stats.rankdata(y)
@@ -87,7 +88,7 @@ def calc_spearman_corr(x: torch.Tensor,
 
     if output_path:
         plt.savefig(output_path/f'{title}.png')
-    plt.show()
+    #plt.show()
     plt.close()
     return regr.rvalue, regr.pvalue
 
@@ -102,50 +103,41 @@ def get_only_keywords(string) -> str:
     return " ".join(string)
 
 
-def plot_metrics(array: list[torch.Tensor],
+def plot_metrics(array: list[pd.DataFrame],
                  title: str,
                  metric_name: str,
                  x_label: list[str],
                  output_path: Path | None
                  ) -> None:
     figure_title = title
-    #sort
-    array = [a[~torch.isnan(a)] for a in array]
+    array = [a.dropna() for a in array]
+
     if len(array)>1:
+        # sort
         order = torch.tensor([a.mean() for a in array])
         order = torch.argsort(order, descending=True)
-
         array = [array[i] for i in order]
         x_label = [x_label[i] for i in order]
 
     x_label = [x+f"\n mean = {a.mean():.2f}\nmedian = {a.median():.2f}\nn = {len(a)}" for (x,a) in zip(x_label, array)]
 
-    fig, ax = plt.subplots(figsize=(4+len(array)*2,7))
-    ax.grid()
-    #tmp = ax.boxplot(array, showmeans=True)
+    fig, ax = plt.subplots(figsize=(6+len(array)*0.7,7))
 
-    #plt.legend(loc='upper right')
-
-    if len(array) > 1:
-        title += " sorted by means"
-    plt.title(title)
-    #plt.xlabel(x_label)
-    plt.ylabel(metric_name)
 
     positions = range(1, len(x_label)+1)
-    #print(list(positions))
-    #print(len(array))
-    array = [a.cpu() for a in array]
+
     tmp = ax.boxplot(array,
                      #notch=False,
                      positions=positions,
                      #meanline=True,
                      showmeans=True,
-
              )
+    if len(array) > 1:
+        title += " sorted by means"
+    plt.title(title)
+    plt.ylabel(metric_name)
+    ax.grid()
     plt.xticks(positions, x_label)
-
-
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
     if metric_name== "WER":
@@ -153,19 +145,19 @@ def plot_metrics(array: list[torch.Tensor],
 
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
-    plt.show()
+    #plt.show()
     plt.close()
 
-def plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config):
+def plot_correlations(df: pd.DataFrame, config):
     summary = []
+    #wers_human_kw, wers_machine_kw, avg_logprobs
     # calc person correlation
     name = f"WER of human result and {config.model}({config.model_type})"
-    r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(wers_human_kw,
-                      wers_machine_kw,
-                      output_path=config.output_path,
-                      name=name,
-                      xlabel=f"WER of human results (only keywords)",
-                      ylabel=f"WER ({config.model}, only keywords)")
+    r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "wers_machine_kw"]],
+                                                                      output_path=config.output_path,
+                                                                      name=name,
+                                                                      xlabel=f"WER of human results (only keywords)",
+                                                                      ylabel=f"WER ({config.model}, only keywords)")
     summary.append({
         "metric": "person correlation",
         "of": name,
@@ -177,8 +169,7 @@ def plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config):
 
     # calc spearman correlation
     name = f"WER of human result and {config.model}({config.model_type})"
-    r_val, p_val = calc_spearman_corr(wers_human_kw,
-                       wers_machine_kw,
+    r_val, p_val = calc_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
                        output_path=config.output_path,
                        name=name,
                        xlabel=f"WER of human results (only keywords)",
@@ -191,8 +182,7 @@ def plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config):
     })
 
     name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
-    r_val, p_val = calc_spearman_corr(wers_human_kw,
-                       avg_logprobs,
+    r_val, p_val = calc_spearman_corr(df[["wers_human_kw", "avg_logprobs"]],
                        output_path=config.output_path,
                        name=name,
                        xlabel=f"WER of human results (only keywords)",
@@ -205,3 +195,33 @@ def plot_correlations(wers_human_kw, wers_machine_kw, avg_logprobs, config):
     })
 
     return summary
+
+def plot_srt(df: pd.DataFrame, config):
+    df_grouped = (
+        df.groupby("snr")
+          .agg(
+            avr_wer_human=("wers_human_kw", "mean"),
+            avr_wer_machine=("wers_machine_kw", "mean"),
+        )
+          .reindex(np.sort(df["snr"].unique()))
+    )
+
+    x_labels = df_grouped.index.tolist()
+    y1_values = df_grouped["avr_wer_human"].values
+    y2_values = df_grouped["avr_wer_machine"].values
+
+    positions = range(len(x_labels))
+
+    plt.plot(positions, y1_values, marker="o", label="human")
+    plt.plot(positions, y2_values, marker="x", label="machine")
+
+    figure_title = f"WER of transcription from human data and {config.model}({config.model_type})"
+    plt.suptitle(figure_title)
+    plt.title(f"n={len(df)}")
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel("Average WER")
+    plt.grid()
+    plt.legend()
+    plt.savefig(config.output_path/f'{figure_title}.png')
+    plt.show()

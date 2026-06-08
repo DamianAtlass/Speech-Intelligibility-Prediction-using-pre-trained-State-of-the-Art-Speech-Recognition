@@ -38,7 +38,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
         "alignment": [],
         "audio_path": [],
         "align_path": [],
-        "noise_level_db": [],
+        "snr_db": [],
         "human_recognized_words": [],
     }
     project_root = Path.cwd().parent if Path.cwd().name == "tests" else Path.cwd()
@@ -78,7 +78,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
                 data["audio"].append(str(audio_file))  # will be resampled and converted to Audio() later, see below
                 data["sample_rate"].append(WANTED_SAMPLE_RATE)
                 data["audio_path"].append(str(audio_file.relative_to(project_root)))
-                data["noise_level_db"].append(str(convert_noise_level(BC2007_noiseLevel.name)))
+                data["snr_db"].append(str(convert_noise_level(BC2007_noiseLevel.name)))
 
                 alignment_file_name = audio_file.stem.split("_")[1] + ".align"
                 alignment_file_path = grid_bc_folder / "word16kHz" / speaker / alignment_file_name

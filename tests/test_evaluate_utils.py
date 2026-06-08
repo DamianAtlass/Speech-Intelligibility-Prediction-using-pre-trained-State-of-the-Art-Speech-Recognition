@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
 import pytest
-
+import pandas as pd
 
 @pytest.mark.parametrize(("string", "output"), [
     ("one two three four five six", "two four five"),
@@ -39,7 +39,12 @@ def test_calc_pearson_corr():
     y = torch.Tensor(list(map(func, x)))
     y = y + noise
 
-    rvalue, pvalue, _, _ = calc_pearson_corr(x, y, name="bla bla bla", xlabel="label", ylabel="label")
+    df = pd.DataFrame({
+        "x": x,
+        "y": y,
+    })
+
+    rvalue, pvalue, _, _ = calc_pearson_corr(df, name="bla bla bla", xlabel="label", ylabel="label")
     assert rvalue > 0.9
     assert pvalue < 0.05
 
@@ -53,6 +58,11 @@ def test_calc_spearman_corr():
     y = torch.Tensor(list(map(func, x)))
     y = y + noise
 
-    rvalue, pvalue = calc_spearman_corr(x, y, name="bla bla bla", xlabel="label", ylabel="label")
+    df = pd.DataFrame({
+        "x": x,
+        "y": y,
+    })
+
+    rvalue, pvalue = calc_spearman_corr(df, name="bla bla bla", xlabel="label", ylabel="label")
     assert rvalue > 0.9
     assert pvalue < 0.05
