@@ -212,32 +212,43 @@ def plot_correlations(df: pd.DataFrame, config):
     return summary
 
 def plot_srt(df: pd.DataFrame, config):
-    df_grouped = (
-        df.groupby("snr")
-          .agg(
-            avr_wer_human=("wers_human_kw", "mean"),
-            avr_wer_machine=("wers_machine_kw", "mean"),
-        )
-          .reindex(np.sort(df["snr"].unique()))
-    )
+    list_model_types: list = ([config.model_type] if isinstance(config.model_type, str) else config.model_type)
+    one_model_type: str = list_model_types[0]
 
-    x_labels = df_grouped.index.tolist()
-    y1_values = df_grouped["avr_wer_human"].values
-    y2_values = df_grouped["avr_wer_machine"].values
+    df_human_data = df[df["model_type"]==one_model_type][["wers_human_kw", "snr"]]
+    df_human_data_grouped = (
+        df_human_data.groupby(["snr"])
+        .agg(
+            avr_wer_human=("wers_human_kw", "mean"),
+        )
+        .reindex(np.sort(df["snr"].unique()))
+    )
+    df = df.drop('wers_human_kw', axis=1)
+
+    x_labels = np.sort(df["snr"].unique())
+    human_values = df_human_data_grouped["avr_wer_human"].values
+
+    machine_plots: list = []
+    for t in list_model_types:
+        df_tmp = df[df["model_type"] == t]
+        df_tmp = df_tmp.groupby(["snr"]).agg(avr_wer_machine=("wers_machine_kw", "mean"), ).reindex(np.sort(df["snr"].unique()))
+        machine_plots.append(df_tmp["avr_wer_machine"].values)
+
 
     positions = range(len(x_labels))
-
-    plt.plot(positions, y1_values, marker="o", label="human")
-    plt.plot(positions, y2_values, marker="x", label="machine")
+    plt.figure(figsize=[10, 5])
+    plt.plot(positions, human_values, marker="o", label="human")
+    for mp,l in zip(machine_plots, list_model_types):
+        plt.plot(positions, mp, marker="x", label=l)
 
     figure_title = f"WER of transcription from human data and {config.model}({config.model_type})"
     plt.suptitle(figure_title)
-    plt.title(f"n={len(df)}")
+    #plt.title(f"n={len(df)}") #falty
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel("Average WER")
     plt.grid()
     plt.legend()
     plt.savefig(config.output_path/f'{figure_title}.png')
-    #plt.show()
+    plt.show()
     plt.close()
