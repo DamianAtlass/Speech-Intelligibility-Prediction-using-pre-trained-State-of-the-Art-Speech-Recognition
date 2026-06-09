@@ -14,6 +14,16 @@ def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Te
     is_nan = torch.isnan(x) | torch.isnan(y)
     return x[~is_nan], y[~is_nan]
 
+def get_only_keywords(string) -> str:
+    """
+    Return only the words at the keyword indices
+    """
+    string = werpy.normalize(string)
+    keywords_index = [1, 3, 4]
+    string = string.split(" ")
+    string = [s for i,s in enumerate(string) if i in keywords_index]
+    return " ".join(string)
+
 
 def calc_pearson_corr(df: pd.DataFrame,
                       name: str,
@@ -42,14 +52,14 @@ def calc_pearson_corr(df: pd.DataFrame,
         plt.ylim(0)
     title = f"Regression line and Pearson correlation coefficient of {name}"
     plt.suptitle(title)
-    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}")
+    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}, stderr: {regr.stderr:.4f},")
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.grid(True)
     plt.legend()
-    plt.show()
     if output_path:
         plt.savefig(output_path/f'{title}.png')
+    #plt.show()
     plt.close()
 
     return regr.rvalue, regr.pvalue, normality_x.pvalue, normality_y.pvalue
@@ -74,9 +84,9 @@ def calc_spearman_corr(df: pd.DataFrame,
     plt.grid(True)
     title = f"Regression line and Spearman correlation coefficient of {name}"
     plt.suptitle(title)
-    plt.title(f"Spearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}")
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    plt.title(f"Spearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}, stderr: {regr.stderr:.4f}")
+    plt.xlabel("ranked " + xlabel)
+    plt.ylabel("ranked " + ylabel)
     if ("WER" in xlabel) and ("WER" in ylabel):
         plt.ylim(0)
         plt.ylim(0)
@@ -91,16 +101,6 @@ def calc_spearman_corr(df: pd.DataFrame,
     #plt.show()
     plt.close()
     return regr.rvalue, regr.pvalue
-
-def get_only_keywords(string) -> str:
-    """
-    Return only the words at the keyword indices
-    """
-    string = werpy.normalize(string)
-    keywords_index = [1, 3, 4]
-    string = string.split(" ")
-    string = [s for i,s in enumerate(string) if i in keywords_index]
-    return " ".join(string)
 
 
 def plot_metrics(array: list[pd.DataFrame],
@@ -167,6 +167,21 @@ def plot_correlations(df: pd.DataFrame, config):
         "y_normality_p_value": f"{y_normality_p:.10f}",
     })
 
+    name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
+    r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "avg_logprobs"]],
+                                                                      output_path=config.output_path,
+                                                                      name=name,
+                                                                      xlabel=f"WER of human results (only keywords)",
+                                                                      ylabel=f"average logprob ({config.model})")
+    summary.append({
+        "metric": "person correlation",
+        "of": name,
+        "correlation_coefficient": f"{r_val:.10f}",
+        "p_value": f"{p_val:.10f}",
+        "x_normality_p_value": f"{x_normality_p:.10f}",
+        "y_normality_p_value": f"{y_normality_p:.10f}",
+    })
+
     # calc spearman correlation
     name = f"WER of human result and {config.model}({config.model_type})"
     r_val, p_val = calc_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
@@ -224,4 +239,5 @@ def plot_srt(df: pd.DataFrame, config):
     plt.grid()
     plt.legend()
     plt.savefig(config.output_path/f'{figure_title}.png')
-    plt.show()
+    #plt.show()
+    plt.close()

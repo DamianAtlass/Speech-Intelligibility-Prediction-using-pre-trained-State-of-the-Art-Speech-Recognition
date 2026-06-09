@@ -4,6 +4,9 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import pytest
 import pandas as pd
+from pathlib import Path
+
+test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 
 @pytest.mark.parametrize(("string", "output"), [
     ("one two three four five six", "two four five"),
@@ -30,7 +33,7 @@ def test_remove_nan(x, y, x_exp, y_exp):
 
 
 def test_calc_pearson_corr():
-    x = torch.linspace(0, 99, 500)
+    x = torch.linspace(0, 99, 100)
 
     def func(x: float) -> float:
         return x * 2  # linear
@@ -44,17 +47,17 @@ def test_calc_pearson_corr():
         "y": y,
     })
 
-    rvalue, pvalue, _, _ = calc_pearson_corr(df, name="bla bla bla", xlabel="label", ylabel="label")
+    rvalue, pvalue, _, _ = calc_pearson_corr(df, name="test pearson", xlabel="x label", ylabel="y label", output_path=test_folder)
     assert rvalue > 0.9
     assert pvalue < 0.05
 
 def test_calc_spearman_corr():
-    x = torch.linspace(0, 99, 500)
+    x = torch.linspace(0, 99, 100)
 
     def func(x: float) -> float:
-        return x**4 #exponential
+        return x**2 #exponential
 
-    noise = torch.randn(len(x)) * 15
+    noise = torch.randn(len(x)) * 400
     y = torch.Tensor(list(map(func, x)))
     y = y + noise
 
@@ -63,6 +66,6 @@ def test_calc_spearman_corr():
         "y": y,
     })
 
-    rvalue, pvalue = calc_spearman_corr(df, name="bla bla bla", xlabel="label", ylabel="label")
+    rvalue, pvalue = calc_spearman_corr(df, name="test spearman", xlabel="x label", ylabel="y label", output_path=test_folder)
     assert rvalue > 0.9
     assert pvalue < 0.05

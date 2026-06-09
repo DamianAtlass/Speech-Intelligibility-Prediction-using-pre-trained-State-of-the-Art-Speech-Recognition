@@ -15,9 +15,11 @@ import pandas as pd
 from typing import Tuple, List
 
 
-def get_data(output_path: Path, dataset_type: str) -> Tuple[List[dict], pd.DataFrame]:
+def get_data(output_path: Path, dataset_type: str, device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+    if not device:
+        device = select_device()
+
     data_path = output_path / "data"
-    device = select_device()
 
     avg_logprobs = []
     references = []
@@ -79,7 +81,7 @@ def get_data(output_path: Path, dataset_type: str) -> Tuple[List[dict], pd.DataF
     })
     return summary, df
 
-def evaluate_run(path: Path):
+def evaluate_run(path: Path, device: torch.device | None = None):
 
     config = get_config(path / "config.ini")
     unfolded_configs = unfold_config(config)
@@ -101,7 +103,7 @@ def evaluate_run(path: Path):
         with open(config.output_path / "summary.json", 'w') as f:
             json.dump({"summary1:": summary, "correlation:": summary2}, f, indent=4)
 
-        plot_srt(df[["wers_human_kw", "wers_machine_kw", "snr", "machine_transcripts_kw", "human_transcripts_kw"]], config)
+        plot_srt(df[["wers_human_kw", "wers_machine_kw", "snr"]], config)
 
 
     else:
@@ -111,7 +113,7 @@ def evaluate_run(path: Path):
         for c in unfolded_configs:
             with catch_time() as t:
                 #avg_logprobs, wers_machine, wers_machine_kw, wers_human_kw
-                summary, df = get_data(c.output_path, c.dataset_type)
+                summary, df = get_data(c.output_path, c.dataset_type, device=device)
             print(f"Reading the generated files took: {t():.4f} s")
 
             for s, metric in zip(summary, [df["avg_logprobs"], df["wers_machine"], df["wers_machine_kw"], df["wers_human_kw"]]):
@@ -120,6 +122,7 @@ def evaluate_run(path: Path):
                              s["metric_name"],
                              [getattr(c, list_field)],
                              c.output_path)
+
             summary2 = plot_correlations(df, c)
 
             with open(c.output_path / "summary.json", 'w') as f:

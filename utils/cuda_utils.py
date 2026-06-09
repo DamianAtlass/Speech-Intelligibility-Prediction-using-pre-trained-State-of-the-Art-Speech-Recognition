@@ -40,7 +40,7 @@ def check_gpu_memory_usage(gpu_index: int, threshold: float = 0.05, gpu_mem=None
         memory_use_values = [int(x.split()[0]) for i, x in enumerate(memory_use_info)]
 
         for i in range(len(memory_use_values)):
-            logger.info(f"Memory usage GPU {i}: {memory_use_values[i]}")
+            logger.info(f"Memory usage GPU {i}: {memory_use_values[i]} MiB")
 
         #check usage threshold
 
