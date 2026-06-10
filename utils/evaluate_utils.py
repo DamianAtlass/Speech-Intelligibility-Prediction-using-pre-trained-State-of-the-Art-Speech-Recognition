@@ -250,5 +250,66 @@ def plot_srt(df: pd.DataFrame, config):
     plt.grid()
     plt.legend()
     plt.savefig(config.output_path/f'{figure_title}.png')
-    plt.show()
+    #plt.show()
+    plt.close()
+
+def calculate_corr_per_listener(df: pd.DataFrame,
+                                config,
+                                correlate_to: str):
+
+    list_model_types: list = ([config.model_type] if isinstance(config.model_type, str) else config.model_type)
+    corr_arr = []
+    p_val_arr = []
+    for t in list_model_types:
+        df_model_type = df[df["model_type"]==t]
+        df_model_type = df_model_type.dropna()
+
+        corr_arr_tmp = []
+        p_val_arr_tmp = []
+
+        listeners = df_model_type["listener"].unique()
+        for l in listeners:
+            df_listener = df_model_type[df_model_type["listener"]==l]
+            x = df_listener["wers_human_kw"]
+            y = df_listener[correlate_to]
+            x_ranked = stats.rankdata(x)
+            y_ranked = stats.rankdata(y)
+            del y, x
+
+            # spearman corr == pearson corr of ranks
+            regr = stats.pearsonr(x_ranked, y_ranked)
+            corr_arr_tmp.append(regr.statistic)
+            p_val_arr_tmp.append(regr.pvalue)
+
+        corr_arr.append(torch.tensor(corr_arr_tmp))
+        p_val_arr.append(torch.tensor(p_val_arr_tmp))
+
+
+    fig, ax = plt.subplots(figsize=(6 + len(config.model_type) * 0.7, 7))
+
+    positions = range(1, len(list_model_types) + 1)
+
+    tmp = ax.boxplot(corr_arr,
+                     # notch=False,
+                     positions=positions,
+                     # meanline=True,
+                     showmeans=True,
+                     )
+    d = {
+        "wers_machine_kw": "WER for keywords",
+        "avg_logprobs": "average log probability score (per sequence)",
+    }
+
+    title = f"Spearman Correlation Coefficient between human WER and {config.model}'s {d[correlate_to]} for each listener"
+    plt.title(title +"\nand maximum p-value to the rounded 4th digit")
+    plt.ylabel("Pearson Correlation Coefficient")
+    ax.grid()
+    x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t,p, c in zip(list_model_types, p_val_arr, corr_arr)]
+    plt.xticks(positions, x_label)
+    ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
+
+
+    if config.output_path:
+        plt.savefig(config.output_path/f'{title}.png')
+    #plt.show()
     plt.close()

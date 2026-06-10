@@ -40,6 +40,8 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
         "align_path": [],
         "snr_db": [],
         "human_recognized_words": [],
+        "listener": [],
+        "speaker": [],
     }
     project_root = Path.cwd().parent if Path.cwd().name == "tests" else Path.cwd()
 
@@ -53,7 +55,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
 
         for BC2007_noiseLevel_listener in BC2007_noiseLevel.iterdir():
             if BC2007_noiseLevel_listener.name =="18":
-                continue # skip bc data for that listener at SNR 2 was missing
+                continue # skip because data for that listener at SNR 2 was missing
             if listener_counter == max_listener:
                 break
             if not BC2007_noiseLevel_listener.is_dir():
@@ -82,21 +84,26 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
 
                 alignment_file_name = audio_file.stem.split("_")[1] + ".align"
                 alignment_file_path = grid_bc_folder / "word16kHz" / speaker / alignment_file_name
-                data["align_path"].append(str(alignment_file_path.relative_to(project_root)))
 
                 reference, alignments = get_sentence_and_alignments(alignment_file_path,
                                                                     original_sr=WANTED_SAMPLE_RATE,
                                                                     new_sr=WANTED_SAMPLE_RATE)
                 assert len(reference.split(" ")) == 6, f"A GRID sentence has to be 6 words-long! ({reference})"
                 data["sentence"].append(reference)
+                data["align_path"].append(str(alignment_file_path.relative_to(project_root)))
                 data["alignment"].append(alignments)
+
+                data["listener"].append(BC2007_noiseLevel_listener.name)
+                data["speaker"].append(speaker[1:])
 
 
                 index = tested_files.index(audio_file.name)
-                recognized_words = results[index]
-                tmp = audio_file.stem.split("_")[1]
-                assert reference == convert_short_name_to_ref(tmp, input_is_only_keywords=False)
-                data["human_recognized_words"].append(convert_short_name_to_ref(recognized_words))
+                recognized_keyword_abbreviations = results[index]
+
+                data["human_recognized_words"].append(convert_short_name_to_ref(recognized_keyword_abbreviations))
+
+                reference_abbreviations = audio_file.stem.split("_")[1]  # a little double check
+                assert reference == convert_short_name_to_ref(reference_abbreviations, input_is_only_keywords=False)
 
                 counter_audio_file += 1
             listener_counter += 1

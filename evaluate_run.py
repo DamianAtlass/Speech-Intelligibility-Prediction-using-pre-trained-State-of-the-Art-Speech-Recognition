@@ -10,12 +10,16 @@ from utils.cuda_utils import select_device
 from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_only_keywords, plot_metrics, plot_correlations, plot_srt
+from utils.evaluate_utils import get_only_keywords, plot_metrics, plot_correlations, plot_srt, \
+    calculate_corr_per_listener
 import pandas as pd
 from typing import Tuple, List
+from utils.cuda_utils import select_device
 
 
-def get_data(output_path: Path, dataset_type: str, device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+def get_data(output_path: Path,
+             dataset_type: str,
+             device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
     if not device:
         device = select_device()
 
@@ -26,6 +30,7 @@ def get_data(output_path: Path, dataset_type: str, device: torch.device) -> Tupl
     machine_transcripts = []
     human_transcripts_kw = []
     snr = []
+    listener = []
 
     for file in data_path.iterdir():
         with open(file) as f:
@@ -41,6 +46,7 @@ def get_data(output_path: Path, dataset_type: str, device: torch.device) -> Tupl
             human_transcripts_kw.append(json_file["human_recognized_words"])
             references.append(json_file["sentence"])
             snr.append(int(json_file["snr_db"]))
+            listener.append(json_file["listener"])
 
 
     machine_transcripts = additional_normalization(machine_transcripts)
@@ -78,20 +84,24 @@ def get_data(output_path: Path, dataset_type: str, device: torch.device) -> Tupl
         "machine_transcripts_kw": machine_transcripts_kw,
         "wers_human_kw": wers_human_kw.cpu(),
         "human_transcripts_kw": human_transcripts_kw,
+        "listener": listener,
     })
     return summary, df
 
 def evaluate_run(path: Path, device: torch.device | None = None):
+    if not device:
+        device = select_device()
 
     config = get_config(path / "config.ini")
     unfolded_configs = unfold_config(config)
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, df_single_run = get_data(config.output_path, config.dataset_type)
+            summary, df_single_run = get_data(config.output_path, config.dataset_type, device)
         print(f"Reading the generated files took: {t():.4f} s")
 
         for s, metric in zip(summary, [df_single_run["avg_logprobs"], df_single_run["wers_machine"], df_single_run["wers_machine_kw"], df_single_run["wers_human_kw"]]):
+            df_single_run["model_type"] = config.model_type
             plot_metrics([metric],
                          f"Average {s["metric_name"]}s for {config.model}({config.model_type})",
                          s["metric_name"],
@@ -103,7 +113,15 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         with open(config.output_path / "summary.json", 'w') as f:
             json.dump({"summary1:": summary, "correlation:": summary2}, f, indent=4)
 
-        plot_srt(df_single_run[["wers_human_kw", "wers_machine_kw", "snr"]], config)
+        plot_srt(df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]], config)
+
+        calculate_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="wers_machine_kw")
+
+        calculate_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="avg_logprobs")
 
 
     else:
@@ -153,9 +171,20 @@ def evaluate_run(path: Path, device: torch.device | None = None):
                          s_arr[0]["metric_name"],
                          [c.model_type for c in unfolded_configs],
                          config.output_path)
+
         plot_srt(df_all[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]], config)
+
+
+        calculate_corr_per_listener(df_all[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="wers_machine_kw")
+
+        calculate_corr_per_listener(df_all[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="avg_logprobs")
+
     logger.info("Finished evaluation")
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/tmp"))
+    evaluate_run(Path("inferences/tmp3"))
