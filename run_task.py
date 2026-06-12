@@ -32,6 +32,8 @@ from utils.logging_utils import catch_time
 from utils.dataset_utils import get_dataset
 from evaluate_run import evaluate_run
 
+INDIVIDUAL_WHISPER_MODELS = ['tiny.en', 'tiny', 'base.en', 'base', 'small.en', 'small', 'medium.en', 'medium', 'large-v1', 'large-v2', 'large-v3', 'large-v3-turbo']
+
 print("Imports done!")
 
 def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:

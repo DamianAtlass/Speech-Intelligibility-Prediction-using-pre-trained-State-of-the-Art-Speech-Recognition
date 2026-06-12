@@ -1,14 +1,21 @@
+import json
+from typing import Tuple, List
+
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats as stats
 import torch
 from pathlib import Path
-
 import werpy
 from matplotlib import pyplot as plt
 import logging
+
+from utils.cuda_utils import select_device
+from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
+
 logger = logging.getLogger(__name__)
+from utils.config_dataclasses import InferenceConfig
+
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -313,3 +320,122 @@ def calculate_corr_per_listener(df: pd.DataFrame,
         plt.savefig(config.output_path/f'{title}.png')
     #plt.show()
     plt.close()
+
+def evaluate_individual_run(config: InferenceConfig,
+                            summary: list[dict],
+                            df_single_run: pd.DataFrame,
+                            device: torch.device):
+
+    metrics = [df_single_run["avg_logprobs"], df_single_run["wers_machine"], df_single_run["wers_machine_kw"]]
+
+    corr_summary = None
+
+    if config.dataset_type != "grid":
+        metrics.append(df_single_run["wers_human_kw"])
+        corr_summary = plot_correlations(df_single_run, config)
+
+        plot_srt(df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]], config)
+
+        calculate_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="wers_machine_kw")
+
+        calculate_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
+                                    config,
+                                    correlate_to="avg_logprobs")
+
+    for s_arr, metric in zip(summary, metrics):
+        df_single_run["model_type"] = config.model_type
+        plot_metrics([metric],
+                     f"Average {s_arr["metric_name"]}s for {config.model}({config.model_type})",
+                     s_arr["metric_name"],
+                     [config.model_type],
+                     config.output_path)
+
+    with open(config.output_path / "summary.json", 'w') as f:
+        json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
+
+
+def get_data(output_path: Path,
+             dataset_type: str,
+             device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+
+    data_path = output_path / "data"
+
+    avg_logprobs = []
+    references = []
+    machine_transcripts = []
+    human_transcripts_kw = []
+    snr = []
+    listener = []
+
+    for file in data_path.iterdir():
+        with open(file) as f:
+            json_file = json.load(f)
+
+            if json_file["prediction_result"]["text"] == "" : #nothing recognized!
+                avg_logprobs.append(torch.nan)
+                machine_transcripts.append("")
+            else:
+                avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
+                machine_transcripts.append(json_file["prediction_result"]["text"])
+
+            references.append(json_file["sentence"])
+            if dataset_type != "grid":
+                human_transcripts_kw.append(json_file["human_recognized_words"])
+                snr.append(int(json_file["snr_db"]))
+                listener.append(json_file["listener"])
+
+
+    machine_transcripts = additional_normalization(machine_transcripts)
+    machine_transcripts_kw = [get_only_keywords(o) for o in machine_transcripts]
+
+    human_transcripts_kw = additional_normalization(human_transcripts_kw)
+
+    references_kw = [get_only_keywords(o) for o in references]
+
+    wers_machine = calculate_wers_with_norm(reference=references, hypothesis=machine_transcripts).to(device)
+    wers_machine_kw = calculate_wers_with_norm(reference=references_kw, hypothesis=machine_transcripts_kw).to(device)
+
+    avg_logprobs = torch.Tensor(avg_logprobs).to(device)
+    if dataset_type != "grid":
+        wers_human_kw = calculate_wers_with_norm(reference=references_kw, hypothesis=human_transcripts_kw).to(device)
+
+    summary = []
+    metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)"]
+    metrics = [avg_logprobs, wers_machine, wers_machine_kw]
+    if dataset_type != "grid":
+        metric_names.append("WER (human study, kw only)")
+        metrics.append(wers_human_kw)
+
+    for n, m in zip(metric_names, metrics):
+        summary.append({
+            "metric_name": n,
+            "mean": m.mean().item(),
+            "median": m.median().item(),
+            "std": m.std().item(),
+            "n": m.shape[0]
+        })
+
+    data = {
+        "avg_logprobs": avg_logprobs.cpu(),
+        "references": references,
+        "references_kw": references_kw,
+        "wers_machine": wers_machine.cpu(),
+        "wers_machine_kw": wers_machine_kw.cpu(),
+        "machine_transcripts": machine_transcripts,
+        "machine_transcripts_kw": machine_transcripts_kw,
+
+    }
+
+    if dataset_type != "grid":
+        data.update({
+        "wers_human_kw": wers_human_kw.cpu(),
+        "human_transcripts_kw": human_transcripts_kw,
+        "listener": listener,
+        "snr": snr,
+
+        })
+
+    df = pd.DataFrame(data)
+    return summary, df

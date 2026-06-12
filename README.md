@@ -52,6 +52,12 @@ pip install -e /path/to/sip_whipser/
 
 It is required to set up a .env file, the .env_template can be used as a template. Remember to rename the final file.
 
+### Required data
+
+Clean grid is downloaded automatically if used. Data regarding the GridIntelligibilityDatabase need to be moved into /project_root/datasets like this:
+/mtec/db/speech/audio/grid/extra/GridIntelligibilityDatabase/BC2007wavs -> /project_root/datasets/GridIntelligibilityDatabase/
+/mtec/public/damian/listener_data -> /project_root/datasets/GridIntelligibilityDatabase/
+/mtec/db/speech/audio/grid/GRID/align/word16kHz -> /project_root/datasets/GridIntelligibilityDatabase/
 ### pytest
 
 To check the functionality, first the file __my_pytest__ needs to be made executable:
