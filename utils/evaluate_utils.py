@@ -16,6 +16,11 @@ from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
 
+sorting_reverse = {
+    "WER (machine)": True,
+    "Logprob(per sequence)": False,
+    "WER (machine, kw only)": True,
+}
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -122,14 +127,13 @@ def plot_metrics(array: list[pd.DataFrame],
     if len(array)>1:
         # sort
         order = torch.tensor([a.mean() for a in array])
-        order = torch.argsort(order, descending=True)
+        order = torch.argsort(order, descending=sorting_reverse[metric_name])
         array = [array[i] for i in order]
         x_label = [x_label[i] for i in order]
 
     x_label = [x+f"\n mean = {a.mean():.2f}\nmedian = {a.median():.2f}\nn = {len(a)}" for (x,a) in zip(x_label, array)]
 
     fig, ax = plt.subplots(figsize=(6+len(array)*0.7,7))
-
 
     positions = range(1, len(x_label)+1)
 
@@ -139,16 +143,20 @@ def plot_metrics(array: list[pd.DataFrame],
                      #meanline=True,
                      showmeans=True,
              )
+    if "WER" in metric_name:
+        max_y = None
+        title += f", y-axis-limit={max_y}"
+        plt.ylim(0, max_y)
+
     if len(array) > 1:
-        title += " sorted by means"
+        title += ", sorted by means"
     plt.title(title)
     plt.ylabel(metric_name)
     ax.grid()
     plt.xticks(positions, x_label)
+    plt.tight_layout()
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
-    if metric_name== "WER":
-        plt.ylim(0,2)
 
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
@@ -347,7 +355,7 @@ def evaluate_individual_run(config: InferenceConfig,
     for s_arr, metric in zip(summary, metrics):
         df_single_run["model_type"] = config.model_type
         plot_metrics([metric],
-                     f"Average {s_arr["metric_name"]}s for {config.model}({config.model_type})",
+                     f"Average {s_arr["metric_name"]} for {config.model}({config.model_type})",
                      s_arr["metric_name"],
                      [config.model_type],
                      config.output_path)
@@ -368,6 +376,7 @@ def get_data(output_path: Path,
     human_transcripts_kw = []
     snr = []
     listener = []
+    audio_paths = []
 
     for file in data_path.iterdir():
         with open(file) as f:
@@ -381,6 +390,7 @@ def get_data(output_path: Path,
                 machine_transcripts.append(json_file["prediction_result"]["text"])
 
             references.append(json_file["sentence"])
+            audio_paths.append(json_file["audio_path"])
             if dataset_type != "grid":
                 human_transcripts_kw.append(json_file["human_recognized_words"])
                 snr.append(int(json_file["snr_db"]))
@@ -425,6 +435,7 @@ def get_data(output_path: Path,
         "wers_machine_kw": wers_machine_kw.cpu(),
         "machine_transcripts": machine_transcripts,
         "machine_transcripts_kw": machine_transcripts_kw,
+        "audio_paths": audio_paths,
 
     }
 

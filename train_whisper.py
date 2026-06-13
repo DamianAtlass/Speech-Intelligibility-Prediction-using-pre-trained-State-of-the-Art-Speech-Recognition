@@ -9,6 +9,8 @@ metric = evaluate.load("wer")
 from utils.config_dataclasses import TrainingConfig
 from utils.logging_utils import capture_stdout, catch_time
 import os
+import json
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -164,8 +166,15 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
         logger.info(f"Start training")
         with capture_stdout(logger.info, __name__):
-            trainer.train()
+            train_output = trainer.train()
         logger.info(f"Training done")
+
+        summary = train_output._asdict()
+        print(summary)
+        with open(config.output_path / "summary.json", 'w') as f:
+            json.dump({"summary:": summary}, f, indent=4)
+    else:
+        logger.info(f"Skip training")
 
     trainer.save_model(str(config.output_path))
 

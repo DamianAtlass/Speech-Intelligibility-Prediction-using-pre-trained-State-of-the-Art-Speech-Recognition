@@ -69,14 +69,11 @@ def main():
         raise Exception("Must be using Python 3.12 or later!")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', help="config file path")
+    parser.add_argument('-f', default="training_config_template.ini", help="config file path")
 
     load_dotenv()
 
-    if parser.parse_args().f:
-        config_path = Path(parser.parse_args().f)
-    else:
-        config_path = Path("inference_config_template.ini")
+    config_path = Path(parser.parse_args().f)
 
     config = get_config(config_path)
 
@@ -129,8 +126,8 @@ def main():
 
     logger.info(f"Execution time of all tasks: {t()/3600:.2f} h")
     logger.info(f"All tasks are finished!")
-    logger.info("Evalute run.")
     if isinstance(config, InferenceConfig):
+        logger.info("Evalute run.")
         evaluate_run(config.output_path, device)
 
 

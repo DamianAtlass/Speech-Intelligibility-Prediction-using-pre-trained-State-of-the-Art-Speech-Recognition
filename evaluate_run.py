@@ -55,7 +55,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         # plot group plots
         for s_arr, metric_arr in zip(zip(*summary_arr[:-1]), [avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr]):
             plot_metrics(metric_arr,
-                        f"Average {s_arr[0]['metric_name']}s",
+                        f"Average {s_arr[0]['metric_name']}",
                          s_arr[0]["metric_name"],
                          [c.model_type for c in unfolded_configs],
                          config.output_path)
