@@ -107,11 +107,13 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
     model.generation_config.forced_decoder_ids = None
 
+    logger.info(f"Define data collector")
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
 
+    logger.info(f"Define training args")
     training_args = Seq2SeqTrainingArguments(
         output_dir=str(config.output_path),
         per_device_train_batch_size=16,
@@ -151,7 +153,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
         return {"wer": wer}
 
-
+    logger.info(f"Define trainer")
     trainer = Seq2SeqTrainer(
         args=training_args,
         model=model,

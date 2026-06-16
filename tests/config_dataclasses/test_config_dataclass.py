@@ -13,8 +13,6 @@ TEST_FOLDER = Path.cwd()/"tests/config_dataclasses"
         "test_training_config2.ini",
 ])
 def test_loading_and_saving(file_name):
-    if file_name =="test_training_config1.ini":
-        pass
     file_path = TEST_FOLDER/file_name
     tmp_file = TEST_FOLDER/"tmp.ini"
 

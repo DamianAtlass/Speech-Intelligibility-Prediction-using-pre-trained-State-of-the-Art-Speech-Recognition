@@ -10,6 +10,7 @@ from whisper import Whisper
 from sip_whisper import Whisper as sip_Whisper
 
 from utils.config_dataclasses import Config, InferenceConfig
+from pathlib import Path
 
 import logging
 logger = logging.getLogger(__name__)
@@ -69,12 +70,12 @@ def convert_hf_model_to_openai_whisper(
     Converts a hf model (.safetensors) to a whisper compatible .pt file and saves it on the disk.
     """
 
-    hf_model_path = os.path.join(os.getcwd(), hf_checkpoint_file_path, "model.safetensors")
-    if not os.path.isfile(hf_model_path):
+    hf_model_path = hf_checkpoint_file_path / "model.safetensors"
+    if not hf_model_path.is_file():
         raise FileNotFoundError(hf_model_path)
 
-    openai_model_path = os.path.join(hf_checkpoint_file_path, safe_file)
-    if os.path.isfile(openai_model_path):
+    openai_model_path = hf_checkpoint_file_path / safe_file
+    if openai_model_path.is_file():
         raise FileExistsError(f"{openai_model_path} already exists!")
 
     # Load HF Model
@@ -91,7 +92,8 @@ def convert_hf_model_to_openai_whisper(
 
     for k in hf_state_dict.keys():
         if module_state[k].shape != hf_state_dict[k].shape:
-            logger.info(f"{k}: {module_state[k].shape, hf_state_dict[k].shape}")
+            logger.warning(f"Wrong layer shape {k}: {module_state[k].shape, hf_state_dict[k].shape}")
+            raise RuntimeError
 
     saved_model_path = hf_checkpoint_file_path/safe_file
 
