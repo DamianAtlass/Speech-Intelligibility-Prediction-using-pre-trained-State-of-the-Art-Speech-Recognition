@@ -96,7 +96,11 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
     logger.info(f"Define model")
 
-    model = WhisperForConditionalGeneration.from_pretrained(f"openai/{full_model_name}", token=hf_token)
+    model = WhisperForConditionalGeneration.from_pretrained(
+        f"openai/{full_model_name}",
+        token=hf_token,
+        torch_dtype=torch.float32
+    )
     model.to(device)
     model.generation_config.language = "english"
     model.generation_config.task = "transcribe"
