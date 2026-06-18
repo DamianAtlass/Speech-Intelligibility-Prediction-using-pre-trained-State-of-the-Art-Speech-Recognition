@@ -39,6 +39,9 @@ def test_parse_and_save_grid():
         ((1., 0, 0, 1), (34000, 0, 0)),
         ((0, 1., 0, 1), (0, 34000, 0)),
         ((0, 0, 1., 1), (0, 0, 34000)),
+        ((10, 10, 0, 1), (10, 10, 0)),
+        ((10, 0, 10, 1), (10, 0, 10)),
+        ((0, 10, 10, 1), (0, 10, 10)),
 ])
 def test_apply_split(split: tuple, resulting_size: tuple):
     dataset = get_grid(real_grid_folder) # len == 34,000
@@ -46,11 +49,14 @@ def test_apply_split(split: tuple, resulting_size: tuple):
     dataset_dict = apply_split(dataset, *split)
 
     for s, n in zip(["train", "test", "val"], [0,1,2]):
-        try:
+        if resulting_size[n] != 0:
             assert len(dataset_dict[s]) == resulting_size[n]
-        except KeyError:
-            if resulting_size[n]!=0:
-                raise KeyError
+        else:
+            try:
+                assert len(dataset_dict[s]) == resulting_size[n]
+                assert False
+            except KeyError:
+                assert True
 
 
 @pytest.mark.parametrize(("scale", "resulting_size"), [
@@ -67,7 +73,7 @@ def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int)
                     dataset_path=Path("datasets/grid/"),
                     train_split=0,
                     test_split=0,
-                    val_split=1,
+                    val_split=1.,
                     dataset_scaling=scale)
 
     dataset_dict = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)

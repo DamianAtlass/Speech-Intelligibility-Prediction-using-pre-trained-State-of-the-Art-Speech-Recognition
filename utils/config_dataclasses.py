@@ -37,9 +37,6 @@ class Config:
         if isinstance(self.debug, str):
             self.debug = self.debug == "True"
 
-        if not (all(isinstance(t, int) for t in [self.train_split, self.test_split, self.val_split]) or
-                all(isinstance(t, float) for t in [self.train_split, self.test_split, self.val_split])):
-            raise ValueError("self.train_split, self.test_split, self.val_split must all be either int of float!")
 
     def save_to_file(self, path: Path) -> None:
         printing_template = [

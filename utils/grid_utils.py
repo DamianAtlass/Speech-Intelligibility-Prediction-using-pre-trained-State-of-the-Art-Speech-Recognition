@@ -187,37 +187,50 @@ def apply_split(dataset : Dataset,
     val_size = calculate_size(l, val_split)
 
     d = {}
+    full_split = False
+    for label, v in zip(["test", "train", "val"], [test_size, train_size, val_size]):
+        if v == l:
+            d[label] = dataset
+            full_split = True
 
-    if train_size == l:
-        return DatasetDict({"train": dataset})
+    if not full_split:
+        if train_size > 0:
+            split = dataset.train_test_split(
+                train_size=train_size,
+                shuffle=True,
+                seed=0,
+            )
 
-    if train_size > 0:
-        split = dataset.train_test_split(
-            train_size=train_size,
-            shuffle=True,
-            seed=0,
-        )
+            d["train"] = split["train"]
+            remainder = split["test"]
+        else:
+            remainder = dataset
 
-        d["train"] = split["train"]
-        remainder = split["test"]
-    else:
-        remainder = dataset
+        if test_size > 0 and val_size > 0:
+            temp = remainder.train_test_split(
+                train_size=test_size,
+                test_size=val_size,
+                shuffle=True,
+                seed=0,
+            )
+            d["test"] = temp["train"]
+            d["val"] = temp["test"]
 
-    if test_size > 0 and val_size > 0:
-        temp = remainder.train_test_split(
-            train_size=test_size,
-            test_size=val_size,
-            shuffle=True,
-            seed=0,
-        )
-        d["test"] = temp["train"]
-        d["val"] = temp["test"]
+        elif test_size > 0:
+            temp = remainder.train_test_split(
+                test_size=test_size,
+                shuffle=True,
+                seed=0,
+            )
+            d["test"] = temp["test"]
 
-    elif test_size > 0:
-        d["test"] = remainder
-
-    elif val_size > 0:
-        d["val"] = remainder
+        elif val_size > 0:
+            temp = remainder.train_test_split(
+                test_size=val_size,
+                shuffle=True,
+                seed=0,
+            )
+            d["val"] = temp["test"]
 
     dataset_dict = DatasetDict(d)
 
