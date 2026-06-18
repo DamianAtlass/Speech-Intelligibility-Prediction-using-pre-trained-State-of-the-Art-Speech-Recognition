@@ -80,6 +80,9 @@ class Config:
                 fields_with_lists.append(field.name)
         return fields_with_lists
 
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+
 @dataclass(kw_only=True)
 class TrainingConfig(Config):
     perform_training: bool

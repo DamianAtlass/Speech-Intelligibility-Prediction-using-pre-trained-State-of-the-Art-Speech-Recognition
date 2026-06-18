@@ -167,20 +167,21 @@ def plot_correlations(df: pd.DataFrame, config):
     summary = []
     #wers_human_kw, wers_machine_kw, avg_logprobs
     # calc person correlation
-    name = f"WER of human result and {config.model}({config.model_type})"
-    r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "wers_machine_kw"]],
-                                                                      output_path=config.output_path,
-                                                                      name=name,
-                                                                      xlabel=f"WER of human results (only keywords)",
-                                                                      ylabel=f"WER ({config.model}, only keywords)")
-    summary.append({
-        "metric": "person correlation",
-        "of": name,
-        "correlation_coefficient": f"{r_val:.10f}",
-        "p_value": f"{p_val:.10f}",
-        "x_normality_p_value": f"{x_normality_p:.10f}",
-        "y_normality_p_value": f"{y_normality_p:.10f}",
-    })
+
+    # name = f"WER of human result and {config.model}({config.model_type})"
+    # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "wers_machine_kw"]],
+    #                                                                   output_path=config.output_path,
+    #                                                                   name=name,
+    #                                                                   xlabel=f"WER of human results (only keywords)",
+    #                                                                   ylabel=f"WER ({config.model}, only keywords)")
+    # summary.append({
+    #     "metric": "person correlation",
+    #     "of": name,
+    #     "correlation_coefficient": f"{r_val:.10f}",
+    #     "p_value": f"{p_val:.10f}",
+    #     "x_normality_p_value": f"{x_normality_p:.10f}",
+    #     "y_normality_p_value": f"{y_normality_p:.10f}",
+    # })
 
     name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
     r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "avg_logprobs"]],
@@ -226,11 +227,15 @@ def plot_correlations(df: pd.DataFrame, config):
 
     return summary
 
-def plot_srt(df: pd.DataFrame, config):
-    list_model_types: list = ([config.model_type] if isinstance(config.model_type, str) else config.model_type)
-    one_model_type: str = list_model_types[0]
+def plot_srt(df: pd.DataFrame,
+             shifting_attribute: str= "model_type",
+             shifting_attribute_label = None,
+             output_path: Path = None,):
+    summary = []
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+    one_run_attribute: str = list_shifting_attribute[0]
 
-    df_human_data = df[df["model_type"]==one_model_type][["wers_human_kw", "snr"]]
+    df_human_data = df[df[shifting_attribute]==one_run_attribute][["wers_human_kw", "snr"]]
     df_human_data_grouped = (
         df_human_data.groupby(["snr"])
         .agg(
@@ -244,8 +249,8 @@ def plot_srt(df: pd.DataFrame, config):
     human_values = df_human_data_grouped["avr_wer_human"].values
 
     machine_plots: list = []
-    for t in list_model_types:
-        df_tmp = df[df["model_type"] == t]
+    for attr in list_shifting_attribute:
+        df_tmp = df[df[shifting_attribute] == attr]
         df_tmp = df_tmp.groupby(["snr"]).agg(avr_wer_machine=("wers_machine_kw", "mean"), ).reindex(np.sort(df["snr"].unique()))
         machine_plots.append(df_tmp["avr_wer_machine"].values)
 
@@ -253,10 +258,10 @@ def plot_srt(df: pd.DataFrame, config):
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
     plt.plot(positions, human_values, marker="o", label="human")
-    for mp,l in zip(machine_plots, list_model_types):
+    for mp,l in zip(machine_plots, list_shifting_attribute):
         plt.plot(positions, mp, marker="x", label=l)
 
-    figure_title = f"WER of transcription from human data and {config.model}({config.model_type})"
+    figure_title = f"WER of transcription from human data and {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     #plt.title(f"n={len(df)}") #falty
     plt.xticks(positions, x_labels)
@@ -264,8 +269,9 @@ def plot_srt(df: pd.DataFrame, config):
     plt.ylabel("Average WER")
     plt.grid()
     plt.legend()
-    plt.savefig(config.output_path/f'{figure_title}.png')
-    #plt.show()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.show()
     plt.close()
 
 def calculate_corr_per_listener(df: pd.DataFrame,
@@ -322,6 +328,7 @@ def calculate_corr_per_listener(df: pd.DataFrame,
     x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t,p, c in zip(list_model_types, p_val_arr, corr_arr)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
+    plt.ylim(-1,1)
 
 
     if config.output_path:
@@ -342,7 +349,9 @@ def evaluate_individual_run(config: InferenceConfig,
         metrics.append(df_single_run["wers_human_kw"])
         corr_summary = plot_correlations(df_single_run, config)
 
-        plot_srt(df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]], config)
+        plot_srt(df=df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
+                 shifting_attribute="model_type",
+                 output_path=config.output_path)
 
         calculate_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
                                     config,

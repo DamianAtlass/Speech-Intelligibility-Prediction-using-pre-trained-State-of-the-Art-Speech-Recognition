@@ -62,7 +62,10 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
         if config.dataset_type != "grid":
-            plot_srt(df_all[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]], config)
+            plot_srt(df_all[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
+                     config,
+                     shifting_attribute="model_type",
+                     output_path=config.output_path)
 
 
             calculate_corr_per_listener(df_all[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
