@@ -181,26 +181,45 @@ def apply_split(dataset : Dataset,
     def calculate_size(len_:int, n: float | int) -> int:
         return cast(int, int(n * len_) if isinstance(n, float) else n)
 
+    l = len(dataset)
+    train_size = calculate_size(l, train_split)
+    test_size = calculate_size(l, test_split)
+    val_size = calculate_size(l, val_split)
 
-    if not (train_split==0 and test_split==0 and val_split==1):
-        l = len(dataset)
-        dataset = dataset.train_test_split(train_size=calculate_size(l, train_split),
-                                           shuffle=True,
-                                           seed=0)
+    d = {}
 
-        temp = dataset["test"].train_test_split(train_size=calculate_size(l, test_split),
-                                                test_size=calculate_size(l, val_split),
-                                                shuffle=True,
-                                                seed=0)
-        dataset_dict = DatasetDict({
-            "train": dataset["train"],
-            "test": temp["train"],
-            "val": temp["test"],
-        })
+    if train_size == l:
+        return DatasetDict({"train": dataset})
+
+    if train_size > 0:
+        split = dataset.train_test_split(
+            train_size=train_size,
+            shuffle=True,
+            seed=0,
+        )
+
+        d["train"] = split["train"]
+        remainder = split["test"]
     else:
-        dataset_dict = DatasetDict({
-            "val": dataset,
-        })
+        remainder = dataset
+
+    if test_size > 0 and val_size > 0:
+        temp = remainder.train_test_split(
+            train_size=test_size,
+            test_size=val_size,
+            shuffle=True,
+            seed=0,
+        )
+        d["test"] = temp["train"]
+        d["val"] = temp["test"]
+
+    elif test_size > 0:
+        d["test"] = remainder
+
+    elif val_size > 0:
+        d["val"] = remainder
+
+    dataset_dict = DatasetDict(d)
 
     if dataset_scaling != 1:
         for split in ["train", "test", "val"]:
