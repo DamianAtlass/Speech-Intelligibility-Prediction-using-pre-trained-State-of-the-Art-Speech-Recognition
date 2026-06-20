@@ -1,6 +1,6 @@
 from pathlib import Path
 from utils.config_dataclasses import get_config
-from utils.evaluate_utils import get_data, plot_srt
+from utils.evaluate_utils import get_data, plot_wer_to_snr, plot_needleman_wunsch_wer_to_snr
 import torch
 import pandas as pd
 import json
@@ -50,10 +50,16 @@ def foo():
             df = pd.concat([df, df_single_run], ignore_index=True)
 
     #step 2: plot
-    plot_srt(df[["wers_human_kw", "wers_machine_kw", "snr", "model_type", "name"]],
-             shifting_attribute="name",
-             shifting_attribute_label="different models",
-             output_path=subfolder_name)
+
+    plot_wer_to_snr(df,
+                    shifting_attribute="name",
+                    shifting_attribute_label="different models",
+                    output_path=subfolder_name)
+
+    plot_needleman_wunsch_wer_to_snr(df,
+                    shifting_attribute="name",
+                    shifting_attribute_label="different models",
+                    output_path=subfolder_name)
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import plot_metrics, plot_correlations, plot_srt, \
+from utils.evaluate_utils import plot_metrics, plot_wer_to_snr, \
     calculate_corr_per_listener, get_data, evaluate_individual_run
 import pandas as pd
 from utils.cuda_utils import select_device

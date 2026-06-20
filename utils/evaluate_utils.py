@@ -9,9 +9,10 @@ from pathlib import Path
 import werpy
 from matplotlib import pyplot as plt
 import logging
-
+from tqdm import tqdm
 from utils.cuda_utils import select_device
 from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
+from utils.wer_needleman_wunsch import wer_needleman_wunsch
 
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
@@ -227,11 +228,11 @@ def plot_correlations(df: pd.DataFrame, config):
 
     return summary
 
-def plot_srt(df: pd.DataFrame,
-             shifting_attribute: str= "model_type",
-             shifting_attribute_label = None,
-             output_path: Path = None,):
-    summary = []
+def plot_wer_to_snr(df: pd.DataFrame,
+                    shifting_attribute: str = "model_type",
+                    shifting_attribute_label = None,
+                    output_path: Path = None, ):
+
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     one_run_attribute: str = list_shifting_attribute[0]
 
@@ -247,26 +248,81 @@ def plot_srt(df: pd.DataFrame,
 
     x_labels = np.sort(df["snr"].unique())
     human_values = df_human_data_grouped["avr_wer_human"].values
+    human_values = torch.tensor(human_values)*100
 
-    machine_plots: list = []
+    machine_values: list = []
     for attr in list_shifting_attribute:
-        df_tmp = df[df[shifting_attribute] == attr]
-        df_tmp = df_tmp.groupby(["snr"]).agg(avr_wer_machine=("wers_machine_kw", "mean"), ).reindex(np.sort(df["snr"].unique()))
-        machine_plots.append(df_tmp["avr_wer_machine"].values)
+        df_attr = df[df[shifting_attribute] == attr]
+        df_attr = df_attr.groupby(["snr"]).agg(avr_wer_machine=("wers_machine_kw", "mean")).reindex(np.sort(df["snr"].unique()))
+        machine_values.append(df_attr["avr_wer_machine"].values * 100)
 
 
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
     plt.plot(positions, human_values, marker="o", label="human")
-    for mp,l in zip(machine_plots, list_shifting_attribute):
-        plt.plot(positions, mp, marker="x", label=l)
+    for mv,l in zip(machine_values, list_shifting_attribute):
+        plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"WER of transcription from human data and {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"WER of transcriptions from human data and {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     #plt.title(f"n={len(df)}") #falty
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel("Average WER")
+    plt.ylabel("Average WER in %")
+    plt.grid()
+    plt.legend()
+    plt.ylim(0,100)
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.show()
+    plt.close()
+
+def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
+                    shifting_attribute: str = "model_type",
+                    shifting_attribute_label = None,
+                    output_path: Path = None, ):
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+    one_run_attribute: str = list_shifting_attribute[0]
+
+    df_human_data = df[df[shifting_attribute]==one_run_attribute]
+
+    human_values = []
+    for snr in np.sort(df_human_data["snr"].unique()):
+        df_snr = df_human_data[df_human_data["snr"]==snr]
+        wer_snr = wer_needleman_wunsch(reference=df_snr["references_kw"].values, transcript=df_snr["human_transcripts_kw"].values)
+        human_values.append(wer_snr)
+    human_values = torch.Tensor(human_values) * 100
+    del df_human_data
+    x_labels = np.sort(df["snr"].unique())
+
+    machine_values: list = []
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        mv_temp = []
+        for snr in np.sort(df_attr["snr"].unique()):
+            df_snr = df_attr[df_attr["snr"] == snr]
+            wer_snr = wer_needleman_wunsch(reference=df_snr["references_kw"].values,
+                                           transcript=df_snr["machine_transcripts_kw"].values)
+            mv_temp.append(wer_snr)
+        machine_values.append(torch.tensor(mv_temp) *100)
+
+
+    positions = range(len(x_labels))
+    plt.figure(figsize=[10, 5])
+
+    plt.plot(positions, human_values, marker="o", label="human")
+
+    for mv,l in zip(machine_values, list_shifting_attribute):
+        plt.plot(positions, mv, marker="x", label=l)
+
+    figure_title = f"WER (Needleman-Wunsch) of transcriptions from human data and {shifting_attribute_label or shifting_attribute}"
+    plt.suptitle(figure_title)
+    #plt.title(f"n={len(df)}") #falty
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel("Average WER (Needleman-Wunsch) in %")
+    plt.ylim(0, 100)
     plt.grid()
     plt.legend()
     if output_path:
@@ -349,9 +405,9 @@ def evaluate_individual_run(config: InferenceConfig,
         metrics.append(df_single_run["wers_human_kw"])
         corr_summary = plot_correlations(df_single_run, config)
 
-        plot_srt(df=df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
-                 shifting_attribute="model_type",
-                 output_path=config.output_path)
+        plot_wer_to_snr(df=df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
+                        shifting_attribute="model_type",
+                        output_path=config.output_path)
 
         calculate_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
                                     config,
