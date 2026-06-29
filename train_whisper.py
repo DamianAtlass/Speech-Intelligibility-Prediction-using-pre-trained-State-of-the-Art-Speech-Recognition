@@ -60,14 +60,14 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     logger.info("load feature extractor")
     feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{full_model_name}", token=hf_token)
 
-    lang_for_tokenizer = None if "en" in config.model_type else "English"
+    language = None if "en" in config.model_type else "English"
     tokenizer = WhisperTokenizer.from_pretrained(f"openai/{full_model_name}",
-                                                 language=lang_for_tokenizer,
+                                                 language=language,
                                                  task="transcribe",
                                                  token=hf_token)
 
     processor = WhisperProcessor.from_pretrained(f"openai/{full_model_name}",
-                                                 language="English",
+                                                 language=language,
                                                  task="transcribe",
                                                  token=hf_token)
 
@@ -102,8 +102,9 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         torch_dtype=torch.float32
     )
     model.to(device)
-    model.generation_config.language = "english"
-    model.generation_config.task = "transcribe"
+    if language is not None:
+        model.generation_config.language = language
+        model.generation_config.task = "transcribe"
 
     # if you ever decide to calculate timestamps with the hf model, remember to set accordingly model.generation_config.alignment_heads
     # https://gist.github.com/hollance/42e32852f24243b748ae6bc1f985b13a
