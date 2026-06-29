@@ -117,6 +117,12 @@ def wer_needleman_wunsch(reference: list, transcript: list) -> float:
     return (substitutions + insertions + deletions) / total_elements
 
 if __name__ == '__main__':
-    total, deletions, insertions, substitutions = needlemann_wunsch(reference="test ssssssssss test", transcript="test test test")
+    total, deletions, insertions, substitutions = needlemann_wunsch(reference="test test test", transcript="test besti test")
 
     print((substitutions + insertions + deletions)/total)
+
+    long_ref = "red blue six"
+    long_hypothesis = "red blue sicks"
+    import werpy
+    print(werpy.wer(long_ref, long_hypothesis))
+    print(wer_needleman_wunsch(reference=[long_ref], transcript=[long_hypothesis]), )

@@ -1,4 +1,4 @@
-from utils.evaluate_utils import get_only_keywords, remove_nan, calc_pearson_corr, calc_spearman_corr
+from utils.evaluate_utils import get_only_keywords, remove_nan, regr_line_pearson_corr, regr_line_spearman_corr
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -47,7 +47,7 @@ def test_calc_pearson_corr():
         "y": y,
     })
 
-    rvalue, pvalue, _, _ = calc_pearson_corr(df, name="test pearson", xlabel="x label", ylabel="y label", output_path=test_folder)
+    rvalue, pvalue, _, _ = regr_line_pearson_corr(df, name="test pearson", xlabel="x label", ylabel="y label", output_path=test_folder)
     assert rvalue > 0.9
     assert pvalue < 0.05
 
@@ -66,6 +66,6 @@ def test_calc_spearman_corr():
         "y": y,
     })
 
-    rvalue, pvalue = calc_spearman_corr(df, name="test spearman", xlabel="x label", ylabel="y label", output_path=test_folder)
+    rvalue, pvalue = regr_line_spearman_corr(df, name="test spearman", xlabel="x label", ylabel="y label", output_path=test_folder)
     assert rvalue > 0.9
     assert pvalue < 0.05
