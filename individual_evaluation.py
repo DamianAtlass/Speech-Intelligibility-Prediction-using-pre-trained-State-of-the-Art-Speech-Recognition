@@ -1,6 +1,7 @@
 from pathlib import Path
 from utils.config_dataclasses import get_config
-from utils.evaluate_utils import get_data, plot_wer_to_snr, plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
+from utils.evaluate_utils import get_data
+from utils.plotting_utils import plot_wer_to_snr, plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
 import torch
 import pandas as pd
 import json

@@ -2,3 +2,4 @@
 pytest tests/
 pytest tests/_test_training.py
 pytest tests/_test_training2.py
+pytest tests/_test_training3.py

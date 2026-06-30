@@ -117,12 +117,16 @@ def wer_needleman_wunsch(reference: list, transcript: list) -> float:
     return (substitutions + insertions + deletions) / total_elements
 
 if __name__ == '__main__':
-    total, deletions, insertions, substitutions = needlemann_wunsch(reference="test test test", transcript="test besti test")
 
-    print((substitutions + insertions + deletions)/total)
+    ref = "the nice tree".split()
+    hypothesis = "eh dicetree".split()
 
-    long_ref = "red blue six"
-    long_hypothesis = "red blue sicks"
+    print(f"wer (needleman-wunsch): {wer_needleman_wunsch(reference=[ref], transcript=[hypothesis])}")
+
+    ref_align, trans_align = _needlemann_wunsch(reference=ref, transcript=hypothesis)
+    print(ref_align)
+    print(trans_align)
+
+    print("--------------")
     import werpy
-    print(werpy.wer(long_ref, long_hypothesis))
-    print(wer_needleman_wunsch(reference=[long_ref], transcript=[long_hypothesis]), )
+    print(f"wer (werpy, uses Levenshtein-Distanz): {werpy.wer(ref, hypothesis)}")
