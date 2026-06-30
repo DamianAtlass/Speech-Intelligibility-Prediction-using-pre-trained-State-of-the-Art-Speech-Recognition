@@ -4,7 +4,7 @@ from utils.convert_hf_to_openai_format import convert_hf_model_to_openai_whisper
 from pathlib import Path
 test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 
-def test_convert_hf_model_to_openai_whisper(checkpoint_path = test_folder/"training_test", ):
+def test_convert_hf_model_to_openai_whisper(checkpoint_path = test_folder/"tiny_test_checkpoint", ):
     if not Path(checkpoint_path/"model.safetensors").is_file():
         print("Skip test. No model to import.")
         pytest.skip()

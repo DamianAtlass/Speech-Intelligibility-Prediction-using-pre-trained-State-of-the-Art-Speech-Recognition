@@ -76,7 +76,7 @@ def _needlemann_wunsch(reference, transcript):
     return (ref_align, trans_align)
 
 
-def needlemann_wunsch(reference, transcript):
+def needlemann_wunsch(reference: str, transcript: str):
     """
     Counts number of errors.
 
