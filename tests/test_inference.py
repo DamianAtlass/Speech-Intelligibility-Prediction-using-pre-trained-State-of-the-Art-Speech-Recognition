@@ -4,6 +4,8 @@ from pathlib import Path
 
 from utils.config_dataclasses import InferenceConfig
 from utils.grid_utils import get_grid, apply_split
+from utils.grid_utils import get_grid
+from utils.dataset_utils import apply_split
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch'!
 import torch

@@ -1,6 +1,5 @@
 import pytest
-from utils.grid_utils import get_grid, apply_split, get_sentence_and_alignments, parse_and_save_grid, download_grid, convert_short_name_to_ref
-from utils.config_dataclasses import Config
+from utils.grid_utils import get_sentence_and_alignments, parse_and_save_grid, download_grid, convert_short_name_to_ref
 from pathlib import Path
 import shutil
 
@@ -28,56 +27,6 @@ def test_parse_and_save_grid():
     assert len(dataset) == 2 * 4
     assert (grid_folder/"saved_dataset").is_dir()
     shutil.rmtree(grid_folder/"saved_dataset")
-
-@pytest.mark.parametrize(("split", "resulting_size"), [
-        ((0.7, 0.2, 0.1, 1), (23_800, 6800, 3400)),
-        ((0.5, 0.35, 0.15, 1), (17000, 11900, 5100)),
-        ((0.5, 0.1, 0.1, 1), (17000, 3400, 3400)),
-        ((1, 2, 3, 1), (1, 2, 3)),
-        ((0.5, 0.1, 0.1, 0.5), (8500, 1700, 1700)),
-        ((100, 101, 102, 1), (100, 101, 102)),
-        ((1., 0, 0, 1), (34000, 0, 0)),
-        ((0, 1., 0, 1), (0, 34000, 0)),
-        ((0, 0, 1., 1), (0, 0, 34000)),
-        ((10, 10, 0, 1), (10, 10, 0)),
-        ((10, 0, 10, 1), (10, 0, 10)),
-        ((0, 10, 10, 1), (0, 10, 10)),
-])
-def test_apply_split(split: tuple, resulting_size: tuple):
-    dataset = get_grid(real_grid_folder) # len == 34,000
-
-    dataset_dict = apply_split(dataset, *split)
-
-    for s, n in zip(["train", "test", "val"], [0,1,2]):
-        if resulting_size[n] != 0:
-            assert len(dataset_dict[s]) == resulting_size[n]
-        else:
-            try:
-                assert len(dataset_dict[s]) == resulting_size[n]
-                assert False
-            except KeyError:
-                assert True
-
-
-@pytest.mark.parametrize(("scale", "resulting_size"), [
-    (1, 34000),
-    (0.5, 17000)
-])
-def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int):
-    dataset = get_grid(real_grid_folder) # len == 34,000
-    config = Config(model="",
-                    model_type="",
-                    model_path=Path(""),
-                    output_path=Path("tests/inference_test"),
-                    dataset_type="grid",
-                    dataset_path=Path("datasets/grid/"),
-                    train_split=0,
-                    test_split=0,
-                    val_split=1.,
-                    dataset_scaling=scale)
-
-    dataset_dict = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
-    assert len(dataset_dict["val"]) == resulting_size
 
 
 @pytest.mark.parametrize(("file_path", "params", "start_expected"),[

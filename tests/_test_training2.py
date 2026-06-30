@@ -6,7 +6,8 @@ from pathlib import Path
 import shutil
 from utils.config_dataclasses import TrainingConfig
 from utils.cuda_utils import select_device
-from utils.grid_utils import get_grid, apply_split
+from utils.grid_utils import get_grid
+from utils.dataset_utils import apply_split
 from train_whisper import train_whisper
 
 

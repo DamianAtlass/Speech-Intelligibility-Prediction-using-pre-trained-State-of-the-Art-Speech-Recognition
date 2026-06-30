@@ -3,7 +3,7 @@ import tarfile
 from shutil import rmtree
 
 import librosa
-from datasets import Dataset, DatasetDict, load_from_disk
+from datasets import Dataset, load_from_disk
 
 SAMPLE_RATE_DOWNLOADED_FILES = 25_000
 WANTED_SAMPLE_RATE = 16_000
@@ -166,84 +166,6 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
     dataset.save_to_disk(save_at)
 
     return dataset
-
-def apply_split(dataset : Dataset,
-                train_split: int | float,
-                test_split: int | float,
-                val_split: int | float,
-                dataset_scaling: int | float ) -> DatasetDict:
-    """
-    Split the dataset depending on the given parameters.
-
-    Returns:
-        DatasetDict
-    """
-    def calculate_size(len_:int, n: float | int) -> int:
-        return cast(int, int(n * len_) if isinstance(n, float) else n)
-
-    l = len(dataset)
-    train_size = calculate_size(l, train_split)
-    test_size = calculate_size(l, test_split)
-    val_size = calculate_size(l, val_split)
-
-    d = {}
-    full_split = False
-    for label, v in zip(["test", "train", "val"], [test_size, train_size, val_size]):
-        if v == l:
-            d[label] = dataset
-            full_split = True
-
-    if not full_split:
-        if train_size > 0:
-            split = dataset.train_test_split(
-                train_size=train_size,
-                shuffle=True,
-                seed=0,
-            )
-
-            d["train"] = split["train"]
-            remainder = split["test"]
-        else:
-            remainder = dataset
-
-        if test_size > 0 and val_size > 0:
-            temp = remainder.train_test_split(
-                train_size=test_size,
-                test_size=val_size,
-                shuffle=True,
-                seed=0,
-            )
-            d["test"] = temp["train"]
-            d["val"] = temp["test"]
-
-        elif test_size > 0:
-            temp = remainder.train_test_split(
-                test_size=test_size,
-                shuffle=True,
-                seed=0,
-            )
-            d["test"] = temp["test"]
-
-        elif val_size > 0:
-            temp = remainder.train_test_split(
-                test_size=val_size,
-                shuffle=True,
-                seed=0,
-            )
-            d["val"] = temp["test"]
-
-    dataset_dict = DatasetDict(d)
-
-    if dataset_scaling != 1:
-        for split in ["train", "test", "val"]:
-            try:
-                dataset_dict[split] = dataset_dict[split].select(range(
-                    int(len(dataset_dict[split]) * dataset_scaling)
-                ))
-            except KeyError as e:
-                pass
-
-    return dataset_dict
 
 
 def convert_short_name_to_ref(string: str, input_is_only_keywords=True) -> str:

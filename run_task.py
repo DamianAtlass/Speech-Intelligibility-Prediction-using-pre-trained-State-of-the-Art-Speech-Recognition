@@ -24,12 +24,11 @@ import torch
 
 # custom imports
 from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, unfold_config
-from utils.grid_utils import get_grid, apply_split
 from train_whisper import train_whisper
 from inference import inference
 from utils.cuda_utils import select_device
 from utils.logging_utils import catch_time
-from utils.dataset_utils import get_dataset
+from utils.dataset_utils import get_dataset, apply_split
 from evaluate_run import evaluate_run
 
 INDIVIDUAL_WHISPER_MODELS = ['tiny.en', 'tiny', 'base.en', 'base', 'small.en', 'small', 'medium.en', 'medium', 'large-v1', 'large-v2', 'large-v3', 'large-v3-turbo']
