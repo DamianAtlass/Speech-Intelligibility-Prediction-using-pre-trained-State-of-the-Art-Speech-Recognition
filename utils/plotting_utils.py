@@ -283,7 +283,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         p_val_arr.append(torch.tensor(p_val_arr_tmp))
 
 
-    fig, ax = plt.subplots(figsize=(6 + len(list_shifting_attribute) * 0.7, 7))
+    fig, ax = plt.subplots(figsize=(8 + len(list_shifting_attribute) * 0.7, 7))
 
     positions = range(1, len(list_shifting_attribute) + 1)
 
@@ -297,6 +297,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         "wers_machine_kw": "WER for keywords",
         "wers_needlewunsch_machine_kw": "Needleman-Wunsch-WER for keywords",
         "avg_logprobs": "average log probability score (per sequence)",
+        "avg_entropy": "mean entropy of all keywords in a sentence"
     }
 
     title = f"Spearman Correlation Coefficient of human {"Needleman-Wunsch-WER" if needlemanwunsch else "WER"} and \n {model}'s {d[correlate_to]} for each listener"

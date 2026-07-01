@@ -6,20 +6,19 @@ import torch
 from pathlib import Path
 import werpy
 import logging
+from scipy.stats import entropy
+from whisper.tokenizer import get_tokenizer
+import numpy as np
+import string
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, plot_wer_to_snr, \
     plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
 from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
-from utils.wer_needleman_wunsch import wer_needleman_wunsch
+from utils.wer_needleman_wunsch import wer_needleman_wunsch, _needlemann_wunsch
 
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
 
-sorting_reverse = {
-    "WER (machine)": True,
-    "Logprob(per sequence)": False,
-    "WER (machine, kw only)": True,
-}
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -156,6 +155,45 @@ def evaluate_individual_run(config: InferenceConfig,
                                   output_path=config.output_path,
                                   needlemanwunsch=True)
 
+
+        if config.extract_logprobs:
+            keywords_index = [1, 3, 4]
+            entropies = []
+            tokenizer = get_tokenizer(multilingual=False)
+            counter = 0
+            for index, row in df_single_run.iterrows():
+                tensor = torch.load(Path.cwd()/row["logprobs_paths"])
+                tokens = row["tokens"]
+                split_transcript = [tokenizer.decode_with_timestamps([t]) for t in tokens]
+                idx_to_keep = ["<|" not in t and "|>" not in t and t not in string.punctuation for t in split_transcript] # rm timestamp tokens
+                tensor = tensor[idx_to_keep]
+                split_transcript = [t for t,b in zip(split_transcript, idx_to_keep) if b] # todo make a copy of this
+
+                ref = row["references"].split()
+                ref_align, hypo_align = _needlemann_wunsch(reference=ref , transcript=split_transcript)
+
+                aligned_kw_indices = [ref_align.index(kw) for kw in row["references_kw"].split()]
+                aligned_kw_indices = [idx for idx in aligned_kw_indices if ref_align[idx] and hypo_align[idx]]
+
+                aligned_kw_indices = [split_transcript.index(hypo_align[o]) for o in aligned_kw_indices]
+
+                tensor = np.array(tensor.cpu())[aligned_kw_indices]
+                print(counter)
+                e = entropy(np.exp(tensor.T)).mean()
+                entropies.append(e)
+                counter+=1
+
+            df_single_run["avg_entropy"] = entropies
+
+        boxplot_corr_per_listener(
+            df_single_run[["wers_needlewunsch_human_kw", "avg_entropy", "model_type", "listener"]],
+            correlate_to="avg_entropy",
+            model=config.model,
+            model_type=config.model_type,
+            output_path=config.output_path,
+            needlemanwunsch=True)
+
+
     for s_arr, metric in zip(summary, metrics):
         df_single_run["model_type"] = config.model_type
         plot_metrics([metric],
@@ -170,6 +208,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
 def get_data(output_path: Path,
              dataset_type: str,
+             extract_logprobs: bool,
              device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
 
     data_path = output_path / "data"
@@ -177,29 +216,46 @@ def get_data(output_path: Path,
     avg_logprobs = []
     references = []
     machine_transcripts = []
+    tokens = []
     human_transcripts_kw = []
     snr = []
     listener = []
     audio_paths = []
+    logprobs_paths = []
+
+    counter = 0
 
     for file in data_path.iterdir():
+        if counter == 2000:
+            pass
+        counter += 1
         with open(file) as f:
             json_file = json.load(f)
 
             if json_file["prediction_result"]["text"] == "" : #nothing recognized!
                 avg_logprobs.append(torch.nan)
                 machine_transcripts.append("")
+                tokens.append([])
             else:
-                avg_logprobs.append(json_file["prediction_result"]["segments"][0]["avg_logprob"])
+                avg_logprobs.append(np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]]))
+
                 machine_transcripts.append(json_file["prediction_result"]["text"])
+
+                tmp = []
+                for segment in json_file["prediction_result"]["segments"]:
+                    tmp.extend(segment["tokens"])
+                tokens.append(tmp)
 
             references.append(json_file["sentence"])
             audio_paths.append(json_file["audio_path"])
+
             if dataset_type != "grid":
                 human_transcripts_kw.append(json_file["human_recognized_words"])
                 snr.append(int(json_file["snr_db"]))
                 listener.append(json_file["listener"])
 
+            if extract_logprobs:
+                logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
 
     machine_transcripts = additional_normalization(machine_transcripts)
     machine_transcripts_kw = [get_only_keywords(o) for o in machine_transcripts]
@@ -216,7 +272,7 @@ def get_data(output_path: Path,
     avg_logprobs = torch.Tensor(avg_logprobs).to(device)
     if dataset_type != "grid":
         wers_human_kw = calculate_wers_with_norm(reference=references_kw, hypothesis=human_transcripts_kw).to(device)
-        wers_needlewunsch_human_kw = [wer_needleman_wunsch([r], [t]) for r,t in zip(references_kw, human_transcripts_kw)]
+        wers_needleman_wunsch_human_kw = [wer_needleman_wunsch([r], [t]) for r,t in zip(references_kw, human_transcripts_kw)]
 
     summary = []
     metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)"]
@@ -241,6 +297,7 @@ def get_data(output_path: Path,
         "wers_machine": wers_machine.cpu(),
         "wers_machine_kw": wers_machine_kw.cpu(),
         "machine_transcripts": machine_transcripts,
+        "tokens": tokens,
         "machine_transcripts_kw": machine_transcripts_kw,
         "audio_paths": audio_paths,
         "wers_needlewunsch_machine_kw": wers_needlewunsch_machine_kw,
@@ -253,8 +310,12 @@ def get_data(output_path: Path,
         "human_transcripts_kw": human_transcripts_kw,
         "listener": listener,
         "snr": snr,
-        "wers_needlewunsch_human_kw": wers_needlewunsch_human_kw,
+        "wers_needlewunsch_human_kw": wers_needleman_wunsch_human_kw,
+        })
 
+    if extract_logprobs:
+        data.update({
+            "logprobs_paths": logprobs_paths,
         })
 
     df = pd.DataFrame(data)
