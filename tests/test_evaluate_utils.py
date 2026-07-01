@@ -1,4 +1,4 @@
-from utils.evaluate_utils import get_only_keywords, remove_nan, regr_line_pearson_corr, regr_line_spearman_corr
+from utils.evaluate_utils import get_only_keywords, remove_nan
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
