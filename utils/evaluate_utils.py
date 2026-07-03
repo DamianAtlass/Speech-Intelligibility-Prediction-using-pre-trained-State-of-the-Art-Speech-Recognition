@@ -11,10 +11,10 @@ from whisper.tokenizer import get_tokenizer
 import numpy as np
 import string
 
-from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, plot_wer_to_snr, \
+from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
-from utils.werpy_utils import additional_normalization, calculate_wers_with_norm
-from utils.wer_needleman_wunsch import wer_needleman_wunsch, _needlemann_wunsch
+from utils.werpy_utils import normalize
+from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
@@ -26,13 +26,30 @@ def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Te
 
 def get_only_keywords(string) -> str:
     """
-    Return only the words at the keyword indices
+    Return only the words at the keyword indices. Only use when you expect the correct length of 6 words.
     """
-    string = werpy.normalize(string)
+    string = string.split()
+    if len(string) != 6:
+        raise ValueError(f"Expected 6 words, got {len(string)}")
+
     keywords_index = [1, 3, 4]
-    string = string.split(" ")
+
     string = [s for i,s in enumerate(string) if i in keywords_index]
     return " ".join(string)
+
+def get_only_keywords_using_alignments(reference: str, string: str) -> str:
+    """
+    Use alignment to return only the words at the keyword indices. Input should be normalized
+    """
+    if string == "yes sir":
+        pass
+
+    reference, string = reference.split(), string.split()
+    assert len(reference) == 6 # grid samples are 6-words-long
+    ref_align, trans_align = _needlemann_wunsch(reference=reference, transcript=string)
+    keywords_index = [1, 3, 4]
+    keywords = [trans_align[ref_align.index(reference[i])] for i in keywords_index]
+    return " ".join([k for k in keywords if k])
 
 
 def plot_regr_lines(df: pd.DataFrame, config):
@@ -71,21 +88,8 @@ def plot_regr_lines(df: pd.DataFrame, config):
     # })
 
     # calc spearman correlation
-    name = f"the WER of human result and {config.model}({config.model_type})"
-    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
-                                                    output_path=config.output_path,
-                                                    name=name,
-                                                    xlabel=f"WER of human results (only keywords)",
-                                                    ylabel=f"WER ({config.model}, only keywords)")
-    summary.append({
-        "metric": "spearman correlation",
-        "of": name,
-        "correlation_coefficient": f"{r_val:.10f}",
-        "p_value": f"{p_val:.10f}",
-    })
-
     name = f"the Needleman-Wunsch-WER of human results and {config.model}({config.model_type})"
-    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_needlewunsch_human_kw", "wers_needlewunsch_machine_kw"]],
+    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
                                                     output_path=config.output_path,
                                                     name=name,
                                                     xlabel=f"Needleman-Wunsch-WER of human results (only keywords)",
@@ -98,7 +102,7 @@ def plot_regr_lines(df: pd.DataFrame, config):
         "p_value": f"{p_val:.10f}",
     })
 
-    name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
+    name = f"the Needleman-Wunsch-WER of human results and average log probability score of {config.model}({config.model_type})"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "avg_logprobs"]],
                                                     output_path=config.output_path,
                                                     name=name,
@@ -125,15 +129,12 @@ def evaluate_individual_run(config: InferenceConfig,
 
     if config.dataset_type != "grid":
         metrics.append(df_single_run["wers_human_kw"])
-        corr_summary = plot_regr_lines(df_single_run, config)
-
-        plot_wer_to_snr(df=df_single_run[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
-                        shifting_attribute="model_type",
-                        output_path=config.output_path)
 
         plot_needleman_wunsch_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "model_type"]],
                                          shifting_attribute="model_type",
                                          output_path=config.output_path)
+
+        corr_summary = plot_regr_lines(df_single_run, config)
 
         boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
                                   correlate_to="wers_machine_kw",
@@ -141,19 +142,17 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
 
-        boxplot_corr_per_listener(df_single_run[["wers_needlewunsch_human_kw", "wers_needlewunsch_machine_kw", "model_type", "listener"]],
-                                  correlate_to="wers_needlewunsch_machine_kw",
+        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
+                                  correlate_to="wers_machine_kw",
                                   model=config.model,
                                   model_type=config.model_type,
-                                  output_path=config.output_path,
-                                  needlemanwunsch=True)
+                                  output_path=config.output_path)
 
-        boxplot_corr_per_listener(df_single_run[["wers_needlewunsch_human_kw", "avg_logprobs", "model_type", "listener"]],
+        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
                                   correlate_to="avg_logprobs",
                                   model=config.model,
                                   model_type=config.model_type,
-                                  output_path=config.output_path,
-                                  needlemanwunsch=True)
+                                  output_path=config.output_path)
 
 
         if config.extract_logprobs:
@@ -185,13 +184,13 @@ def evaluate_individual_run(config: InferenceConfig,
 
             df_single_run["avg_entropy"] = entropies
 
-        boxplot_corr_per_listener(
-            df_single_run[["wers_needlewunsch_human_kw", "avg_entropy", "model_type", "listener"]],
-            correlate_to="avg_entropy",
-            model=config.model,
-            model_type=config.model_type,
-            output_path=config.output_path,
-            needlemanwunsch=True)
+            boxplot_corr_per_listener(
+                df_single_run[["wers_human_kw", "avg_entropy", "model_type", "listener"]],
+                correlate_to="avg_entropy",
+                model=config.model,
+                model_type=config.model_type,
+                output_path=config.output_path,
+                needlemanwunsch=True)
 
 
     for s_arr, metric in zip(summary, metrics):
@@ -257,22 +256,20 @@ def get_data(output_path: Path,
             if extract_logprobs:
                 logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
 
-    machine_transcripts = additional_normalization(machine_transcripts)
-    machine_transcripts_kw = [get_only_keywords(o) for o in machine_transcripts]
+    machine_transcripts = normalize(machine_transcripts)
+    machine_transcripts_kw = [get_only_keywords_using_alignments(reference=r, string=t) for r, t in zip(references, machine_transcripts)]
 
-    human_transcripts_kw = additional_normalization(human_transcripts_kw)
+    human_transcripts_kw = normalize(human_transcripts_kw)
 
     references_kw = [get_only_keywords(o) for o in references]
 
-    wers_machine = calculate_wers_with_norm(reference=references, hypothesis=machine_transcripts).to(device)
-    wers_machine_kw = calculate_wers_with_norm(reference=references_kw, hypothesis=machine_transcripts_kw).to(device)
+    wers_machine = wer_needleman_wunsch_per_sample(references=references, transcripts=machine_transcripts)
+    wers_machine_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=machine_transcripts_kw)
 
-    wers_needlewunsch_machine_kw = [wer_needleman_wunsch([r], [t]) for r,t in zip(references_kw, machine_transcripts_kw)]
 
-    avg_logprobs = torch.Tensor(avg_logprobs).to(device)
+    avg_logprobs = avg_logprobs
     if dataset_type != "grid":
-        wers_human_kw = calculate_wers_with_norm(reference=references_kw, hypothesis=human_transcripts_kw).to(device)
-        wers_needleman_wunsch_human_kw = [wer_needleman_wunsch([r], [t]) for r,t in zip(references_kw, human_transcripts_kw)]
+        wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
 
     summary = []
     metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)"]
@@ -284,33 +281,30 @@ def get_data(output_path: Path,
     for n, m in zip(metric_names, metrics):
         summary.append({
             "metric_name": n,
-            "mean": m.mean().item(),
-            "median": m.median().item(),
-            "std": m.std().item(),
-            "n": m.shape[0]
+            "mean": np.mean(m),
+            "median": np.median(m),
+            "std": np.std(m),
+            "n": len(m)
         })
 
     data = {
-        "avg_logprobs": avg_logprobs.cpu(),
+        "avg_logprobs": avg_logprobs,
         "references": references,
         "references_kw": references_kw,
-        "wers_machine": wers_machine.cpu(),
-        "wers_machine_kw": wers_machine_kw.cpu(),
+        "wers_machine": wers_machine,
+        "wers_machine_kw": wers_machine_kw,
         "machine_transcripts": machine_transcripts,
         "tokens": tokens,
         "machine_transcripts_kw": machine_transcripts_kw,
         "audio_paths": audio_paths,
-        "wers_needlewunsch_machine_kw": wers_needlewunsch_machine_kw,
-
     }
 
     if dataset_type != "grid":
         data.update({
-        "wers_human_kw": wers_human_kw.cpu(),
+        "wers_human_kw": wers_human_kw,
         "human_transcripts_kw": human_transcripts_kw,
         "listener": listener,
         "snr": snr,
-        "wers_needlewunsch_human_kw": wers_needleman_wunsch_human_kw,
         })
 
     if extract_logprobs:

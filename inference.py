@@ -74,6 +74,8 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.device) -> None:
     model = load_whisper_model(config, device)
 
+    #dataset["val"] = dataset["val"].filter(lambda sample: sample["snr_db"]=="40")
+
     batch_inference(config, model, dataset["val"], device)
     print()
 
