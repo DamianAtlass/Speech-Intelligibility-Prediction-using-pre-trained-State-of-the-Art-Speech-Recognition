@@ -205,24 +205,33 @@ def plot_entropy(df: pd.DataFrame,
 
     x_labels = np.sort(df["snr"].unique())
 
-    machine_values: list = []
+    entropy_means: list = []
     for attr in tqdm(list_shifting_attribute):
         df_attr = df[df[shifting_attribute] == attr]
-        mv_temp = []
+        entropies_per_snr = []
         for snr in np.sort(df_attr["snr"].unique()):
+
             df_snr = df_attr[df_attr["snr"] == snr]
-            df_snr["avg_entropy"] = df_snr["avg_entropy"].apply(lambda x: np.mean([o for o in x if o is not np.nan]))
+            tmp = []
+            for kw in range(3):
 
-            avg_entropy = np.mean(df_snr[df_snr['avg_entropy'].notnull()]['avg_entropy'])
-            mv_temp.append(avg_entropy)
-        machine_values.append(mv_temp)
+                mean_entropies_for_this_kw = df_snr["avg_entropy"].apply(lambda x: x[kw])
+                mean_entropies_for_this_kw = mean_entropies_for_this_kw[mean_entropies_for_this_kw.notnull()]
+                mean_entropy_for_this_kw = np.mean(mean_entropies_for_this_kw)
+                assert mean_entropy_for_this_kw != np.nan
+                tmp.append(mean_entropy_for_this_kw)
+            entropies_per_snr.append(tmp)
+        entropy_means.append(entropies_per_snr)
 
+    kw_labels = ["color", "letter", "digit"]
 
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
-
-    for mv,l in zip(machine_values, list_shifting_attribute):
-        plt.plot(positions, mv, marker="x", label=l)
+    colors = ["b", "g", "c", "r", ]
+    line_type = ['-', '--', ':']
+    for mv,l,c in zip(entropy_means, list_shifting_attribute, colors):
+        for kw, lt in zip(range(3), line_type):
+            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
 
     figure_title = f"Average entropy of keywords for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)

@@ -76,7 +76,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.device) -> None:
     model = load_whisper_model(config, device)
 
-    #dataset["val"] = dataset["val"].filter(lambda sample: sample["snr_db"]=="40")
+    #dataset["val"] = dataset["val"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
 
     batch_inference(config, model, dataset["val"], device)
     print()
