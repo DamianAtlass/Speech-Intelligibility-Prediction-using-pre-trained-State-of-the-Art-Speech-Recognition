@@ -76,7 +76,7 @@ def _needlemann_wunsch(reference, transcript):
     return (ref_align, trans_align)
 
 
-def needlemann_wunsch(reference: str, transcript: str):
+def needlemann_wunsch(reference: list[str], transcript: list[str]):
     """
     Counts number of errors.
 
@@ -104,24 +104,52 @@ def needlemann_wunsch(reference: str, transcript: str):
 
 ######## own additions ############
 
-def wer_needleman_wunsch(reference: list, transcript: list) -> float:
+def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float | int:
+    """
+
+    references, list[str]: represents a single sequence to be aligned. Example ["A nice house"]
+    transcripts, list[str]: represents a single sequence to be aligned with the reference. Example ["A nice mouse"]
+
+    Splits both at spaces. Doesn't normalize.
+    :return:
+    """
+    assert isinstance(references[0], str) if len(references) else True , "references needs to be list[str]"
+    assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
+    references = [o.split() for o in references]
+    transcripts = [o.split() for o in transcripts]
+
     total_elements, deletions, insertions, substitutions = 0, 0, 0, 0
 
-    for r, t in zip(reference, transcript):
+    for r, t in zip(references, transcripts):
         t, d, i, s = needlemann_wunsch(reference=r,transcript=t)
         total_elements += t
         deletions += d
         insertions += i
         substitutions += s
+    try:
+        return (substitutions + insertions + deletions) / total_elements
+    except ZeroDivisionError:
+        return np.nan
 
-    return (substitutions + insertions + deletions) / total_elements
+def wer_needleman_wunsch_per_sample(references: list[str], transcripts: list[str]) -> list[float|int]:
+    """
+    Caluclates the needleman_wunsch WER per sample.
+    """
+    assert isinstance(references[0], str) if len(references) else True, "references needs to be list[str]"
+    assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
+
+    wers = []
+    for r,t in zip(references, transcripts):
+        wer = wer_needleman_wunsch(references=[r], transcripts=[t])
+        wers.append(wer)
+    return wers
 
 if __name__ == '__main__':
 
-    ref = "the nice tree".split()
-    hypothesis = "eh dicetree".split()
+    ref = "grading four again".split()
+    hypothesis = "Been grading L four again".split()
 
-    print(f"wer (needleman-wunsch): {wer_needleman_wunsch(reference=[ref], transcript=[hypothesis])}")
+    print(f"wer (needleman-wunsch): {wer_needleman_wunsch(references=[ref], transcripts=[hypothesis])}")
 
     ref_align, trans_align = _needlemann_wunsch(reference=ref, transcript=hypothesis)
     print(ref_align)

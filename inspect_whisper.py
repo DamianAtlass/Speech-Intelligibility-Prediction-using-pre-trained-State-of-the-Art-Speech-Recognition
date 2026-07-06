@@ -69,8 +69,8 @@ def compare_transcripts():
             loaded_list.append(result_loaded["text"])
             print(f"text unequal for {i=} ({result_array["text"]}  =/= {result_loaded["text"]} )")
 
-    print(f"array: {wer_needleman_wunsch(reference=refs, transcript=array_list)}")
-    print(f"loaded: {wer_needleman_wunsch(reference=refs, transcript=loaded_list)}")
+    print(f"array: {wer_needleman_wunsch(references=refs, transcripts=array_list)}")
+    print(f"loaded: {wer_needleman_wunsch(references=refs, transcripts=loaded_list)}")
 
     # mean arr: 5.413363646233904e-10
     # min arr: -1.52587890625e-05

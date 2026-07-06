@@ -14,8 +14,21 @@ def calculate_wers_with_norm(
 
     return torch.Tensor(werpy.wers(reference, hypothesis))
 
-def additional_normalization(strings: list[str]) -> list[str]:
-    return [numbers_to_words(separate_numbers_from_letter(o)) for o in strings]
+def normalize(strings: list[str],
+              apply_separate_numbers_from_letter: bool = True,
+              apply_numbers_to_words: bool = True,
+              apply_werpy_normalize: bool = True
+              ) -> list[str]:
+    if apply_separate_numbers_from_letter:
+        strings = [separate_numbers_from_letter(o) for o in strings]
+
+    if apply_werpy_normalize:
+        strings = [werpy.normalize(o) for o in strings]
+
+    if apply_numbers_to_words:
+        strings = [numbers_to_words(o) for o in strings]
+
+    return strings
 
 
 #print(werpy.wers("The cat is sleeping on the mat.", "The cat is playing on mat."))

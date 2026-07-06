@@ -142,57 +142,6 @@ def plot_metrics(array: list[pd.DataFrame],
     #plt.show()
     plt.close()
 
-
-def plot_wer_to_snr(df: pd.DataFrame,
-                    shifting_attribute: str = "model_type",
-                    shifting_attribute_label = None,
-                    output_path: Path = None, ):
-
-    list_shifting_attribute: list = list(df[shifting_attribute].unique())
-    one_run_attribute: str = list_shifting_attribute[0]
-
-    df_human_data = df[df[shifting_attribute]==one_run_attribute][["wers_human_kw", "snr"]]
-    df_human_data_grouped = (
-        df_human_data.groupby(["snr"])
-        .agg(
-            avr_wer_human=("wers_human_kw", "mean"),
-        )
-        .reindex(np.sort(df["snr"].unique()))
-    )
-    df = df.drop('wers_human_kw', axis=1)
-
-    x_labels = np.sort(df["snr"].unique())
-    human_values = df_human_data_grouped["avr_wer_human"].values
-    human_values = torch.tensor(human_values)*100
-
-    machine_values: list = []
-    for attr in list_shifting_attribute:
-        df_attr = df[df[shifting_attribute] == attr]
-        df_attr = df_attr.groupby(["snr"]).agg(avr_wer_machine=("wers_machine_kw", "mean")).reindex(np.sort(df["snr"].unique()))
-        machine_values.append(df_attr["avr_wer_machine"].values * 100)
-
-
-    positions = range(len(x_labels))
-    plt.figure(figsize=[10, 5])
-    plt.plot(positions, human_values, marker="o", label="human")
-    for mv,l in zip(machine_values, list_shifting_attribute):
-        plt.plot(positions, mv, marker="x", label=l)
-
-    figure_title = f"WER of transcriptions from human data and {shifting_attribute_label or shifting_attribute}"
-    plt.suptitle(figure_title)
-    #plt.title(f"n={len(df)}") #falty
-    plt.xticks(positions, x_labels)
-    plt.xlabel("SNR")
-    plt.ylabel("Average WER in %")
-    plt.grid()
-    plt.legend()
-    plt.ylim(0,100)
-    if output_path:
-        plt.savefig(output_path/f'{figure_title}.png')
-    #plt.show()
-    plt.close()
-
-
 def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
                     shifting_attribute: str = "model_type",
                     shifting_attribute_label = None,
@@ -206,7 +155,8 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
     human_values = []
     for snr in np.sort(df_human_data["snr"].unique()):
         df_snr = df_human_data[df_human_data["snr"]==snr]
-        wer_snr = wer_needleman_wunsch(reference=df_snr["references_kw"].values, transcript=df_snr["human_transcripts_kw"].values)
+        wer_snr = wer_needleman_wunsch(references=df_snr["references_kw"].values,
+                                       transcripts=df_snr["human_transcripts_kw"].values)
         human_values.append(wer_snr)
     human_values = torch.Tensor(human_values) * 100
     del df_human_data
@@ -218,8 +168,8 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
         mv_temp = []
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
-            wer_snr = wer_needleman_wunsch(reference=df_snr["references_kw"].values,
-                                           transcript=df_snr["machine_transcripts_kw"].values)
+            wer_snr = wer_needleman_wunsch(references=df_snr["references_kw"].values,
+                                           transcripts=df_snr["machine_transcripts_kw"].values)
             mv_temp.append(wer_snr)
         machine_values.append(torch.tensor(mv_temp) *100)
 
@@ -246,14 +196,62 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
     plt.close()
 
 
+def plot_entropy(df: pd.DataFrame,
+                    shifting_attribute: str = "model_type",
+                    shifting_attribute_label = None,
+                    output_path: Path = None, ):
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+
+    x_labels = np.sort(df["snr"].unique())
+
+    entropy_means: list = []
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        entropies_per_snr = []
+        for snr in np.sort(df_attr["snr"].unique()):
+
+            df_snr = df_attr[df_attr["snr"] == snr]
+            tmp = []
+            for kw in range(3):
+
+                mean_entropies_for_this_kw = df_snr["avg_entropy"].apply(lambda x: x[kw])
+                mean_entropies_for_this_kw = mean_entropies_for_this_kw[mean_entropies_for_this_kw.notnull()]
+                mean_entropy_for_this_kw = np.mean(mean_entropies_for_this_kw)
+                assert mean_entropy_for_this_kw != np.nan
+                tmp.append(mean_entropy_for_this_kw)
+            entropies_per_snr.append(tmp)
+        entropy_means.append(entropies_per_snr)
+
+    kw_labels = ["color", "letter", "digit"]
+
+    positions = range(len(x_labels))
+    plt.figure(figsize=[10, 5])
+    colors = ["b", "g", "c", "r", ]
+    line_type = ['-', '--', ':']
+    for mv,l,c in zip(entropy_means, list_shifting_attribute, colors):
+        for kw, lt in zip(range(3), line_type):
+            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
+
+    figure_title = f"Average entropy of keywords for {shifting_attribute_label or shifting_attribute}"
+    plt.suptitle(figure_title)
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel("Average entropy")
+    plt.ylim(0, 5)
+    plt.grid()
+    plt.legend()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.show()
+    plt.close()
+
 def boxplot_corr_per_listener(df: pd.DataFrame,
                               correlate_to: str,
                               model: str,
                               model_type: str | list[str],
                               output_path: Path = None,
-                              shifting_attribute = "model_type",
-                              needlemanwunsch = False):
-    wer_human_column = "wers_needlewunsch_human_kw" if needlemanwunsch else "wers_human_kw"
+                              shifting_attribute = "model_type"):
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     corr_arr = []
@@ -268,7 +266,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         listeners = df_model_type["listener"].unique()
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
-            x = df_listener[wer_human_column]
+            x = df_listener["wers_human_kw"]
             y = df_listener[correlate_to]
             x_ranked = stats.rankdata(x)
             y_ranked = stats.rankdata(y)
@@ -283,7 +281,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         p_val_arr.append(torch.tensor(p_val_arr_tmp))
 
 
-    fig, ax = plt.subplots(figsize=(6 + len(list_shifting_attribute) * 0.7, 7))
+    fig, ax = plt.subplots(figsize=(8 + len(list_shifting_attribute) * 0.7, 7))
 
     positions = range(1, len(list_shifting_attribute) + 1)
 
@@ -294,12 +292,12 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
     d = {
-        "wers_machine_kw": "WER for keywords",
-        "wers_needlewunsch_machine_kw": "Needleman-Wunsch-WER for keywords",
+        "wers_machine_kw": "Needleman-Wunsch-WER for keywords",
         "avg_logprobs": "average log probability score (per sequence)",
+        "avg_entropy": "mean entropy of all keywords in a sentence"
     }
 
-    title = f"Spearman Correlation Coefficient of human {"Needleman-Wunsch-WER" if needlemanwunsch else "WER"} and \n {model}'s {d[correlate_to]} for each listener"
+    title = f"Spearman Correlation Coefficient of human Needleman-Wunsch-WER and \n {model}'s {d[correlate_to]} for each listener"
     plt.title(title +"\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()

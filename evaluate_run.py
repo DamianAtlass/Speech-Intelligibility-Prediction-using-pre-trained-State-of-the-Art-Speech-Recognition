@@ -8,7 +8,7 @@ import torch
 import logging
 logger = logging.getLogger(__name__)
 from utils.evaluate_utils import get_data, evaluate_individual_run
-from utils.plotting_utils import plot_metrics, plot_wer_to_snr, boxplot_corr_per_listener
+from utils.plotting_utils import plot_metrics, boxplot_corr_per_listener, plot_needleman_wunsch_wer_to_snr
 import pandas as pd
 from utils.cuda_utils import select_device
 
@@ -22,10 +22,13 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, df_single_run = get_data(config.output_path, config.dataset_type, device)
+            summary, df_single_run = get_data(config.output_path, config.dataset_type, config.extract_logprobs, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model_type
         evaluate_individual_run(config, summary, df_single_run, device)
+
+        #with pd.option_context('display.max_rows', None, 'display.max_columns', None, "display.width", 10000):
+            #print(df_single_run[["references_kw", "machine_transcripts", "machine_transcripts_kw", "wers_machine_kw"]])
     else:
         summary_arr, avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr = [], [], [], []
         #list_field = config.get_list_fields()[0]
@@ -34,7 +37,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
         for c in unfolded_configs:
             with catch_time() as t:
-                summary, df_single_run = get_data(c.output_path, c.dataset_type, device=device)
+                summary, df_single_run = get_data(c.output_path, c.dataset_type, c.extract_logprobs, device=device)
                 df_single_run["model_type"] = c.model_type
 
                 if df_all is None:
@@ -62,7 +65,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
         if config.dataset_type != "grid":
-            plot_wer_to_snr(df_all[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
+            plot_needleman_wunsch_wer_to_snr(df_all[["wers_human_kw", "wers_machine_kw", "snr", "model_type"]],
                             config,
                             shifting_attribute="model_type",
                             output_path=config.output_path)
@@ -78,11 +81,10 @@ def evaluate_run(path: Path, device: torch.device | None = None):
                                       correlate_to="avg_logprobs",
                                       model=config.model,
                                       model_type=config.model_type,
-                                      output_path=config.output_path
-                                      )
+                                      output_path=config.output_path)
 
     logger.info("Finished evaluation")
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/tmp"))
+    evaluate_run(Path("inferences/small.en60"))
