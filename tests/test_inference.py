@@ -10,6 +10,7 @@ load_dotenv() # needs to be before 'import torch'!
 import torch
 import shutil
 
+test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 
 @pytest.mark.parametrize("time_stamps", [False,True])
 @pytest.mark.parametrize("extract_logprobs", [False,True])
@@ -19,9 +20,9 @@ def test_batch_inference(time_stamps, extract_logprobs):
         model="whisper",
         model_type="tiny",
         model_path=None,
-        output_path=Path("tests/inference_test"),
+        output_path=test_folder/"inference_test",
         dataset_type="grid",
-        dataset_path=Path("datasets/grid/"),
+        dataset_path=test_folder.parent/"datasets/grid/",
         train_split=1,
         test_split=1,
         val_split=1,

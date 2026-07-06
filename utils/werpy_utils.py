@@ -22,11 +22,11 @@ def normalize(strings: list[str],
     if apply_separate_numbers_from_letter:
         strings = [separate_numbers_from_letter(o) for o in strings]
 
-    if apply_numbers_to_words:
-        strings = [numbers_to_words(o) for o in strings]
-
     if apply_werpy_normalize:
         strings = [werpy.normalize(o) for o in strings]
+
+    if apply_numbers_to_words:
+        strings = [numbers_to_words(o) for o in strings]
 
     return strings
 

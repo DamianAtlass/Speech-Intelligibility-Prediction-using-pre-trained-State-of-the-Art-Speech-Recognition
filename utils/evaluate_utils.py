@@ -12,7 +12,7 @@ import numpy as np
 import string
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
-    plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
+    plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_entropy
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 
@@ -23,6 +23,33 @@ from utils.config_dataclasses import InferenceConfig
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
     return x[~is_nan], y[~is_nan]
+
+def find_ordered_indices(transcript: list, keywords_to_find: list) -> list[int]:
+    indices = []
+    j = 0  # pointer for keywords
+
+    assert [transcript.index(s) for s in keywords_to_find if s is not None] or True # no exception being thrown is assert enough
+
+    for i, val in enumerate(transcript):
+        if j < len(keywords_to_find):
+            if keywords_to_find[j] is None:
+                indices.append(None)
+                j+=1
+                continue
+
+            if val == keywords_to_find[j]:
+                indices.append(i)
+                j += 1
+                if j == len(keywords_to_find):
+                    break
+    rest = len(keywords_to_find) - len(indices)
+    indices.extend([None for _ in range(rest)])
+    assert len(indices) == len(keywords_to_find)
+    return indices
+
+
+
+    return indices if j == len(keywords_to_find) else None
 
 def get_only_keywords(string) -> str:
     """
@@ -37,19 +64,28 @@ def get_only_keywords(string) -> str:
     string = [s for i,s in enumerate(string) if i in keywords_index]
     return " ".join(string)
 
-def get_only_keywords_using_alignments(reference: str, string: str) -> str:
+def get_only_keywords_using_alignments(reference: list[str], transcript: list[str], return_idx=False) -> list[str] | list[int]:
     """
-    Use alignment to return only the words at the keyword indices. Input should be normalized
+    Use alignment to return only the words at the keywords of string at the keyword indices. Input should be normalized and already split.
     """
-    if string == "yes sir":
-        pass
+    ref_keywords_index = [1, 3, 4]
+    assert isinstance(reference, list), "reference must be a list!"
+    assert isinstance(transcript, list), "string must be a list!"
 
-    reference, string = reference.split(), string.split()
     assert len(reference) == 6 # grid samples are 6-words-long
-    ref_align, trans_align = _needlemann_wunsch(reference=reference, transcript=string)
-    keywords_index = [1, 3, 4]
-    keywords = [trans_align[ref_align.index(reference[i])] for i in keywords_index]
-    return " ".join([k for k in keywords if k])
+    ref_align, trans_align = _needlemann_wunsch(reference=reference, transcript=transcript)
+    ref_aligned_indices = [ref_align.index(reference[i]) for i in ref_keywords_index]
+
+
+    trans_keywords = [trans_align[i] for i in ref_aligned_indices]
+    assert len(trans_keywords) <= 3
+    if return_idx:
+        trans_keywords_indices = find_ordered_indices(transcript, trans_keywords)
+        if l:=trans_keywords_indices[len(trans_keywords_indices)-1]:
+            assert l < len(transcript)# last index cannot be greater than length of original string
+        return trans_keywords_indices
+
+    return trans_keywords
 
 
 def plot_regr_lines(df: pd.DataFrame, config):
@@ -160,38 +196,58 @@ def evaluate_individual_run(config: InferenceConfig,
             entropies = []
             tokenizer = get_tokenizer(multilingual=False)
             counter = 0
+
+            error_counter = 0
+
             for index, row in df_single_run.iterrows():
-                tensor = torch.load(Path.cwd()/row["logprobs_paths"])
+                logprob_tensor = torch.load(Path.cwd()/row["logprobs_paths"])
                 tokens = row["tokens"]
-                split_transcript = [tokenizer.decode_with_timestamps([t]) for t in tokens]
-                idx_to_keep = ["<|" not in t and "|>" not in t and t not in string.punctuation for t in split_transcript] # rm timestamp tokens
-                tensor = tensor[idx_to_keep]
-                split_transcript = [t for t,b in zip(split_transcript, idx_to_keep) if b] # todo make a copy of this
+                decoded_tokens = [tokenizer.decode_with_timestamps([t]) for t in tokens]
+                if len(decoded_tokens) != logprob_tensor.shape[0]:
+                    #print(f"{counter = }, ({len(decoded_tokens) = } != {logprob_tensor.shape[0] = })")
+                    error_counter+=1
+                    entropies.append([np.nan, np.nan, np.nan])
+                    continue
+                idx_to_keep = ["<|" not in t and "|>" not in t for t in decoded_tokens] # rm timestamp tokens
 
-                ref = row["references"].split()
-                ref_align, hypo_align = _needlemann_wunsch(reference=ref , transcript=split_transcript)
+                logprob_tensor = logprob_tensor[idx_to_keep]
+                decoded_tokens_without_timestamp_tokens = [t for t,b in zip(decoded_tokens, idx_to_keep) if b] # todo make a copy of this
 
-                aligned_kw_indices = [ref_align.index(kw) for kw in row["references_kw"].split()]
-                aligned_kw_indices = [idx for idx in aligned_kw_indices if ref_align[idx] and hypo_align[idx]]
+                # normalize for alignment
+                decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in decoded_tokens_without_timestamp_tokens]
+                decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens, apply_separate_numbers_from_letter=False, apply_werpy_normalize=False)
+                #get keywords
+                ref = row["references"]
+                trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+                assert len(trans_keywords_indices) == 3
+                logprob_tensor = np.array(logprob_tensor.cpu())
 
-                aligned_kw_indices = [split_transcript.index(hypo_align[o]) for o in aligned_kw_indices]
-
-                tensor = np.array(tensor.cpu())[aligned_kw_indices]
-                print(counter)
-                e = entropy(np.exp(tensor.T)).mean()
-                entropies.append(e)
+                e_arr = []
+                for idx in trans_keywords_indices:
+                    if idx is None:
+                        e_arr.append(np.nan)
+                        continue
+                    e = entropy(np.exp(logprob_tensor[idx]))
+                    e_arr.append(e)
                 counter+=1
+                entropies.append(e_arr)
 
+
+            print(f"{error_counter = }")
             df_single_run["avg_entropy"] = entropies
 
+            plot_entropy(df_single_run,
+                shifting_attribute="model_type",
+                output_path=config.output_path)
+
+
+            #dont touch this
             boxplot_corr_per_listener(
                 df_single_run[["wers_human_kw", "avg_entropy", "model_type", "listener"]],
                 correlate_to="avg_entropy",
                 model=config.model,
                 model_type=config.model_type,
-                output_path=config.output_path,
-                needlemanwunsch=True)
-
+                output_path=config.output_path)
 
     for s_arr, metric in zip(summary, metrics):
         df_single_run["model_type"] = config.model_type
@@ -257,8 +313,8 @@ def get_data(output_path: Path,
                 logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
 
     machine_transcripts = normalize(machine_transcripts)
-    machine_transcripts_kw = [get_only_keywords_using_alignments(reference=r, string=t) for r, t in zip(references, machine_transcripts)]
-
+    machine_transcripts_kw = [get_only_keywords_using_alignments(reference=r.split(), transcript=t.split()) for r, t in zip(references, machine_transcripts)]
+    machine_transcripts_kw = [" ".join(w for w in t if w) for t in machine_transcripts_kw]
     human_transcripts_kw = normalize(human_transcripts_kw)
 
     references_kw = [get_only_keywords(o) for o in references]

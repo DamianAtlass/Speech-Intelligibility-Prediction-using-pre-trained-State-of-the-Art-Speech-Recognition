@@ -104,7 +104,15 @@ def needlemann_wunsch(reference: list[str], transcript: list[str]):
 
 ######## own additions ############
 
-def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float|int:
+def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float | int:
+    """
+
+    references, list[str]: represents a single sequence to be aligned. Example ["A nice house"]
+    transcripts, list[str]: represents a single sequence to be aligned with the reference. Example ["A nice mouse"]
+
+    Splits both at spaces. Doesn't normalize.
+    :return:
+    """
     assert isinstance(references[0], str) if len(references) else True , "references needs to be list[str]"
     assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
     references = [o.split() for o in references]
@@ -118,10 +126,18 @@ def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float
         deletions += d
         insertions += i
         substitutions += s
-
-    return (substitutions + insertions + deletions) / total_elements
+    try:
+        return (substitutions + insertions + deletions) / total_elements
+    except ZeroDivisionError:
+        return np.nan
 
 def wer_needleman_wunsch_per_sample(references: list[str], transcripts: list[str]) -> list[float|int]:
+    """
+    Caluclates the needleman_wunsch WER per sample.
+    """
+    assert isinstance(references[0], str) if len(references) else True, "references needs to be list[str]"
+    assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
+
     wers = []
     for r,t in zip(references, transcripts):
         wer = wer_needleman_wunsch(references=[r], transcripts=[t])

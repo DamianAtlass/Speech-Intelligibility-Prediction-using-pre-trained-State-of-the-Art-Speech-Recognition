@@ -15,7 +15,7 @@ def test_separate_numbers_from_letter(text, result: str):
     assert separate_numbers_from_letter(text) == result
 
 def test_additional_normalization():
-    assert normalize(["as42_a!!5"])[0] == "as forty-two _a!! five"
+    assert normalize(["as42_a!!5"])[0] == 'as forty-two a five'
 
 @pytest.mark.parametrize(("text", "result", "apply_separate_numbers_from_letter", "apply_numbers_to_words", "apply_werpy_normalize"),[
     ["Tree4wood10","Tree4wood10", False, False, False],

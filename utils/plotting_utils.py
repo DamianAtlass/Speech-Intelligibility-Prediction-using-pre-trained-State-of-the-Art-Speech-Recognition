@@ -196,6 +196,47 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
     plt.close()
 
 
+def plot_entropy(df: pd.DataFrame,
+                    shifting_attribute: str = "model_type",
+                    shifting_attribute_label = None,
+                    output_path: Path = None, ):
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+
+    x_labels = np.sort(df["snr"].unique())
+
+    machine_values: list = []
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        mv_temp = []
+        for snr in np.sort(df_attr["snr"].unique()):
+            df_snr = df_attr[df_attr["snr"] == snr]
+            df_snr["avg_entropy"] = df_snr["avg_entropy"].apply(lambda x: np.mean([o for o in x if o is not np.nan]))
+
+            avg_entropy = np.mean(df_snr[df_snr['avg_entropy'].notnull()]['avg_entropy'])
+            mv_temp.append(avg_entropy)
+        machine_values.append(mv_temp)
+
+
+    positions = range(len(x_labels))
+    plt.figure(figsize=[10, 5])
+
+    for mv,l in zip(machine_values, list_shifting_attribute):
+        plt.plot(positions, mv, marker="x", label=l)
+
+    figure_title = f"Average entropy of keywords for {shifting_attribute_label or shifting_attribute}"
+    plt.suptitle(figure_title)
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel("Average entropy")
+    plt.ylim(0, 5)
+    plt.grid()
+    plt.legend()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.show()
+    plt.close()
+
 def boxplot_corr_per_listener(df: pd.DataFrame,
                               correlate_to: str,
                               model: str,

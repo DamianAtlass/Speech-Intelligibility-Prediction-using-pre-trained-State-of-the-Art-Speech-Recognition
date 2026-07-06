@@ -57,6 +57,8 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
             if config.extract_logprobs:
                 extracted_logprobs = result.pop("extracted_logprobs")
+                tokens = [x for s in result["segments"] for x in s["tokens"]]
+                assert len(tokens) == extracted_logprobs.shape[0]
                 file_path = config.output_path/"logprobs"/f"{file_name}.pt"
                 logger.info(f"Save logprobs to {file_path}")
                 torch.save(extracted_logprobs, file_path)
