@@ -46,6 +46,7 @@ def get_dataset(dataset_type: str, dataset_path: Path = None, add_noise: bool = 
     return dataset
 
 def add_noise_to_dataset(dataset: Dataset):
+    logger.info(f"Add noise to all {len(dataset)} samples.")
     rng = np.random.default_rng(0)
     dataset = dataset.add_column("snr", rng.choice(SNRS, size=len(dataset)))
     dataset.set_transform(add_noise_transformation)
