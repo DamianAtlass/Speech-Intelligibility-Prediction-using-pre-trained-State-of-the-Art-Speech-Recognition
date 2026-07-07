@@ -1,7 +1,7 @@
 from tests.test_grid_utils import real_grid_folder
 from utils.config_dataclasses import Config
 from utils.dataset_utils import get_dataset, apply_split
-from datasets import Dataset, DatasetDict, load_from_disk
+from datasets import Dataset, DatasetDict
 from pathlib import Path
 import pytest
 
@@ -77,3 +77,15 @@ def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int)
 
     dataset_dict = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
     assert len(dataset_dict["val"]) == resulting_size
+
+
+@pytest.mark.parametrize(("dataset_type", "dataset_path"), [
+    ("grid", grid_folder),
+    ("grid_bc", grid_bc_folder),
+])
+def test_get_dataset_and_add_noise(dataset_type, dataset_path):
+    try:
+        dataset  = get_dataset(dataset_type=dataset_type, dataset_path=dataset_path, add_noise=True)
+        assert dataset_type=="grid"
+    except ValueError:
+        assert dataset_type=="grid_bc"

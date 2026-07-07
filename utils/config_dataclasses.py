@@ -16,6 +16,7 @@ class Config:
 
     dataset_type: str
     dataset_path: Path | None = None
+    add_noise: bool = False
     train_split: int | float
     test_split: int | float
     val_split: int | float = None
@@ -27,6 +28,8 @@ class Config:
     def __post_init__(self):
         self.model_type = cast(str, self.model_type).replace(" ", "").split(",") if "," in self.model_type else self.model_type
         self.dataset_path = Path.cwd()/self.dataset_path if self.dataset_path else None
+        if isinstance(self.add_noise, str):
+            self.add_noise = self.add_noise == "True"
         self.train_split = to_int_or_float(self.train_split)
         self.test_split = to_int_or_float(self.test_split)
         self.val_split = to_int_or_float(self.val_split) if (self.val_split is not None) else None
@@ -48,6 +51,7 @@ class Config:
             '',
             'dataset_type',
             'dataset_path',
+            'add_noise',
             'train_split',
             'test_split',
             'val_split',
