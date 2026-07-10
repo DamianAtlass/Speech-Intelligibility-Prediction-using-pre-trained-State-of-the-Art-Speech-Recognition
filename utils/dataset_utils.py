@@ -12,8 +12,10 @@ from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 from typing import cast
-
+import numpy as np
+from utils.manipulate_audio import add_noise_transformation
 WANTED_SAMPLE_RATE = 16_000
+SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 
 
 
@@ -23,7 +25,7 @@ default_dataset_paths = {
     "grid_bc": Path.cwd()/"datasets/GridIntelligibilityDatabase"
 }
 
-def get_dataset(dataset_type: str, dataset_path: Path = None):
+def _get_dataset(dataset_type: str, dataset_path: Path = None) -> Dataset:
 
     if not dataset_path:
         dataset_path = default_dataset_paths[dataset_type]
@@ -34,12 +36,27 @@ def get_dataset(dataset_type: str, dataset_path: Path = None):
         return get_grid_bc(dataset_path if dataset_path else default_dataset_paths[dataset_type])
     raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
 
+def get_dataset(dataset_type: str, dataset_path: Path = None, add_noise: bool = False) -> Dataset:
+    dataset = _get_dataset(dataset_type, dataset_path)
+    
+    if add_noise:
+        if dataset_type=="grid_bc":
+            raise ValueError("Do you really wanna do this?")
+        dataset = add_noise_to_dataset(dataset)
+    return dataset
+
+def add_noise_to_dataset(dataset: Dataset):
+    logger.info(f"Add noise to all {len(dataset)} samples.")
+    rng = np.random.default_rng(0)
+    dataset = dataset.add_column("snr", rng.choice(SNRS, size=len(dataset)))
+    dataset.set_transform(add_noise_transformation)
+    return dataset
 
 def apply_split(dataset : Dataset,
                 train_split: int | float,
                 test_split: int | float,
                 val_split: int | float,
-                dataset_scaling: int | float ) -> DatasetDict:
+                dataset_scaling: int | float = 1) -> DatasetDict:
     """
     Split the dataset depending on the given parameters.
 
