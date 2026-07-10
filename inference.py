@@ -29,6 +29,7 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
     transcribe_fn = sip_whisper.transcribe if config.extract_logprobs else whisper.transcribe
     counter = 0
+
     with torch.inference_mode():
         for sample in tqdm.tqdm(dataset):
             counter = counter + 1
@@ -37,20 +38,22 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             sample_dict = dict(sample)
             sample_dict.pop("audio")
             audio_array = torch.tensor(sample["audio"]["array"]).to(device)
-
             audio_array = whisper.pad_or_trim(audio_array)
-            with catch_time() as t:
-                # results will not be equal (therefore not deterministic) if temperature=!0.0
-                #  https://github.com/openai/whisper/discussions/81
-                result: dict = transcribe_fn(model,
-                                             audio_array,
-                                             fp16=False,
-                                             beam_size=config.beam_size,
-                                             temperature=0,
-                                             word_timestamps=config.word_timestamps,
-                                             condition_on_previous_text=False,
-                                             language="en")
-            logger.info(f"Transcription time for sample {counter}/{len(dataset)}: {t():.4f} secs")
+
+            options = {
+                "model": model,
+                "audio": audio_array,
+                "fp16": False,
+                "beam_size": config.beam_size,
+                "temperature": 0,
+                "word_timestamps": config.word_timestamps,
+                "condition_on_previous_text": False,
+                "language": "en"
+            }
+
+            # results will not be equal (therefore not deterministic) if temperature=!0.0
+            #  https://github.com/openai/whisper/discussions/81
+            result: dict = transcribe_fn(**options)
 
             audio_path = Path(sample["audio_path"])
             file_name = f"{audio_path.parent.stem}_{audio_path.stem}"
@@ -58,17 +61,22 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
             if config.extract_logprobs:
                 extracted_logprobs = result.pop("extracted_logprobs")
                 tokens = [x for s in result["segments"] for x in s["tokens"]]
-                assert len(tokens) == extracted_logprobs.shape[0]
-                file_path = config.output_path/"logprobs"/f"{file_name}.pt"
-                logger.info(f"Save logprobs to {file_path}")
-                torch.save(extracted_logprobs, file_path)
+                assert len(tokens) == (0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
 
-                result["logprobs_path"] = str(file_path.relative_to(Path.cwd()))
+                if extracted_logprobs is not None:
+                    logprob_file_path = config.output_path/"logprobs"/f"{file_name}.pt"
+                    logger.info(f"Save logprobs to {logprob_file_path}")
+                    torch.save(extracted_logprobs, logprob_file_path)
+                    result["logprobs_path"] = str(logprob_file_path.relative_to(Path.cwd()))
+
+                else:
+                    result["logprobs_path"] = ""
+                    logger.info("No logprobs to save.")
 
             sample_dict["prediction_result"] = result
-            file_path = config.output_path / "data" / f"{file_name}.json"
-            logger.info(f"Save result data to {file_path}")
-            with open(file_path, 'w') as f:
+            result_data_file_path = config.output_path / "data" / f"{file_name}.json"
+            logger.info(f"Save result data [{counter}] to {result_data_file_path.relative_to(Path.cwd())}")
+            with open(result_data_file_path, 'w') as f:
                 json.dump(sample_dict, f, indent=4)
 
             logger.info("--------------------")

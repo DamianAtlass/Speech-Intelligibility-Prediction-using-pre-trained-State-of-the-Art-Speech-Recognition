@@ -38,3 +38,6 @@ def test_batch_inference(time_stamps, extract_logprobs):
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset, torch.device("cpu"))
 
+    if extract_logprobs:
+        assert (test_folder/"inference_test/logprobs/s7_sgib3s.pt").exists()
+
