@@ -1,4 +1,5 @@
-from utils.evaluate_utils import get_only_keywords, remove_nan, get_only_keywords_using_alignments, find_ordered_indices
+from utils.evaluate_utils import get_only_keywords_by_index, remove_nan, get_only_keywords_using_alignments, \
+    find_ordered_indices, get_only_keywords_by_identity
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -46,10 +47,32 @@ def test_find_ordered_indices_throw_exception(transcript, keywords_to_find):
 ])
 def test_get_only_keywords(string, output, exception):
     try:
-        assert get_only_keywords(string) == output
+        assert get_only_keywords_by_index(string) == output
         assert not exception
     except ValueError:
         assert exception
+
+@pytest.mark.parametrize(("transcript", "reference_kw", "result"), [
+    ("one two three four five six", "two four five", "two four five"),
+    ("one two three four five six", "A B C", ""),
+    ("one two three four", "two X four", "two four"),
+    #("place red with j three again", "red j three", False),
+])
+def test_get_only_keywords_by_identity(transcript, reference_kw, result: str):
+     r = get_only_keywords_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split())
+     assert result == " ".join(r)
+
+
+@pytest.mark.parametrize(("transcript", "reference_kw", "result"), [
+    ("one two three four five six", "two four five", [1,3,4]),
+    ("one two three four five six", "A B C", [None, None, None]),
+    ("one two three four", "two X four", [1, None, 3]),
+    ("place red with j three again", "red j three", [1,3,4]),
+    ("place red with j four again", "red j three", [1, 3, None]),
+])
+def test_get_only_keywords_by_identity_with_return_idx(transcript, reference_kw, result: str):
+    r = get_only_keywords_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    assert result == r
 
 
 @pytest.mark.parametrize(("reference", "string", "output"), [

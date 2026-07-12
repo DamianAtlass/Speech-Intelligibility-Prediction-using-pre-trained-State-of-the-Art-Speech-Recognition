@@ -135,6 +135,9 @@ def wer_needleman_wunsch_per_sample(references: list[str], transcripts: list[str
     """
     Caluclates the needleman_wunsch WER per sample.
     """
+    assert isinstance(references, list)
+    assert isinstance(transcripts, list)
+
     assert isinstance(references[0], str) if len(references) else True, "references needs to be list[str]"
     assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
 

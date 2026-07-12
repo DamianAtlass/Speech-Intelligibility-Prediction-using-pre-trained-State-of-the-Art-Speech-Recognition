@@ -48,7 +48,7 @@ def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
     plt.grid(True)
     plt.legend()
     if output_path:
-        plt.savefig(output_path/f'{title}.png')
+        plt.savefig(output_path/f'{title.replace("\n", "")}.png')
     #plt.show()
     plt.close()
 
@@ -88,7 +88,7 @@ def plot_regr_line_for_spearman_corr(df: pd.DataFrame,
     plt.legend()
 
     if output_path:
-        plt.savefig(output_path/f'{title}.png')
+        plt.savefig(output_path/f'{title.replace("\n", "")}.png')
     #plt.show()
     plt.close()
     return regr.rvalue, regr.pvalue
@@ -138,7 +138,7 @@ def plot_metrics(array: list[pd.DataFrame],
 
 
     if output_path:
-        plt.savefig(output_path/f'{figure_title}.png')
+        plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
     #plt.show()
     plt.close()
 
@@ -191,8 +191,49 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
     plt.grid()
     plt.legend()
     if output_path:
-        plt.savefig(output_path/f'{figure_title}.png')
+        plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
     #plt.show()
+    plt.close()
+
+def plot_x_to_snr(df: pd.DataFrame,
+                    plotting_attribute: str,
+                    shifting_attribute: str = "model_type",
+                    shifting_attribute_label = None,
+                    output_path: Path = None, ):
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+    x_labels = np.sort(df["snr"].unique())
+
+    values: list = []
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        values_per_df = []
+        for snr in np.sort(df_attr["snr"].unique()):
+            df_snr = df_attr[df_attr["snr"] == snr]
+            value = np.mean(df_snr[plotting_attribute].values)
+            values_per_df.append(value)
+        values.append(torch.tensor(values_per_df))
+
+
+    positions = range(len(x_labels))
+    plt.figure(figsize=[10, 5])
+
+    for mv,l in zip(values, list_shifting_attribute):
+        plt.plot(positions, mv, marker="x", label=l)
+
+    figure_title = f"Average, macroscopic entropy {shifting_attribute_label or shifting_attribute}"
+    plt.suptitle(figure_title)
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel("TODO2")
+    plt.grid()
+    plt.ylim(0)
+
+    plt.legend()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
+
+    plt.show()
     plt.close()
 
 
@@ -294,10 +335,10 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     d = {
         "wers_machine_kw": "Needleman-Wunsch-WER for keywords",
         "avg_logprobs": "average log probability score (per sequence)",
-        "avg_entropy": "mean entropy of all keywords in a sentence"
+        "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
     }
 
-    title = f"Spearman Correlation Coefficient of human Needleman-Wunsch-WER and \n {model}'s {d[correlate_to]} for each listener"
+    title = f"Spearman Correlation Coefficient of human Needleman-Wunsch-WER and \n{model}'s {d[correlate_to]} for each listener"
     plt.title(title +"\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
@@ -308,7 +349,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 
 
     if output_path:
-        plt.savefig(output_path/f'{title}.png')
+        plt.savefig(output_path/f'{title.replace("\n", "")}.png')
     #plt.show()
     plt.close()
 
