@@ -182,7 +182,7 @@ def plot_needleman_wunsch_wer_to_snr(df: pd.DataFrame,
     for mv,l in zip(machine_values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"WER (Needleman-Wunsch) of transcriptions from human data and {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"WER (Needleman-Wunsch) of transcriptions from human data by {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -232,15 +232,14 @@ def plot_x_to_snr(df: pd.DataFrame,
     plt.legend()
     if output_path:
         plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
-
-    plt.show()
+    #plt.show()
     plt.close()
 
 
-def plot_entropy(df: pd.DataFrame,
-                    shifting_attribute: str = "model_type",
-                    shifting_attribute_label = None,
-                    output_path: Path = None, ):
+def plot_microscopic_entropy(df: pd.DataFrame,
+                             shifting_attribute: str = "model_type",
+                             shifting_attribute_label = None,
+                             output_path: Path = None, ):
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
 
@@ -256,7 +255,7 @@ def plot_entropy(df: pd.DataFrame,
             tmp = []
             for kw in range(3):
 
-                mean_entropies_for_this_kw = df_snr["avg_entropy"].apply(lambda x: x[kw])
+                mean_entropies_for_this_kw = df_snr["entropies_kw"].apply(lambda x: x[kw])
                 mean_entropies_for_this_kw = mean_entropies_for_this_kw[mean_entropies_for_this_kw.notnull()]
                 mean_entropy_for_this_kw = np.mean(mean_entropies_for_this_kw)
                 assert mean_entropy_for_this_kw != np.nan
@@ -284,7 +283,7 @@ def plot_entropy(df: pd.DataFrame,
     plt.legend()
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
-    plt.show()
+    #plt.show()
     plt.close()
 
 def boxplot_corr_per_listener(df: pd.DataFrame,
@@ -346,6 +345,73 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
     plt.ylim(-1,1)
+
+    if output_path:
+        plt.savefig(output_path/f'{title.replace("\n", "")}.png')
+    #plt.show()
+    plt.close()
+
+def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
+                              #model: str,
+                              #model_type: str ,
+                              output_path: Path = None):
+
+    corr_arr = []
+    p_val_arr = []
+
+
+    corr_arr_tmp = []
+    p_val_arr_tmp = []
+
+    listeners = df["listener"].unique()
+    for kw in range(3):
+        for l in listeners:
+            df_listener = df[df["listener"] == l]
+            x = df_listener["wers_human_kw"]
+            y = df_listener["entropies_kw"].map(lambda x: x[kw])
+
+            filter = y.isna()
+            y = y[~filter]
+            x = x[~filter]
+
+
+            x_ranked = stats.rankdata(x)
+            y_ranked = stats.rankdata(y)
+            del y, x
+
+            # spearman corr == pearson corr of ranks
+            regr = stats.pearsonr(x_ranked, y_ranked)
+            corr_arr_tmp.append(regr.statistic)
+            p_val_arr_tmp.append(regr.pvalue)
+
+    corr_arr.append(torch.tensor(corr_arr_tmp))
+    p_val_arr.append(torch.tensor(p_val_arr_tmp))
+
+    fig, ax = plt.subplots(figsize=(8 + len(list_shifting_attribute) * 0.7, 7))
+
+    positions = range(1, len(list_shifting_attribute) + 1)
+
+    tmp = ax.boxplot(corr_arr,
+                     # notch=False,
+                     positions=positions,
+                     # meanline=True,
+                     showmeans=True,
+                     )
+    d = {
+        "wers_machine_kw": "Needleman-Wunsch-WER for keywords",
+        "avg_logprobs": "average log probability score (per sequence)",
+        "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
+    }
+
+    title = f"Spearman Correlation Coefficient of human Needleman-Wunsch-WER and \n{model}'s {d[correlate_to]} for each listener"
+    plt.title(title + "\nand maximum p-value to the rounded 4th digit")
+    plt.ylabel("Spearman Correlation Coefficient")
+    ax.grid()
+    x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
+               zip(list_shifting_attribute, p_val_arr, corr_arr)]
+    plt.xticks(positions, x_label)
+    ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
+    plt.ylim(-1, 1)
 
 
     if output_path:

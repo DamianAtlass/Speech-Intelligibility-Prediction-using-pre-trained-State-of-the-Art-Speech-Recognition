@@ -12,7 +12,8 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
-    plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_entropy, plot_x_to_snr
+    plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
+    boxplot_microscopic_corr_per_listener
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 
@@ -140,7 +141,7 @@ def plot_regr_lines(df: pd.DataFrame, config):
     # })
 
     # calc spearman correlation
-    name = f"the Needleman-Wunsch-WER of human results and {config.model}({config.model_type})"
+    name = f"the Needleman-Wunsch-WER of human transcripts and {config.model}({config.model_type}) whisper transcripts (kw only)"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
                                                     output_path=config.output_path,
                                                     name=name,
@@ -267,7 +268,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 entropies_kw.append(tmp_wk_entropy)
 
             df_single_run["average_macroscopic_entropy"] = average_macroscopic_entropy
-            df_single_run["avg_entropy"] = entropies_kw
+            df_single_run["entropies_kw"] = entropies_kw
 
             print(f"{error_counter = }")
             print(f"{found_kw = }, -> {round(found_kw/(((len(df_single_run)-error_counter) * 3)), 2)*100}%")
@@ -278,7 +279,7 @@ def evaluate_individual_run(config: InferenceConfig,
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
                           shifting_attribute="model_type",
-                          output_path=None
+                          output_path=config.output_path
                           )
 
             boxplot_corr_per_listener(
@@ -290,9 +291,11 @@ def evaluate_individual_run(config: InferenceConfig,
 
 
 
-            plot_entropy(df_single_run,
-                shifting_attribute="model_type",
-                output_path=config.output_path)
+            plot_microscopic_entropy(df_single_run,
+                                     shifting_attribute="model_type",
+                                     output_path=config.output_path)
+
+            #boxplot_microscopic_corr_per_listener(df_single_run, output_path=config.output_path)
 
 
 
@@ -329,7 +332,7 @@ def get_data(output_path: Path,
     counter = 0
 
     for file in tqdm(data_path.iterdir()):
-        if counter == 1000:
+        if counter == 10000:
             pass
         counter += 1
         with open(file) as f:
