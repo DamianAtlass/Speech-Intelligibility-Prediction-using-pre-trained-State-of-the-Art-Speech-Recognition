@@ -341,6 +341,7 @@ def get_data(output_path: Path,
             if json_file["prediction_result"]["text"] == "" : #nothing recognized!
                 avg_logprobs.append(torch.nan)
                 machine_transcripts.append("")
+                decoded_tokens_with_timestamps.append([])
             else:
                 avg_logprobs.append(np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]]))
 
