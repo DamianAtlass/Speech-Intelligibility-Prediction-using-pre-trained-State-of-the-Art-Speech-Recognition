@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 from utils.config_dataclasses import get_config
 from utils.evaluate_utils import get_data
-from utils.plotting_utils import plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener
+from utils.plotting_utils import plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr
 import torch
 import pandas as pd
 import json
@@ -65,6 +65,13 @@ def foo():
         model_type="",
         shifting_attribute="name",
         output_path=subfolder_name)
+
+    plot_x_to_snr(df=df_single_run,
+                  plotting_attribute="average_macroscopic_entropy",
+                  shifting_attribute_label="model",
+                  shifting_attribute="name",
+                  output_path=subfolder_name
+                  )
 
 
 if __name__ == '__main__':

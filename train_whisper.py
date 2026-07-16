@@ -92,6 +92,8 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
                               num_proc=4,
                               load_from_cache_file=False,
                               )  # set cache to false for debugging
+    dataset.set_transform(lambda x: x) # reset transformation
+
     logger.info(f"Execution time of dataset mapping: {t():.4f} secs")
 
     logger.info(f"Define model")

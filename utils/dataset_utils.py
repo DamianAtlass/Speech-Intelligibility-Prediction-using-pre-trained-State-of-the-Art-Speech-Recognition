@@ -36,7 +36,7 @@ def _get_dataset(dataset_type: str, dataset_path: Path = None) -> Dataset:
         return get_grid_bc(dataset_path if dataset_path else default_dataset_paths[dataset_type])
     raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
 
-def get_dataset(dataset_type: str, dataset_path: Path = None, add_noise: bool = False) -> Dataset:
+def get_dataset(dataset_type: str, dataset_path: Path|None = None, add_noise: bool = False) -> Dataset:
     dataset = _get_dataset(dataset_type, dataset_path)
     
     if add_noise:

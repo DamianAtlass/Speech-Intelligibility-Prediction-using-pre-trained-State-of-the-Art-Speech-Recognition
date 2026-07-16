@@ -1,5 +1,5 @@
 from utils.evaluate_utils import get_only_keywords_by_index, remove_nan, get_only_keywords_using_alignments, \
-    find_ordered_indices, get_only_keywords_by_identity
+    find_ordered_indices, get_only_keywords_by_identity, get_only_keywords_by_phonetic_similarity, get_only_keywords_by_accepting_other_options
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -106,11 +106,42 @@ def test_get_only_keywords_using_alignments_with_return_idx(reference: str, tran
     keywords = get_only_keywords_using_alignments(reference=reference.split(), transcript=transcript, return_idx=True)
     assert keywords == output
 
+@pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
+    ("one two three four five six", "two four five", ["two", "four", "five"]),
+    ("one to three for five six", "two four five", ["to", "for", "five"]),
+    ("one transformers three for five six", "two four five", [None, "for", "five"]),
+])
+def test_get_only_keywords_by_phonetic_similarity(transcript, reference_kw, expected_output):
+    r = get_only_keywords_by_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split())
+    assert expected_output == r
+
+@pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
+    ("one transformers three for five six", "two four five", [None, 3, 4]),
+])
+def test_get_only_keywords_by_phonetic_similarity(transcript, reference_kw, expected_output):
+    r = get_only_keywords_by_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    assert expected_output == r
+
+@pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
+    ("bin green at x eight now", "green x eight", ["green", "x", "eight"]),
+    ("bin green at c eight now", "green x eight", ["green", "c", "eight"]),
+    ("bin white at BOX BOX now", "green x eight", ["white", None, None]),
+])
+def test_get_only_keywords_by_accepting_other_options(transcript, reference_kw, expected_output):
+    r = get_only_keywords_by_accepting_other_options(reference_kw=reference_kw.split(), transcript=transcript.split())
+    assert expected_output == r
+
+@pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
+    ("bin green at c BOX now", "green x eight", [1, 3, None]),
+])
+def test_get_only_keywords_by_accepting_other_options_with_return_index(transcript, reference_kw, expected_output):
+    r = get_only_keywords_by_accepting_other_options(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    assert expected_output == r
+
 @pytest.mark.parametrize(("x", "y", "x_exp", "y_exp"), [
     (torch.tensor([1, 2, 3, torch.nan]), torch.tensor([torch.nan, 2, 3, 4]), torch.tensor([2, 3]), torch.tensor([2, 3])),
         (torch.tensor([1, torch.nan]), torch.tensor([torch.nan, 2]), torch.tensor([]), torch.tensor([])),
     (torch.tensor([torch.nan, 2, 3, 4, 5]), torch.tensor([1, 9, 9, 9, 9]), torch.tensor([2, 3, 4, 5]), torch.tensor([9, 9, 9, 9])),
-
 ])
 def test_remove_nan(x, y, x_exp, y_exp):
     x_out ,y_out = remove_nan(x,y)

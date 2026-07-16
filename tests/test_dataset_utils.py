@@ -22,7 +22,7 @@ def test_get_dataset(dataset_type, dataset_path, l):
 
 def test_get_dataset_exception():
     try:
-        dataset: Dataset = get_dataset(dataset_type="asdf")
+        dataset: Dataset = get_dataset(dataset_type="asdf", add_noise=False)
     except KeyError:
         assert True
 

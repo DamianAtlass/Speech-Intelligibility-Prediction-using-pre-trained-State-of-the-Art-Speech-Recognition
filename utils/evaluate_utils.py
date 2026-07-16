@@ -20,6 +20,16 @@ from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsc
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
 
+from phonemizer import phonemize
+from panphon.distance import Distance
+dist = Distance()
+
+grid_vocab = {
+    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
+    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
+    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
+}
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -65,7 +75,10 @@ def get_only_keywords_by_index(string) -> str:
     string = [s for i,s in enumerate(string) if i in keywords_index]
     return " ".join(string)
 
-def get_only_keywords_using_alignments(reference: list[str], transcript: list[str], return_idx=False) -> list[str] | list[int]:
+def get_only_keywords_using_alignments(
+        reference: list[str],
+        transcript: list[str],
+        return_idx=False) -> list[str] | list[int]:
     """
     Use alignment to return only the words at the keywords of string at the keyword indices. Input should be normalized and already split.
     """
@@ -88,16 +101,67 @@ def get_only_keywords_using_alignments(reference: list[str], transcript: list[st
 
     return trans_keywords
 
-def get_only_keywords_by_identity(reference_kw: list[str], transcript: list[str], return_idx=False) -> list[str]|list[int|None]:
+def get_only_keywords_by_identity(
+        reference_kw: list[str],
+        transcript: list[str],
+        return_idx=False) -> list[str]|list[int|None]:
     r = []
     for kw in reference_kw:
         if kw in transcript:
-            if return_idx:
-                r.append(transcript.index(kw))
-            else:
-                r.append(kw)
+            r.append(transcript.index(kw) if return_idx else kw)
         else:
             if return_idx:
+                r.append(None)
+
+    if return_idx:
+        rest = len(reference_kw) - len(r)
+        r.extend([None for _ in range(rest)])
+    return r
+
+def get_only_keywords_by_phonetic_similarity(
+    reference_kw: list[str],
+    transcript: list[str],
+    return_idx=False) -> list[str]|list[int|None]:
+    error_threshold = 1
+    r = []
+    for kw in reference_kw:
+        if kw in transcript:
+            r.append(transcript.index(kw) if return_idx else kw)
+        else:
+            kw = phonemize(kw, language="en-us", backend="espeak")
+            phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
+            distance = [dist.fast_levenshtein_distance(source=kw, target=o) for o in phonetic_transcript]
+
+            if min(distance) <= error_threshold:
+                idx = distance.index(min(distance))
+                r.append(idx if return_idx else transcript[idx])
+            else:
+                r.append(None)
+
+    if return_idx:
+        rest = len(reference_kw) - len(r)
+        r.extend([None for _ in range(rest)])
+    return r
+
+
+def get_only_keywords_by_accepting_other_options(
+        reference_kw: list[str],
+        transcript: list[str],
+        return_idx=False) -> list[str] | list[int | None]:
+    r = []
+    for kw, other_options in zip(reference_kw, grid_vocab.values()):
+        if kw in transcript:
+            r.append(transcript.index(kw) if return_idx else kw)
+        else:
+            added = False
+            for o in other_options:
+                if o in transcript:
+                    r.append(transcript.index(o) if return_idx else o)
+                    added = True
+                    break
+            if added:
+                continue
+            else:
                 r.append(None)
 
     if return_idx:
@@ -208,6 +272,13 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
 
+        plot_x_to_snr(df=df_single_run,
+                      plotting_attribute="wers_machine",
+                      shifting_attribute_label="whisper",
+                      shifting_attribute="model_type",
+                      output_path=config.output_path
+                      )
+
         # evaluate logprobs
         found_kw = 0
         no_kw_in_sentence_found = 0
@@ -253,6 +324,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 ref = row["references"]
                 #trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
                 trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+                trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
                 assert len(trans_keywords_indices) == 3
 
                 tmp_found_kw = np.sum([1 for o in trans_keywords_indices if o is not None])
@@ -341,13 +413,14 @@ def get_data(output_path: Path,
             if json_file["prediction_result"]["text"] == "" : #nothing recognized!
                 avg_logprobs.append(torch.nan)
                 machine_transcripts.append("")
-                decoded_tokens_with_timestamps.append([])
+                if extract_logprobs:
+                    decoded_tokens_with_timestamps.append([])
             else:
                 avg_logprobs.append(np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]]))
 
                 machine_transcripts.append(json_file["prediction_result"]["text"])
-
-                decoded_tokens_with_timestamps.append(json_file["prediction_result"]["decoded_tokens_with_timestamps"])
+                if extract_logprobs:
+                    decoded_tokens_with_timestamps.append(json_file["prediction_result"]["decoded_tokens_with_timestamps"])
 
             references.append(json_file["sentence"])
             audio_paths.append(json_file["audio_path"])
