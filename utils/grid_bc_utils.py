@@ -46,14 +46,14 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
     project_root = Path.cwd().parent if Path.cwd().name == "tests" else Path.cwd()
 
     counter_noise = 0
-    for BC2007_noiseLevel in tqdm(BC2007.iterdir()):
+    for BC2007_noiseLevel in tqdm(sorted(BC2007.iterdir())):
         if counter_noise == max_noise_folders:
             break
         listener_counter = 0
         if not BC2007_noiseLevel.is_dir():
             continue
 
-        for BC2007_noiseLevel_listener in BC2007_noiseLevel.iterdir():
+        for BC2007_noiseLevel_listener in sorted(BC2007_noiseLevel.iterdir()):
             if BC2007_noiseLevel_listener.name =="18":
                 continue # skip because data for that listener at SNR 2 was missing
             if listener_counter == max_listener:
@@ -69,7 +69,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
 
             counter_audio_file =  0
 
-            for audio_file in BC2007_noiseLevel_listener.iterdir():
+            for audio_file in sorted(BC2007_noiseLevel_listener.iterdir()):
                 if counter_audio_file == max_files_per_listener:
                     break
                 if not audio_file.name in tested_files:

@@ -120,7 +120,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
         "align_path": [],
     }
     counter_speaker = 0
-    for speaker in tqdm(audio_folder.iterdir(), total=max_speaker or 34):
+    for speaker in tqdm(sorted(audio_folder.iterdir()), total=max_speaker or 34):
         speaker = speaker.name
         align = align_folder/speaker/"align"
         audio = audio_folder/speaker/speaker
@@ -130,7 +130,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
         assert audio.is_dir()
 
         counter_file = 0
-        for file in audio.iterdir():
+        for file in sorted(audio.iterdir()):
             audio_file_path = audio/file.name
             align_file_path = align/f"{file.stem}.align"
 
