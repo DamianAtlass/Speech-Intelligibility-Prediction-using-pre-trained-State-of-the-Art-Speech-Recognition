@@ -1,5 +1,6 @@
 from datasets import DatasetDict
-from transformers import WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor, WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
+from transformers import WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor, WhisperForConditionalGeneration, \
+    Seq2SeqTrainingArguments, Seq2SeqTrainer, EarlyStoppingCallback
 import torch
 from whisper import available_models
 from dataclasses import dataclass
@@ -127,12 +128,13 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         warmup_steps=500,
         gradient_checkpointing=True,
         fp16=True,
-        eval_strategy="epoch",
+        eval_strategy="steps",
+        eval_steps=50,
         per_device_eval_batch_size=8,
         predict_with_generate=True,
         generation_max_length=225,
-        save_strategy="epoch",
-        save_steps=1,
+        save_strategy="steps",
+        save_steps=50,
         logging_steps=50,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
@@ -167,6 +169,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         processing_class=processor,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
     )
 
     if config.perform_training:
