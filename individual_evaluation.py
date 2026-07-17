@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 from utils.config_dataclasses import get_config
 from utils.evaluate_utils import get_data
-from utils.plotting_utils import plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr
+from utils.plotting_utils import plot_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr
 import torch
 import pandas as pd
 import json
@@ -52,8 +52,9 @@ def foo():
             df = pd.concat([df, df_single_run], ignore_index=True)
 
     #step 2: plot
-    plot_needleman_wunsch_wer_to_snr(
+    plot_wer_to_snr(
         df[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "name"]],
+        only_kw=False,
         shifting_attribute="name",
         shifting_attribute_label="\nWhisper (small) with varying normalization types",
         output_path=subfolder_name)

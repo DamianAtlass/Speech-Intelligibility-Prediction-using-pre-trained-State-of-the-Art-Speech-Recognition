@@ -12,7 +12,7 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
-    plot_needleman_wunsch_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
+    plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
     boxplot_microscopic_corr_per_listener
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
@@ -205,12 +205,12 @@ def plot_regr_lines(df: pd.DataFrame, config):
     # })
 
     # calc spearman correlation
-    name = f"the Needleman-Wunsch-WER of human transcripts and {config.model}({config.model_type}) whisper transcripts (kw only)"
+    name = f"the WER of human transcripts and {config.model}({config.model_type}) whisper transcripts (kw only)"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
                                                     output_path=config.output_path,
                                                     name=name,
-                                                    xlabel=f"Needleman-Wunsch-WER of human results (only keywords)",
-                                                    ylabel=f"Needleman-Wunsch-WER ({config.model}, only keywords)")
+                                                    xlabel=f"WER of human results (only keywords)",
+                                                    ylabel=f"WER ({config.model}, only keywords)")
 
     summary.append({
         "metric": "spearman correlation",
@@ -219,7 +219,7 @@ def plot_regr_lines(df: pd.DataFrame, config):
         "p_value": f"{p_val:.10f}",
     })
 
-    name = f"the Needleman-Wunsch-WER of human results and average log probability score of {config.model}({config.model_type})"
+    name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "avg_logprobs"]],
                                                     output_path=config.output_path,
                                                     name=name,
@@ -248,9 +248,15 @@ def evaluate_individual_run(config: InferenceConfig,
         print("Generate correlation plots")
         metrics.append(df_single_run["wers_human_kw"])
 
-        plot_needleman_wunsch_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "model_type"]],
-                                         shifting_attribute="model_type",
-                                         output_path=config.output_path)
+        plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts", "snr", "references_kw", "references", "model_type"]],
+                        only_kw=False,
+                        shifting_attribute="model_type",
+                        output_path=config.output_path)
+
+        plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "model_type"]],
+                        only_kw=True,
+                        shifting_attribute="model_type",
+                        output_path=config.output_path)
 
         corr_summary = plot_regr_lines(df_single_run, config)
 
@@ -271,13 +277,6 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model=config.model,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
-
-        plot_x_to_snr(df=df_single_run,
-                      plotting_attribute="wers_machine",
-                      shifting_attribute_label="whisper",
-                      shifting_attribute="model_type",
-                      output_path=config.output_path
-                      )
 
         # evaluate logprobs
         found_kw = 0

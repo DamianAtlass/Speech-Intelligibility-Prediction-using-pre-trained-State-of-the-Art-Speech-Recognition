@@ -148,9 +148,9 @@ def plot_metrics(array: list[pd.DataFrame],
     #plt.show()
     plt.close()
 
-def plot_needleman_wunsch_wer_to_snr(
+def plot_wer_to_snr(
         df: pd.DataFrame,
-        plotting_attribute: Literal["machine_transcripts", "machine_transcripts_kw"],
+        only_kw: bool,
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         output_path: Path = None, ):
@@ -170,14 +170,16 @@ def plot_needleman_wunsch_wer_to_snr(
     del df_human_data
     x_labels = np.sort(df["snr"].unique())
 
-    col = "references_kw" if plotting_attribute=="machine_transcripts_kw" else "references"
+    ref_col = "references_kw" if only_kw else "references"
+    plotting_attribute = "machine_transcripts_kw" if only_kw else "machine_transcripts"
+
     machine_values: list = []
     for attr in tqdm(list_shifting_attribute):
         df_attr = df[df[shifting_attribute] == attr]
         mv_temp = []
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
-            wer_snr = wer_needleman_wunsch(references=df_snr[col].values,
+            wer_snr = wer_needleman_wunsch(references=df_snr[ref_col].values,
                                            transcripts=df_snr[plotting_attribute].values)
             mv_temp.append(wer_snr)
         machine_values.append(torch.tensor(mv_temp) * 100)
@@ -191,7 +193,7 @@ def plot_needleman_wunsch_wer_to_snr(
     for mv,l in zip(machine_values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"WER of transcriptions from human data by {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"WER of human transcription vs machine{" (keyword only)" if only_kw else ""} by {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
