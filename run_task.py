@@ -79,7 +79,7 @@ def main():
     config = get_config(config_path)
 
     Path.mkdir(config.output_path.parent, exist_ok=True)
-    if "delete_me" in config.output_path.name and config.debug:
+    if config.output_path.exists() and "delete_me" in config.output_path.name and config.debug:
         shutil.rmtree(config.output_path)
     Path.mkdir(config.output_path, exist_ok=config.debug)
 
