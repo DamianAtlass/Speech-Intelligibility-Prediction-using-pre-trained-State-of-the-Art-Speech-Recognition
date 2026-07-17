@@ -198,7 +198,7 @@ def plot_wer_to_snr(
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel("Average WER in %")
-    plt.ylim(0, 100)
+    plt.ylim(0, max([100, max([max(l) for l in machine_values])]))
     plt.grid()
     plt.legend()
     if output_path:
