@@ -294,8 +294,8 @@ def evaluate_individual_run(config: InferenceConfig,
                 if row["logprobs_paths"] =="":
                     error_counter+=1
                     continue
-
-                logprob_tensor = torch.load(Path.cwd()/row["logprobs_paths"])
+                logprob_path = Path.cwd()/"inferences"/config.output_path/"logprobs"/Path(row["logprobs_paths"]).name
+                logprob_tensor = torch.load(logprob_path)
                 posteriors = logprob_tensor.exp()
                 del logprob_tensor
                 decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
