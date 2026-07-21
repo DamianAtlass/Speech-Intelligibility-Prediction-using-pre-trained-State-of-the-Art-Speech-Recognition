@@ -376,10 +376,11 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
         p_val_arr_per_kw = []
         for l in listeners:
             df_listener = df[df["listener"] == l]
-            ref_kw = df_listener["human_transcripts_kw"].map(lambda x: x.split()[kw])
-            estimated_kw_idx = df_listener["estimated_transcript_keywords_indices"].map(lambda x: x[kw])
-            estimated_kw = [transcript.split()[kw_idx] for transcript,kw_idx in zip(df_listener["machine_transcripts"], estimated_kw_idx)]
-            x = [int(r!=t) for r,t in zip(ref_kw, estimated_kw)] # basically the WER
+
+            ref_kw = df_listener["references_kw"].map(lambda x: x.split()[kw])
+            human_kw = df_listener["human_transcripts_kw"].map(lambda x: x.split()[kw])
+            x = [int(r != h) for r, h in zip(ref_kw, human_kw)]  # basically the WER
+
             y = df_listener["entropies_kw"].map(lambda x: x[kw])
 
             filter = y.isna()
@@ -410,7 +411,7 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between equal keyword recognition compared to \nhuman transcripts and the corresponding token-level entropy for each listener"
+    title = f"Spearman Correlation between token-level human WER and the corresponding whisper token-level entropy for each listener"
     plt.title(title + "\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
