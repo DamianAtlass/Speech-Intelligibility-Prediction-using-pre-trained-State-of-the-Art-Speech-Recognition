@@ -3,13 +3,14 @@ from typing import Tuple, List
 
 import pandas as pd
 import torch
+from torch.distributions import Categorical
 from pathlib import Path
 import werpy
 import logging
 from scipy.stats import entropy
-from whisper.tokenizer import get_tokenizer
 import numpy as np
 from tqdm import tqdm
+import os
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
@@ -122,7 +123,7 @@ def get_only_keywords_by_phonetic_similarity(
     reference_kw: list[str],
     transcript: list[str],
     return_idx=False) -> list[str]|list[int|None]:
-    error_threshold = 1
+    error_threshold = float("inf")
     r = []
     for kw in reference_kw:
         if kw in transcript:
@@ -130,7 +131,7 @@ def get_only_keywords_by_phonetic_similarity(
         else:
             kw = phonemize(kw, language="en-us", backend="espeak")
             phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
-            distance = [dist.fast_levenshtein_distance(source=kw, target=o) for o in phonetic_transcript]
+            distance = [dist.feature_edit_distance(source=kw, target=o) for o in phonetic_transcript]
 
             if min(distance) <= error_threshold:
                 idx = distance.index(min(distance))
@@ -278,73 +279,7 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
 
-        # evaluate logprobs
-        found_kw = 0
-        no_kw_in_sentence_found = 0
-        if config.extract_logprobs:
-            print("Evaluate logprobs")
-            entropies_kw = []
-            average_macroscopic_entropy = []
-            counter = 0
-
-            error_counter = 0
-
-            for index, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
-                # get average entropy
-                if row["logprobs_paths"] =="":
-                    error_counter+=1
-                    continue
-                logprob_path = Path.cwd()/"inferences"/config.output_path/"logprobs"/Path(row["logprobs_paths"]).name
-                logprob_tensor = torch.load(logprob_path)
-                posteriors = logprob_tensor.exp()
-                del logprob_tensor
-                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-                assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
-                entropies_per_token = entropy(posteriors.cpu(), axis=1)
-                assert len(entropies_per_token)==len(decoded_tokens_with_timestamps)
-                idx_to_keep = ["<|" not in t and "|>" not in t for t in decoded_tokens_with_timestamps] # rm timestamp tokens
-
-                entropies_per_token = entropies_per_token[idx_to_keep]
-                decoded_tokens_without_timestamp_tokens = [t for t,b in zip(decoded_tokens_with_timestamps, idx_to_keep) if b]
-                average_macroscopic_entropy.append(entropies_per_token.mean())
-
-                # get kw specific entropy
-
-                if len(decoded_tokens_with_timestamps) != posteriors.shape[0]:
-                    raise RuntimeError
-                del decoded_tokens_with_timestamps
-
-
-                # normalize for alignment
-                decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in decoded_tokens_without_timestamp_tokens]
-                decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens, apply_separate_numbers_from_letter=False, apply_werpy_normalize=False)
-
-                #get keywords
-                ref = row["references"]
-                #trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-                trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-                trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-                assert len(trans_keywords_indices) == 3
-
-                tmp_found_kw = np.sum([1 for o in trans_keywords_indices if o is not None])
-                found_kw+= tmp_found_kw
-                no_kw_in_sentence_found+= tmp_found_kw==0
-
-
-                tmp_wk_entropy = []
-                for idx in trans_keywords_indices:
-                    tmp_wk_entropy.append(np.nan if idx is None else entropies_per_token[idx])
-
-                counter+=1
-                entropies_kw.append(tmp_wk_entropy)
-
-            df_single_run["average_macroscopic_entropy"] = average_macroscopic_entropy
-            df_single_run["entropies_kw"] = entropies_kw
-
-            print(f"{error_counter = }")
-            print(f"{found_kw = }, -> {round(found_kw/(((len(df_single_run)-error_counter) * 3)), 2)*100}%")
-            print(f"{no_kw_in_sentence_found = }, -> {round( no_kw_in_sentence_found/len(df_single_run)-error_counter, 2)*100}%")
-
+    if config.extract_logprobs:
 
             plot_x_to_snr(df = df_single_run,
                           plotting_attribute="average_macroscopic_entropy",
@@ -382,11 +317,49 @@ def evaluate_individual_run(config: InferenceConfig,
     with open(config.output_path / "summary.json", 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
+def get_summary(df: pd.DataFrame,
+                dataset_type: str) -> list[dict]:
+    """
+    Args:
+        df: pd.DataFrame
+        dataset_type: str
+
+    Returns:
+        summary: list[dict], a summary of some df columns
+    """
+
+    summary = []
+    df["machine_transcripts_len"] = df["machine_transcripts"].map(lambda x: len(x.split()))
+    metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)", "transcript length"]
+    metrics_col = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
+    if dataset_type != "grid":
+        metric_names.append("WER (human study, kw only)")
+        metrics_col.append("wers_human_kw")
+
+    for n, m in zip(metric_names, metrics_col):
+        values = df[m]
+        summary.append({
+            "metric_name": n,
+            "mean": np.mean(values),
+            "median": np.median(values),
+            "std": np.std(values),
+            "n": len(values)
+        })
+    return summary
 
 def get_data(output_path: Path,
              dataset_type: str,
              extract_logprobs: bool,
              device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+
+    file_name_df = output_path/"df.pkl"
+    if file_name_df.exists():
+        df: pd.DataFrame = pd.read_pickle(file_name_df)
+        summary = get_summary(df=df, dataset_type=dataset_type)
+        return summary, df
+    else:
+        if (output_path/"summary.json").exists():
+            os.remove(output_path/"summary.json")
 
     data_path = output_path / "data"
 
@@ -450,22 +423,6 @@ def get_data(output_path: Path,
     if dataset_type != "grid":
         wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
 
-    summary = []
-    metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)"]
-    metrics = [avg_logprobs, wers_machine, wers_machine_kw]
-    if dataset_type != "grid":
-        metric_names.append("WER (human study, kw only)")
-        metrics.append(wers_human_kw)
-
-    for n, m in zip(metric_names, metrics):
-        summary.append({
-            "metric_name": n,
-            "mean": np.mean(m),
-            "median": np.median(m),
-            "std": np.std(m),
-            "n": len(m)
-        })
-
     data = {
         "avg_logprobs": avg_logprobs,
         "references": references,
@@ -492,4 +449,91 @@ def get_data(output_path: Path,
         })
 
     df = pd.DataFrame(data)
+    summary = get_summary(df=df, dataset_type=dataset_type)
+
+    # evaluate logprobs
+    found_kw = 0
+    no_kw_in_sentence_found = 0
+
+    if extract_logprobs:
+        print("Evaluate logprobs")
+        entropies_kw = []
+        average_macroscopic_entropy = []
+        estimated_transcript_keywords_indices = []
+
+        counter = 0
+        error_counter = 0
+
+        for index, row in tqdm(df.iterrows(), total=len(df)):
+            #load logprobs
+            if row["logprobs_paths"] == "":
+                error_counter += 1
+                continue
+            logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
+                row["logprobs_paths"]).name
+            logprob_tensor = torch.load(logprob_path)
+
+            # calculate entropy
+            posteriors = logprob_tensor.exp()
+            del logprob_tensor
+            decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
+            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+            entropies_per_token = Categorical(probs=posteriors).entropy()
+            del posteriors
+            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+
+            # rm timestamp tokens
+            no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
+                           decoded_tokens_with_timestamps]
+            entropies_per_token = entropies_per_token[no_timestamp_idx]
+            decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if
+                                                       b]
+            del decoded_tokens_with_timestamps
+
+            average_macroscopic_entropy.append(entropies_per_token.mean().item())
+
+            # get kw specific entropy
+            decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in
+                                                       decoded_tokens_without_timestamp_tokens]
+            ## find "correct" kw position
+            decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
+                                                                apply_separate_numbers_from_letter=False,
+                                                                apply_numbers_to_words=True,
+                                                                apply_werpy_normalize=False)
+
+            # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+            #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+            #                                                       decoded_tokens_without_timestamp_tokens,
+            #                                                       return_idx=True)
+            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+            #                                                                      decoded_tokens_without_timestamp_tokens,
+            #                                                                      return_idx=True)
+            transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+                                                                              transcript=decoded_tokens_without_timestamp_tokens,
+                                                                              return_idx=True)
+            estimated_transcript_keywords_indices.append(transcript_keywords_indices)
+            assert len(transcript_keywords_indices) == 3
+
+            tmp_found_kw = np.sum([1 for o in transcript_keywords_indices if o is not None])
+            found_kw += tmp_found_kw
+            no_kw_in_sentence_found += tmp_found_kw == 0
+
+            tmp_wk_entropy = []
+            for idx in transcript_keywords_indices:
+                tmp_wk_entropy.append(np.nan if idx is None else entropies_per_token[idx])
+
+            counter += 1
+            entropies_kw.append(tmp_wk_entropy)
+
+        df["average_macroscopic_entropy"] = average_macroscopic_entropy
+        df["estimated_transcript_keywords_indices"] = estimated_transcript_keywords_indices
+        df["entropies_kw"] = entropies_kw
+
+        print(f"{error_counter = }")
+        print(f"{found_kw = }, -> {round(found_kw / (((len(df) - error_counter) * 3)), 2) * 100}%")
+        print(
+            f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
+
+    df.to_pickle(output_path/file_name_df)
     return summary, df

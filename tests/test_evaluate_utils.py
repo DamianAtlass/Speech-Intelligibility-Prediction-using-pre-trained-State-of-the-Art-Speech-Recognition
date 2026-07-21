@@ -116,7 +116,7 @@ def test_get_only_keywords_by_phonetic_similarity(transcript, reference_kw, expe
     assert expected_output == r
 
 @pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
-    ("one transformers three for five six", "two four five", [None, 3, 4]),
+    ("one transformers three for five six", "two four five", [2, 3, 4]),
 ])
 def test_get_only_keywords_by_phonetic_similarity(transcript, reference_kw, expected_output):
     r = get_only_keywords_by_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)

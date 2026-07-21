@@ -289,7 +289,7 @@ def plot_microscopic_entropy(df: pd.DataFrame,
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel("microscopic entropy")
-    plt.ylim(0, 5)
+    plt.ylim(0)
     plt.grid()
     plt.legend()
     if output_path:
