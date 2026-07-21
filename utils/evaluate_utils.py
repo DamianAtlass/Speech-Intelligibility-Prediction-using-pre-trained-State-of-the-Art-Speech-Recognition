@@ -119,19 +119,59 @@ def get_only_keywords_by_identity(
         r.extend([None for _ in range(rest)])
     return r
 
+def get_only_keywords_with_different_approaches(
+    reference_kw: list[str],
+    transcript: list[str],
+    return_idx=False) -> list[str]|list[int|None]:
+
+    re = lambda x: transcript.index(x) if return_idx else x
+
+    keywords_or_indices = []
+    for kw, expected_kw_position, other_options in zip(reference_kw, [1,3,4], grid_vocab.values()):
+        if kw in transcript:
+            keywords_or_indices.append(re(kw))
+        else:
+            added = False
+            #check if kw_varient at expected position
+            if len(transcript)>=expected_kw_position+1 and (word:=transcript[expected_kw_position]) in other_options:
+                keywords_or_indices.append(re(word))
+                continue
+
+            # search kw option in whole transcript
+            for word in transcript:
+                if word in other_options:
+                    keywords_or_indices.append(re(word))
+                    added = True
+                    break
+            if added:
+                continue
+            else:
+                kw_phonemized = phonemize(kw, language="en-us", backend="espeak")
+                phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
+                distance = [dist.feature_edit_distance(source=kw_phonemized, target=o) for o in phonetic_transcript]
+
+                idx = distance.index(min(distance))
+                keywords_or_indices.append(idx if return_idx else transcript[idx])
+
+    if return_idx:
+        rest = len(reference_kw) - len(keywords_or_indices)
+        keywords_or_indices.extend([None for _ in range(rest)])
+    return keywords_or_indices
+
 def get_only_keywords_by_phonetic_similarity(
     reference_kw: list[str],
     transcript: list[str],
     return_idx=False) -> list[str]|list[int|None]:
     error_threshold = float("inf")
+
     r = []
     for kw in reference_kw:
         if kw in transcript:
             r.append(transcript.index(kw) if return_idx else kw)
         else:
-            kw = phonemize(kw, language="en-us", backend="espeak")
+            kw_phonemized = phonemize(kw, language="en-us", backend="espeak")
             phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
-            distance = [dist.feature_edit_distance(source=kw, target=o) for o in phonetic_transcript]
+            distance = [dist.feature_edit_distance(source=kw_phonemized, target=o) for o in phonetic_transcript]
 
             if min(distance) <= error_threshold:
                 idx = distance.index(min(distance))
@@ -267,8 +307,8 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
 
-        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
-                                  correlate_to="wers_machine_kw",
+        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine", "model_type", "listener"]],
+                                  correlate_to="wers_machine",
                                   model=config.model,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
@@ -281,7 +321,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
     if config.extract_logprobs:
 
-            plot_x_to_snr(df = df_single_run,
+            plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wers_human_kw"]],
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
                           shifting_attribute="model_type",
@@ -297,11 +337,14 @@ def evaluate_individual_run(config: InferenceConfig,
 
 
 
-            plot_microscopic_entropy(df_single_run,
+            plot_microscopic_entropy(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
                                      shifting_attribute="model_type",
                                      output_path=config.output_path)
 
-            #boxplot_microscopic_corr_per_listener(df_single_run, output_path=config.output_path)
+            boxplot_microscopic_corr_per_listener(
+                df_single_run[["entropies_kw", "listener", "model_type", "references_kw","human_transcripts_kw",
+                               "estimated_transcript_keywords_indices", "machine_transcripts"]],
+                output_path=config.output_path)
 
 
 
@@ -354,6 +397,7 @@ def get_data(output_path: Path,
 
     file_name_df = output_path/"df.pkl"
     if file_name_df.exists():
+        print("Load df from disk.")
         df: pd.DataFrame = pd.read_pickle(file_name_df)
         summary = get_summary(df=df, dataset_type=dataset_type)
         return summary, df
@@ -509,9 +553,14 @@ def get_data(output_path: Path,
             #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
             #                                                                      decoded_tokens_without_timestamp_tokens,
             #                                                                      return_idx=True)
-            transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
-                                                                              transcript=decoded_tokens_without_timestamp_tokens,
-                                                                              return_idx=True)
+            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+            #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
+            #                                                                   return_idx=True)
+            transcript_keywords_indices: list[int | None] = get_only_keywords_with_different_approaches(
+                 reference_kw=row["references_kw"].split(),
+                 transcript=decoded_tokens_without_timestamp_tokens,
+                 return_idx=True)
+            #transcript_keywords_indices = [1,3,4]
             estimated_transcript_keywords_indices.append(transcript_keywords_indices)
             assert len(transcript_keywords_indices) == 3
 

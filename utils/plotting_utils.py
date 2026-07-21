@@ -193,7 +193,7 @@ def plot_wer_to_snr(
     for mv,l in zip(machine_values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"WER of human transcription vs machine{" (keyword only)" if only_kw else ""} by {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"WER of human transcription vs machine transcripts{" (keyword only)" if only_kw else ""} by {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -344,6 +344,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      )
     d = {
         "wers_machine_kw": "WER for keywords",
+        "wers_machine": "WER for the whole sequence",
         "avg_logprobs": "average log probability score (per sequence)",
         "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
     }
@@ -366,25 +367,24 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                               #model: str,
                               #model_type: str ,
                               output_path: Path = None):
-    #todo baustelle
     corr_arr = []
     p_val_arr = []
 
-
-    corr_arr_tmp = []
-    p_val_arr_tmp = []
-
     listeners = df["listener"].unique()
-    for kw in range(3):
+    for kw in tqdm(range(3)):
+        corr_arr_per_kw = []
+        p_val_arr_per_kw = []
         for l in listeners:
             df_listener = df[df["listener"] == l]
-            x = df_listener["wers_human_kw"]
+            ref_kw = df_listener["human_transcripts_kw"].map(lambda x: x.split()[kw])
+            estimated_kw_idx = df_listener["estimated_transcript_keywords_indices"].map(lambda x: x[kw])
+            estimated_kw = [transcript.split()[kw_idx] for transcript,kw_idx in zip(df_listener["machine_transcripts"], estimated_kw_idx)]
+            x = [int(r!=t) for r,t in zip(ref_kw, estimated_kw)] # basically the WER
             y = df_listener["entropies_kw"].map(lambda x: x[kw])
 
             filter = y.isna()
             y = y[~filter]
-            x = x[~filter]
-
+            x = np.array(x)[~filter]
 
             x_ranked = stats.rankdata(x)
             y_ranked = stats.rankdata(y)
@@ -392,15 +392,16 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
 
             # spearman corr == pearson corr of ranks
             regr = stats.pearsonr(x_ranked, y_ranked)
-            corr_arr_tmp.append(regr.statistic)
-            p_val_arr_tmp.append(regr.pvalue)
+            corr_arr_per_kw.append(regr.statistic)
+            p_val_arr_per_kw.append(regr.pvalue)
 
-    corr_arr.append(torch.tensor(corr_arr_tmp))
-    p_val_arr.append(torch.tensor(p_val_arr_tmp))
+        corr_arr.append(torch.tensor(corr_arr_per_kw))
+        p_val_arr.append(torch.tensor(p_val_arr_per_kw))
 
-    fig, ax = plt.subplots(figsize=(8 + len(list_shifting_attribute) * 0.7, 7))
+    fig, ax = plt.subplots(figsize=(9, 7))
 
-    positions = range(1, len(list_shifting_attribute) + 1)
+    positions = range(1, 3 + 1)
+
 
     tmp = ax.boxplot(corr_arr,
                      # notch=False,
@@ -408,18 +409,13 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                      # meanline=True,
                      showmeans=True,
                      )
-    d = {
-        "wers_machine_kw": "WER for keywords",
-        "avg_logprobs": "average log probability score (per sequence)",
-        "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
-    }
 
-    title = f"Spearman Correlation Coefficient of human WER and \n{model}'s {d[correlate_to]} for each listener"
+    title = f"Spearman Correlation between equal keyword recognition compared to \nhuman transcripts and the corresponding token-level entropy for each listener"
     plt.title(title + "\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
     x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
-               zip(list_shifting_attribute, p_val_arr, corr_arr)]
+               zip(["color", "letter", "digit"], p_val_arr, corr_arr)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
     plt.ylim(-1, 1)
