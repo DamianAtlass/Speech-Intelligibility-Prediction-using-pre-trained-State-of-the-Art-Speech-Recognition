@@ -21,9 +21,12 @@ from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsc
 logger = logging.getLogger(__name__)
 from utils.config_dataclasses import InferenceConfig
 
-from phonemizer import phonemize
 from panphon.distance import Distance
 dist = Distance()
+
+from phonemizer.backend import EspeakBackend
+backend = EspeakBackend("en-us")
+phonemize = backend.phonemize
 
 grid_vocab = {
     "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
@@ -146,8 +149,8 @@ def get_only_keywords_with_different_approaches(
             if added:
                 continue
             else:
-                kw_phonemized = phonemize(kw, language="en-us", backend="espeak")
-                phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
+                kw_phonemized = phonemize([kw])[0]
+                phonetic_transcript = phonemize(transcript)
                 distance = [dist.feature_edit_distance(source=kw_phonemized, target=o) for o in phonetic_transcript]
 
                 idx = distance.index(min(distance))
@@ -523,7 +526,7 @@ def get_data(output_path: Path,
             decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
             assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
             assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
-            entropies_per_token = Categorical(probs=posteriors).entropy()
+            entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
             del posteriors
             assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
@@ -535,7 +538,7 @@ def get_data(output_path: Path,
                                                        b]
             del decoded_tokens_with_timestamps
 
-            average_macroscopic_entropy.append(entropies_per_token.mean().item())
+            average_macroscopic_entropy.append(float(entropies_per_token.mean()))
 
             # get kw specific entropy
             decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in
@@ -570,8 +573,8 @@ def get_data(output_path: Path,
 
             tmp_wk_entropy = []
             for idx in transcript_keywords_indices:
-                tmp_wk_entropy.append(np.nan if idx is None else entropies_per_token[idx])
-
+                tmp_wk_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
+            del entropies_per_token
             counter += 1
             entropies_kw.append(tmp_wk_entropy)
 
