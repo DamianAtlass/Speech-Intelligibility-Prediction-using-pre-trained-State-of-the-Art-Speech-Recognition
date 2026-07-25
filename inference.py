@@ -2,17 +2,21 @@ import tqdm
 import torch
 import whisper
 import sip_whisper
-from utils.convert_hf_to_openai_format import load_whisper_model
-from utils.logging_utils import catch_time
 from datasets import Dataset, DatasetDict
 from utils.config_dataclasses import InferenceConfig
 from typing import Any
 import json
 from pathlib import Path
 import logging
+from utils.models_utils import load_model
+from torch.utils.data import DataLoader
+from math import ceil
+
+from utils.parakeet_utils import collate
+from utils.logging_utils import catch_time
 logger = logging.getLogger(__name__)
 
-def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, device: torch.device) -> None:
+def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, device: torch.device) -> None:
     """
     Perform inference on a batch of data to collect the results and certain internal values. Saves it locally file by file.
     config: InferenceConfig
@@ -22,11 +26,6 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
     Returns: None
     """
-
-    if config.extract_logprobs:
-        (config.output_path/"logprobs").mkdir(exist_ok=config.debug)
-    (config.output_path / "data").mkdir(exist_ok=config.debug)
-
     transcribe_fn = sip_whisper.transcribe if config.extract_logprobs else whisper.transcribe
     counter = 0
 
@@ -81,12 +80,42 @@ def batch_inference(config: InferenceConfig, model: Any, dataset: Dataset, devic
 
             logger.info("--------------------")
 
+def inference_parekeet(config: InferenceConfig, model: Any, dataset: Dataset, device: torch.device) -> None:
+    with torch.inference_mode():
+        batch_size = 20
+
+        for i in range(ceil(len(dataset) / batch_size)):
+            start = i * batch_size
+            end = min((i + 1) * batch_size, len(dataset))
+            subset = dataset.select(range(start, end))
+
+            dataloader = DataLoader(subset, batch_size=batch_size, collate_fn=collate)
+            with catch_time() as t:
+                transcriptions = model.transcribe(
+                    audio=dataloader,
+                    timestamps=True,
+                )
+            print(f"Execution time of do_something: {t():.1f} s")
+
+            for sample, result in zip(subset, transcriptions):
+                pass
+
+
+
 def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.device) -> None:
-    model = load_whisper_model(config, device)
+    if config.extract_logprobs:
+        (config.output_path/"logprobs").mkdir(exist_ok=config.debug)
+    (config.output_path / "data").mkdir(exist_ok=config.debug)
+
+    model = load_model(config, device)
 
     #dataset["val"] = dataset["val"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
-
-    batch_inference(config, model, dataset["val"], device)
+    if config.model =="whisper":
+        inference_whisper(config, model, dataset["val"], device)
+    elif config.model =="parakeet":
+        inference_parekeet(config, model, dataset["val"], device)
+    else:
+        raise NotImplementedError
     print()
 
 if __name__ == '__main__':

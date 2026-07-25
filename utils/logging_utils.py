@@ -9,7 +9,7 @@ def catch_time() -> Iterator[Callable[[], float]]:
     Example:
     with catch_time() as t:
         logging_mylib.do_something()
-    logger.info(f"Execution time of do_something: {t()/360:.4f} h")
+    logger.info(f"Execution time of do_something: {t()/3600:.4f} h")
     """
     start = perf_counter()
     yield lambda: perf_counter() - start
