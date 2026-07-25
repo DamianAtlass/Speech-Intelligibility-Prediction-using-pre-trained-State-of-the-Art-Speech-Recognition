@@ -13,6 +13,7 @@ from utils.cuda_utils import select_device
 from utils.dataset_utils import get_dataset, apply_split
 from utils.logging_utils import catch_time
 from math import ceil
+from typing import Callable
 
 
 
@@ -21,18 +22,21 @@ def load_parakeet_model(config: InferenceConfig, device: torch.device):
         model_name=f"nvidia/{config.model}-{config.model_type}").to(device)
     return model
 
-def collate(batch):
-    lengths = np.array([b["audio"]["array"].shape[-1] for b in batch], dtype=np.int64)
-    max_len = lengths.max()
+def get_collate_fn(device: torch.device) -> Callable:
 
-    audio = np.stack([np.pad(b["audio"]["array"],(0, max_len - b["audio"]["array"].shape[-1]),)
-        for b in batch
-    ])
+    def collate(batch):
+        lengths = np.array([b["audio"]["array"].shape[-1] for b in batch], dtype=np.int64)
+        max_len = lengths.max()
 
-    return (
-        torch.from_numpy(audio).float(),
-        torch.from_numpy(lengths),
-    )
+        audio = np.stack([np.pad(b["audio"]["array"],(0, max_len - b["audio"]["array"].shape[-1]),)
+            for b in batch
+        ])
+
+        return (
+            torch.from_numpy(audio).float().to(device),
+            torch.from_numpy(lengths).to(device),
+        )
+    return collate
 
 def main():
     print("sdlfuj")
