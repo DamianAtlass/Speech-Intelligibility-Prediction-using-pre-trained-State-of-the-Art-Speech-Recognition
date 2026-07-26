@@ -41,7 +41,7 @@ def foo():
     for run in runs:
         config = get_config(Path(run["path"]) / "config.ini")
         with catch_time() as t:
-            summary, df_single_run = get_data(config.output_path, config.dataset_type, config.extract_logprobs, device)
+            summary, df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model_type
         df_single_run["name"] = run["name"]

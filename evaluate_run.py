@@ -17,12 +17,12 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
         device = select_device()
 
-    config = get_config(path / "config.ini")
+    config: InferenceConfig = get_config(path / "config.ini")
     unfolded_configs: list[InferenceConfig] = unfold_config(config)
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, df_single_run = get_data(config.output_path, config.dataset_type, config.extract_logprobs, device)
+            summary, df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model_type
         evaluate_individual_run(config, summary, df_single_run, device)
@@ -37,7 +37,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
         for c in unfolded_configs:
             with catch_time() as t:
-                summary, df_single_run = get_data(c.output_path, c.dataset_type, c.extract_logprobs, device=device)
+                summary, df_single_run = get_data(config.model, c.output_path, c.dataset_type, c.extract_logprobs, device=device)
                 df_single_run["model_type"] = c.model_type
 
                 if df_all is None:

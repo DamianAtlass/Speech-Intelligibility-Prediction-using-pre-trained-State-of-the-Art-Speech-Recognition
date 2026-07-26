@@ -1,8 +1,8 @@
 import json
-from typing import Tuple, List
-
+from typing import Tuple, List, Literal
 import pandas as pd
 import torch
+from pandas import DataFrame
 from torch.distributions import Categorical
 from pathlib import Path
 import werpy
@@ -11,6 +11,7 @@ from scipy.stats import entropy
 import numpy as np
 from tqdm import tqdm
 import os
+from utils.config_dataclasses import Config
 
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
@@ -393,10 +394,11 @@ def get_summary(df: pd.DataFrame,
         })
     return summary
 
-def get_data(output_path: Path,
-             dataset_type: str,
-             extract_logprobs: bool,
-             device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+def get_data(model: Literal["whisper, parakeet"],
+        output_path: Path,
+        dataset_type: str,
+        extract_logprobs: bool,
+        device: torch.device) -> tuple[list[dict], DataFrame] | None:
 
     file_name_df = output_path/"df.pkl"
     if file_name_df.exists():
@@ -407,6 +409,16 @@ def get_data(output_path: Path,
     else:
         if (output_path/"summary.json").exists():
             os.remove(output_path/"summary.json")
+
+    if model == "whisper":
+        return get_data_whisper(output_path, dataset_type, extract_logprobs, device)
+    elif model == "parakeet":
+        return get_data_parakeet(output_path, dataset_type, extract_logprobs, device)
+
+def get_data_whisper(output_path: Path,
+                     dataset_type: str,
+                     extract_logprobs: bool,
+                     device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
 
     data_path = output_path / "data"
 
@@ -466,7 +478,6 @@ def get_data(output_path: Path,
     wers_machine = wer_needleman_wunsch_per_sample(references=references, transcripts=machine_transcripts)
     wers_machine_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=machine_transcripts_kw)
 
-    avg_logprobs = avg_logprobs
     if dataset_type != "grid":
         wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
 
@@ -587,5 +598,195 @@ def get_data(output_path: Path,
         print(
             f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
 
-    df.to_pickle(output_path/file_name_df)
+    df.to_pickle(output_path/"df.pkl")
+    return summary, df
+
+
+def get_data_parakeet(output_path: Path,
+                     dataset_type: str,
+                     extract_logprobs: bool,
+                     device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+    data_path = output_path / "data"
+
+    avg_logprobs = []
+    references = []
+    machine_transcripts = []
+    decoded_tokens_with_timestamps = []
+    human_transcripts_kw = []
+    snr = []
+    listener = []
+    audio_paths = []
+    logprobs_paths = []
+
+    counter = 0
+
+    for file in tqdm(data_path.iterdir()):
+        if counter == 10000:
+            pass
+        counter += 1
+        with open(file) as f:
+            json_file = json.load(f)
+
+            if json_file["prediction_result"]["text"] == "":  # nothing recognized!
+                avg_logprobs.append(torch.nan)
+                machine_transcripts.append("")
+                if extract_logprobs:
+                    decoded_tokens_with_timestamps.append([])
+            else:
+                y_seq = json_file["prediction_result"]["y_sequence"]
+                avg = json_file["prediction_result"]["score"] / (len(y_seq) - y_seq.count(1024))  # 1024 is mask token
+                avg_logprobs.append(avg)
+
+                machine_transcripts.append(json_file["prediction_result"]["text"])
+                if extract_logprobs:
+                    decoded_tokens_with_timestamps.append(json_file["prediction_result"]["decoded_tokens_with_timestamps"])
+
+            references.append(json_file["sentence"])
+            audio_paths.append(json_file["audio_path"])
+
+            if dataset_type != "grid":
+                human_transcripts_kw.append(json_file["human_recognized_words"])
+                snr.append(int(json_file["snr_db"]))
+                listener.append(json_file["listener"])
+
+            if extract_logprobs:
+                logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
+
+    references_kw = [get_only_keywords_by_index(o) for o in references]
+    machine_transcripts = normalize(machine_transcripts)
+    # machine_transcripts_kw = [get_only_keywords_using_alignments(reference=r.split(), transcript=t.split()) for r, t in zip(references, machine_transcripts)]
+    machine_transcripts_kw = [get_only_keywords_by_identity(reference_kw=r.split(), transcript=t.split()) for r, t in
+                              zip(references_kw, machine_transcripts)]
+
+    recognize_kw = np.sum([np.sum([1 for _ in keywords]) for keywords in machine_transcripts_kw])
+    recognize_kw_percent = (recognize_kw / (len(machine_transcripts_kw) * 3))
+    print(f"recognized keywords: {round(recognize_kw_percent, 2) * 100}%")
+    machine_transcripts_kw = [" ".join(w for w in t if w) for t in machine_transcripts_kw]
+    human_transcripts_kw = normalize(human_transcripts_kw)
+
+    wers_machine = wer_needleman_wunsch_per_sample(references=references, transcripts=machine_transcripts)
+    wers_machine_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=machine_transcripts_kw)
+
+    if dataset_type != "grid":
+        wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
+
+    data = {
+        "avg_logprobs": avg_logprobs,
+        "references": references,
+        "references_kw": references_kw,
+        "wers_machine": wers_machine,
+        "wers_machine_kw": wers_machine_kw,
+        "machine_transcripts": machine_transcripts,
+        #"decoded_tokens_with_timestamps": decoded_tokens_with_timestamps,
+        "machine_transcripts_kw": machine_transcripts_kw,
+        "audio_paths": audio_paths,
+    }
+
+    if dataset_type != "grid":
+        data.update({
+            "wers_human_kw": wers_human_kw,
+            "human_transcripts_kw": human_transcripts_kw,
+            "listener": listener,
+            "snr": snr,
+        })
+
+    if extract_logprobs:
+        data.update({
+            "logprobs_paths": logprobs_paths,
+        })
+
+    df = pd.DataFrame(data)
+    summary = get_summary(df=df, dataset_type=dataset_type)
+
+    # evaluate logprobs
+    found_kw = 0
+    no_kw_in_sentence_found = 0
+
+    if extract_logprobs:
+        print("Evaluate logprobs")
+        entropies_kw = []
+        average_macroscopic_entropy = []
+        estimated_transcript_keywords_indices = []
+
+        counter = 0
+        error_counter = 0
+
+        for index, row in tqdm(df.iterrows(), total=len(df)):
+            # load logprobs
+            if row["logprobs_paths"] == "":
+                error_counter += 1
+                continue
+            logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
+                row["logprobs_paths"]).name
+            logprob_tensor = torch.load(logprob_path)
+
+            # calculate entropy
+            posteriors = logprob_tensor.exp()
+            del logprob_tensor
+            decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
+            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+            entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+            del posteriors
+            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+
+            # rm timestamp tokens
+            no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
+                                decoded_tokens_with_timestamps]
+            entropies_per_token = entropies_per_token[no_timestamp_idx]
+            decoded_tokens_without_timestamp_tokens = [t for t, b in
+                                                       zip(decoded_tokens_with_timestamps, no_timestamp_idx) if
+                                                       b]
+            del decoded_tokens_with_timestamps
+
+            average_macroscopic_entropy.append(float(entropies_per_token.mean()))
+
+            # get kw specific entropy
+            decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in
+                                                       decoded_tokens_without_timestamp_tokens]
+            ## find "correct" kw position
+            decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
+                                                                apply_separate_numbers_from_letter=False,
+                                                                apply_numbers_to_words=True,
+                                                                apply_werpy_normalize=False)
+
+            # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+            # trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+            #                                                       decoded_tokens_without_timestamp_tokens,
+            #                                                       return_idx=True)
+            # trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+            #                                                                      decoded_tokens_without_timestamp_tokens,
+            #                                                                      return_idx=True)
+            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+            #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
+            #                                                                   return_idx=True)
+            transcript_keywords_indices: list[int | None] = get_only_keywords_with_different_approaches(
+                reference_kw=row["references_kw"].split(),
+                transcript=decoded_tokens_without_timestamp_tokens,
+                return_idx=True)
+            # transcript_keywords_indices = [1,3,4]
+            estimated_transcript_keywords_indices.append(transcript_keywords_indices)
+            assert len(transcript_keywords_indices) == 3
+
+            tmp_found_kw = np.sum([1 for o in transcript_keywords_indices if o is not None])
+            found_kw += tmp_found_kw
+            no_kw_in_sentence_found += tmp_found_kw == 0
+
+            tmp_wk_entropy = []
+            for idx in transcript_keywords_indices:
+                tmp_wk_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
+            del entropies_per_token
+            counter += 1
+            entropies_kw.append(tmp_wk_entropy)
+
+        df["average_macroscopic_entropy"] = average_macroscopic_entropy
+        df["estimated_transcript_keywords_indices"] = estimated_transcript_keywords_indices
+        df["entropies_kw"] = entropies_kw
+
+        print(f"{error_counter = }")
+        print(f"{found_kw = }, -> {round(found_kw / (((len(df) - error_counter) * 3)), 2) * 100}%")
+        print(
+            f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
+
+    df.to_pickle(output_path / "df.pkl")
     return summary, df

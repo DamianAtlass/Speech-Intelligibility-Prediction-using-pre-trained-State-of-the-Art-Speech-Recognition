@@ -15,7 +15,7 @@ def load_model(config: InferenceConfig, device: torch.device) -> Whisper|sip_whi
         return model
     elif config.model=="parakeet":
         model: EncDecCTCModelBPE = load_parakeet_model(config, device)
-        model.change_decoding_strategy({"decoding_cfg": "greedy_batch}"})
+        model.change_decoding_strategy({"strategy": "greedy_batch"})
 
         return model
     else:
