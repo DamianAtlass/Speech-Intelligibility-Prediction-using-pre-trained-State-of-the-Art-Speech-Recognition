@@ -128,8 +128,6 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
 
         alignment_path = config.output_path/"alignments"
         alignment_path.mkdir()
-        y_sequence_path = config.output_path/"y_sequence"
-        y_sequence_path.mkdir()
 
         print("enter parakeet inference")
         with tqdm(total=len(dataset)) as pbar:
@@ -143,7 +141,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                 print("batch inference...")
                 transcriptions = model.transcribe(
                     audio=dataloader,
-                    timestamps=True,
+                    timestamps=config.word_timestamps,
                     verbose=False
                 )
                 for sample, result in zip(subset, transcriptions):
@@ -154,18 +152,15 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
                     alignments_data_file_path = alignment_path / f"{result_file_name}.pt"
-                    y_sequence_data_file_path = y_sequence_path / f"{result_file_name}.pt"
                     if result_data_file_path.exists(): raise FileExistsError
                     if alignments_data_file_path.exists(): raise FileExistsError
-                    if y_sequence_data_file_path.exists(): raise FileExistsError
 
                     torch.save(result.pop("alignments"), alignments_data_file_path)
-                    torch.save(result.pop("y_sequence"), y_sequence_data_file_path)
-                    result["alignments_path"] = str(alignments_data_file_path.relative_to(Path.cwd()))
-                    result["y_sequence_path"] = str(y_sequence_data_file_path.relative_to(Path.cwd()))
 
+                    result["alignments_path"] = str(alignments_data_file_path.relative_to(Path.cwd()))
+
+                    result["y_sequence"] = [int(a) for a in result["y_sequence"]]
                     result["score"] = result["score"].item()
-                    result["length"] = result["length"].item()
 
                     save_result(sample_dict=dict(sample),
                                 result=result,
