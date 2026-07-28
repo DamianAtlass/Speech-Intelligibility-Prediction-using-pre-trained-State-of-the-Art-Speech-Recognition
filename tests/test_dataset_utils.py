@@ -60,7 +60,7 @@ def test_apply_split(split: tuple, resulting_size: tuple):
     (0.5, 17000)
 ])
 def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int):
-    dataset = get_grid(real_grid_folder) # len == 34,000
+    dataset = get_grid(GRID_FOLDER) # len == 34,000
     config = Config(model="",
                     model_type="",
                     model_path=Path(""),
@@ -77,8 +77,8 @@ def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int)
 
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path"), [
-    ("grid", grid_folder),
-    ("grid_bc", grid_bc_folder),
+    ("grid", GRID_FOLDER),
+    ("grid_bc", BC_FOLDER),
 ])
 def test_get_dataset_and_add_noise(dataset_type, dataset_path):
     try:

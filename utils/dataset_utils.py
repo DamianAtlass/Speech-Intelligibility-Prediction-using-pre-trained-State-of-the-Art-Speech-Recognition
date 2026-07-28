@@ -38,6 +38,7 @@ def _get_dataset(dataset_type: str, dataset_path: Path = None) -> Dataset:
 
 def get_dataset(dataset_type: str, dataset_path: Path|None = None, add_noise: bool = False) -> Dataset:
     dataset = _get_dataset(dataset_type, dataset_path)
+    dataset = dataset.shuffle(seed=0)
     
     if add_noise:
         if dataset_type=="grid_bc":
@@ -83,8 +84,7 @@ def apply_split(dataset : Dataset,
         else:
             split = dataset.train_test_split(
                 train_size=split_value,
-                shuffle=True,
-                seed=0,
+                shuffle=False,
             )
             d[label] = split["train"]
             dataset = split["test"]

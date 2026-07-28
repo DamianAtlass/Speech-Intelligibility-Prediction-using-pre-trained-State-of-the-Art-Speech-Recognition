@@ -303,7 +303,6 @@ def evaluate_individual_run(config: InferenceConfig,
 
     if config.dataset_type != "grid":
         print("Generate correlation plots")
-        metrics.append(df_single_run["wers_human_kw"])
 
         plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts", "snr", "references_kw", "references", "model_type"]],
                         only_kw=False,
