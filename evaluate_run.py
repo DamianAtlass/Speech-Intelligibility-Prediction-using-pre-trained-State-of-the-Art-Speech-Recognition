@@ -22,14 +22,16 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
     if len(unfolded_configs)==1:
         with catch_time() as t:
-            summary, df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
+            df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
         print(f"Reading the generated files took: {t():.4f} s")
+
         df_single_run["model_type"] = config.model_type
-        evaluate_individual_run(config, summary, df_single_run, device)
+        evaluate_individual_run(config=config, df_single_run=df_single_run, device=device)
 
         #with pd.option_context('display.max_rows', None, 'display.max_columns', None, "display.width", 10000):
             #print(df_single_run[["references_kw", "machine_transcripts", "machine_transcripts_kw", "wers_machine_kw"]])
     else:
+        #all of this could use a re-word
         summary_arr, avg_logprobs_arr, wers_machine_arr, wers_machine_kw_arr = [], [], [], []
         #list_field = config.get_list_fields()[0]
 
@@ -46,7 +48,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
                     df_all = pd.concat([df_all, df_single_run], ignore_index=True)
             print(f"Reading the generated files took: {t():.4f} s")
 
-            evaluate_individual_run(c, summary, df_single_run, device)
+            evaluate_individual_run(config=c, df_single_run=df_single_run, device=device)
 
             summary_arr.append(summary)
             avg_logprobs_arr.append(df_single_run["avg_logprobs"])

@@ -1,5 +1,5 @@
 import json
-from typing import Tuple, List, Literal
+from typing import Tuple, List, Literal, cast
 import pandas as pd
 import torch
 from pandas import DataFrame
@@ -173,8 +173,8 @@ def get_only_keywords_by_phonetic_similarity(
         if kw in transcript:
             r.append(transcript.index(kw) if return_idx else kw)
         else:
-            kw_phonemized = phonemize(kw, language="en-us", backend="espeak")
-            phonetic_transcript = phonemize(transcript, language="en-us", backend="espeak")
+            kw_phonemized = phonemize([kw])[0]
+            phonetic_transcript = phonemize(transcript)
             distance = [dist.feature_edit_distance(source=kw_phonemized, target=o) for o in phonetic_transcript]
 
             if min(distance) <= error_threshold:
@@ -279,15 +279,27 @@ def plot_regr_lines(df: pd.DataFrame, config):
 
     return summary
 
-
+from utils.dataset_utils import get_dataset, apply_split
 def evaluate_individual_run(config: InferenceConfig,
-                            summary: list[dict],
                             df_single_run: pd.DataFrame,
                             device: torch.device):
+    # check for missing rows
+    d = get_dataset(dataset_type=config.dataset_type,dataset_path=config.dataset_path,add_noise=config.add_noise)
+    d = apply_split(d, train_split=config.train_split, test_split=config.test_split,
+                val_split=config.val_split, dataset_scaling=config.dataset_scaling)
+    if len(d["val"])!=len(df_single_run):
+        print(f"Dataframe is missing rows! Expected {len(d["val"])}, got {len(df_single_run)}.")
+    del d
+    summary = get_summary(df=df_single_run, dataset_type=config.dataset_type)
 
-    metrics = [df_single_run["avg_logprobs"], df_single_run["wers_machine"], df_single_run["wers_machine_kw"]]
+    metrics = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
 
     corr_summary = None
+
+    for m in tqdm(metrics):
+        plot_metrics(data=[df_single_run[m]],
+                     x_label=[config.model_type],
+                     output_path=config.output_path)
 
     if config.dataset_type != "grid":
         print("Generate correlation plots")
@@ -350,17 +362,6 @@ def evaluate_individual_run(config: InferenceConfig,
                                "estimated_transcript_keywords_indices", "machine_transcripts"]],
                 output_path=config.output_path)
 
-
-
-
-    for s_arr, metric in zip(summary, metrics):
-        df_single_run["model_type"] = config.model_type
-        plot_metrics([metric],
-                     f"Average {s_arr["metric_name"]} for {config.model}({config.model_type})",
-                     s_arr["metric_name"],
-                     [config.model_type],
-                     config.output_path)
-
     with open(config.output_path / "summary.json", 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
@@ -377,11 +378,8 @@ def get_summary(df: pd.DataFrame,
 
     summary = []
     df["machine_transcripts_len"] = df["machine_transcripts"].map(lambda x: len(x.split()))
-    metric_names = ["Logprob(per sequence)", "WER (machine)", "WER (machine, kw only)", "transcript length"]
+    metric_names = ["Logprob (per sequence)", "WER (machine)", "WER (machine, kw only)", "transcript length"]
     metrics_col = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
-    if dataset_type != "grid":
-        metric_names.append("WER (human study, kw only)")
-        metrics_col.append("wers_human_kw")
 
     for n, m in zip(metric_names, metrics_col):
         values = df[m]
@@ -394,18 +392,17 @@ def get_summary(df: pd.DataFrame,
         })
     return summary
 
-def get_data(model: Literal["whisper, parakeet"],
+def get_data(model: str,
         output_path: Path,
         dataset_type: str,
         extract_logprobs: bool,
-        device: torch.device) -> tuple[list[dict], DataFrame] | None:
+        device: torch.device) -> DataFrame:
 
     file_name_df = output_path/"df.pkl"
     if file_name_df.exists():
         print("Load df from disk.")
         df: pd.DataFrame = pd.read_pickle(file_name_df)
-        summary = get_summary(df=df, dataset_type=dataset_type)
-        return summary, df
+        return df
     else:
         if (output_path/"summary.json").exists():
             os.remove(output_path/"summary.json")
@@ -414,11 +411,13 @@ def get_data(model: Literal["whisper, parakeet"],
         return get_data_whisper(output_path, dataset_type, extract_logprobs, device)
     elif model == "parakeet":
         return get_data_parakeet(output_path, dataset_type, extract_logprobs, device)
+    else:
+        raise ValueError(f"Unknown model: {model}")
 
 def get_data_whisper(output_path: Path,
                      dataset_type: str,
                      extract_logprobs: bool,
-                     device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+                     device: torch.device) -> pd.DataFrame:
 
     data_path = output_path / "data"
 
@@ -507,7 +506,6 @@ def get_data_whisper(output_path: Path,
         })
 
     df = pd.DataFrame(data)
-    summary = get_summary(df=df, dataset_type=dataset_type)
 
     # evaluate logprobs
     found_kw = 0
@@ -570,10 +568,10 @@ def get_data_whisper(output_path: Path,
             # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
-            transcript_keywords_indices: list[int | None] = get_only_keywords_with_different_approaches(
+            transcript_keywords_indices = cast(list[int | None], get_only_keywords_with_different_approaches(
                  reference_kw=row["references_kw"].split(),
                  transcript=decoded_tokens_without_timestamp_tokens,
-                 return_idx=True)
+                 return_idx=True))
             #transcript_keywords_indices = [1,3,4]
             estimated_transcript_keywords_indices.append(transcript_keywords_indices)
             assert len(transcript_keywords_indices) == 3
@@ -599,13 +597,13 @@ def get_data_whisper(output_path: Path,
             f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
 
     df.to_pickle(output_path/"df.pkl")
-    return summary, df
+    return df
 
 
 def get_data_parakeet(output_path: Path,
                      dataset_type: str,
                      extract_logprobs: bool,
-                     device: torch.device) -> Tuple[List[dict], pd.DataFrame]:
+                     device: torch.device) -> pd.DataFrame:
     data_path = output_path / "data"
 
     avg_logprobs = []
@@ -696,7 +694,6 @@ def get_data_parakeet(output_path: Path,
         })
 
     df = pd.DataFrame(data)
-    summary = get_summary(df=df, dataset_type=dataset_type)
 
     # evaluate logprobs
     found_kw = 0
@@ -789,4 +786,4 @@ def get_data_parakeet(output_path: Path,
             f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
 
     df.to_pickle(output_path / "df.pkl")
-    return summary, df
+    return df

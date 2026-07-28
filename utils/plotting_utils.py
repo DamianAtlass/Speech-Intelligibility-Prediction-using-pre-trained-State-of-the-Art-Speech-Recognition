@@ -10,15 +10,18 @@ from typing import Literal
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 
 sorting_reverse = {
-    "WER (machine)": True,
-    "Logprob(per sequence)": False,
-    "WER (machine, kw only)": True,
+    "wers_machine": True,
+    "avg_logprobs": False,
+    "wers_machine_kw": True,
 }
 
 labels_dict = {
     "average_macroscopic_entropy": "average (macroscopic) entropy",
     "wers_machine": "WER machine",
-    "wers_machine_kw": "WER machine (keywords only)"
+    "wers_machine_kw": "WER machine (keywords only)",
+    'avg_logprobs': "Logprob (per sequence)",
+    "machine_transcripts_len": "length of transcripts"
+
 }
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
@@ -100,43 +103,43 @@ def plot_regr_line_for_spearman_corr(df: pd.DataFrame,
     return regr.rvalue, regr.pvalue
 
 
-def plot_metrics(array: list[pd.DataFrame],
-                 title: str,
-                 metric_name: str,
+def plot_metrics(data: list[pd.Series],
                  x_label: list[str],
                  output_path: Path | None
                  ) -> None:
-    figure_title = title
-    array = [a.dropna() for a in array]
+    column_name: str = data[0].name
+    figure_title = f"Average {labels_dict[column_name]}"
+    plot_title = figure_title
+    data = [a.dropna() for a in data]
 
-    if len(array)>1:
+    if len(data)>1:
         # sort
-        order = torch.tensor([a.mean() for a in array])
-        order = torch.argsort(order, descending=sorting_reverse[metric_name])
-        array = [array[i] for i in order]
+        order = torch.tensor([a.mean() for a in data])
+        order = torch.argsort(order, descending=sorting_reverse[column_name])
+        data = [data[i] for i in order]
         x_label = [x_label[i] for i in order]
 
-    x_label = [x+f"\n mean = {a.mean():.2f}\nmedian = {a.median():.2f}\nn = {len(a)}" for (x,a) in zip(x_label, array)]
+    x_label = [x +f"\n mean = {a.mean():.2f}\nmedian = {a.median():.2f}\nn = {len(a)}" for (x,a) in zip(x_label, data)]
 
-    fig, ax = plt.subplots(figsize=(6+len(array)*0.7,7))
+    fig, ax = plt.subplots(figsize=(6 + len(data) * 0.7, 7))
 
     positions = range(1, len(x_label)+1)
 
-    tmp = ax.boxplot(array,
+    tmp = ax.boxplot(data,
                      #notch=False,
                      positions=positions,
                      #meanline=True,
                      showmeans=True,
-             )
-    if "WER" in metric_name:
+                     )
+    if "wer" in column_name:
         max_y = None
-        title += f", y-axis-limit={max_y}"
+        figure_title += f", y-axis-limit={max_y}"
         plt.ylim(0, max_y)
 
-    if len(array) > 1:
-        title += ", sorted by means"
-    plt.title(title)
-    plt.ylabel(metric_name)
+    if len(data) > 1:
+        figure_title += ", sorted by means"
+    plt.title(figure_title)
+    plt.ylabel(labels_dict[column_name])
     ax.grid()
     plt.xticks(positions, x_label)
     plt.tight_layout()
@@ -144,7 +147,7 @@ def plot_metrics(array: list[pd.DataFrame],
 
 
     if output_path:
-        plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
+        plt.savefig(output_path/f'{plot_title.replace("\n", "")}.png')
     #plt.show()
     plt.close()
 

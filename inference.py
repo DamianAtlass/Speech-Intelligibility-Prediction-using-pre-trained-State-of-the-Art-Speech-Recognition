@@ -18,6 +18,17 @@ from utils.parakeet_utils import get_collate_fn
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
+def create_filename(dataset_type: str, sample: dict) -> str:
+    audio_path = Path(sample["audio_path"])
+    match dataset_type:
+        case "grid_bc":
+            snr_str = f"{"m" if int(sample["snr_db"]) < 0 else ""}{abs(int(sample["snr_db"]))}"
+            return f"snr_{snr_str}_l{sample["listener"]}_s{sample["speaker"]}_{audio_path.stem.split("_")[1]}"
+        case "grid":
+            return f"s{sample["speaker"]}_{audio_path.stem}"
+        case _:
+            raise RuntimeError("Unknown dataset type")
+
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
@@ -44,7 +55,7 @@ def save_result(sample_dict: dict,
 
     Returns:
     """
-
+    if result_data_file_path.exists(): raise FileExistsError
     sample_dict.pop("audio")
     sample_dict["prediction_result"] = result
 
@@ -92,7 +103,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
             result: dict = transcribe_fn(**options)
 
             audio_path = Path(sample["audio_path"])
-            file_name = f"{audio_path.parent.stem}_{audio_path.stem}"
+            file_name = create_filename(config.dataset_type, sample)
 
             if config.extract_logprobs:
                 extracted_logprobs = result.pop("extracted_logprobs")
@@ -110,16 +121,9 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                     result["logprobs_path"] = ""
                     logger.info("No logprobs to save.")
 
-            sample_dict = dict(sample)
-            sample_dict.pop("audio")
-            sample_dict["prediction_result"] = result
             result_data_file_path = config.output_path / "data" / f"{file_name}.json"
-            if result_data_file_path.exists(): raise FileExistsError
-            logger.info(f"Save result data [{counter}] to {result_data_file_path.relative_to(Path.cwd())}")
-            with open(result_data_file_path, 'w') as f:
-                json.dump(sample_dict, f, indent=4)
+            save_result(dict(sample), result, result_data_file_path, counter, True)
 
-            logger.info("--------------------")
 
 def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, dataset: Dataset, device: torch.device) -> None:
     with torch.inference_mode():
@@ -147,14 +151,13 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                 for sample, result in zip(subset, transcriptions):
                     result = asdict(result)
 
-                    audio_path = Path(sample["audio_path"])
-                    result_file_name = f"{audio_path.parent.stem}_{audio_path.stem}"
+
+                    result_file_name = create_filename(config.dataset_type, sample)
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
-                    alignments_data_file_path = alignment_path / f"{result_file_name}.pt"
-                    if result_data_file_path.exists(): raise FileExistsError
-                    if alignments_data_file_path.exists(): raise FileExistsError
 
+                    alignments_data_file_path = alignment_path / f"{result_file_name}.pt"
+                    if alignments_data_file_path.exists(): raise FileExistsError
                     torch.save(result.pop("alignments"), alignments_data_file_path)
 
                     result["alignments_path"] = str(alignments_data_file_path.relative_to(Path.cwd()))

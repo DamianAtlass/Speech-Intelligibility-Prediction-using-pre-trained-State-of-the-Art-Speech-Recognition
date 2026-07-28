@@ -24,6 +24,5 @@ def test_load_parakeet_model():
         word_timestamps=False,
         beam_size=2
     )
-    device = select_device()
-    model = load_parakeet_model(config, device)
+    model = load_parakeet_model(config, torch.device("cpu"))
     assert isinstance(model, EncDecCTCModelBPE)

@@ -1,4 +1,3 @@
-from tests.test_grid_utils import real_grid_folder
 from utils.config_dataclasses import Config
 from utils.dataset_utils import get_dataset, apply_split
 from datasets import Dataset, DatasetDict
@@ -10,6 +9,7 @@ from utils.grid_utils import get_grid
 test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 grid_folder = test_folder / "grid"
 grid_bc_folder = test_folder / "grid_bc"
+real_grid_folder = test_folder.parent / "datasets" / "grid"
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path", "l"), [
     ("grid", grid_folder, 2000),

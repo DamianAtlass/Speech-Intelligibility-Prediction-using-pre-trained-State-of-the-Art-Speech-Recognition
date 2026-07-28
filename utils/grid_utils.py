@@ -118,12 +118,13 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
         "alignment": [],
         "audio_path": [],
         "align_path": [],
+        "speaker": [],
     }
     counter_speaker = 0
-    for speaker in tqdm(sorted(audio_folder.iterdir()), total=max_speaker or 34):
-        speaker = speaker.name
-        align = align_folder/speaker/"align"
-        audio = audio_folder/speaker/speaker
+    for audio_folder_speaker in tqdm(sorted(audio_folder.iterdir()), total=max_speaker or 34):
+        audio_folder_speaker = audio_folder_speaker.name
+        align = align_folder/audio_folder_speaker/"align"
+        audio = audio_folder/audio_folder_speaker/audio_folder_speaker
 
 
         assert align.is_dir()
@@ -152,6 +153,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
             data["audio_path"].append(str(audio_file_path.relative_to(Path.cwd())))
             data["align_path"].append(str(align_file_path.relative_to(Path.cwd())))
             data["sample_rate"].append(WANTED_SAMPLE_RATE)
+            data["speaker"].append(audio_folder_speaker[1:])
 
             counter_file+=1
             if counter_file==max_files_per_speaker:
