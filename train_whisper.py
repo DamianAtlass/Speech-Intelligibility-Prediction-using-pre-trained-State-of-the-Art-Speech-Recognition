@@ -1,5 +1,6 @@
 from datasets import DatasetDict
-from transformers import WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor, WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
+from transformers import WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor, WhisperForConditionalGeneration, \
+    Seq2SeqTrainingArguments, Seq2SeqTrainer,EarlyStoppingCallback, IntervalStrategy
 import torch
 from whisper import available_models
 from dataclasses import dataclass
@@ -45,9 +46,12 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 
 def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.device):
-    #model_type = config.model
+
+    if "val" in dataset.keys():
+        dataset.pop("val")
+
     full_model_name = f"{config.model}-{config.model_type}"
-    #output_path = f"{model_type}_{datetime.datetime.now().strftime("%d_%m_%Y-%H.%M.%S")}"
+
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
         logger.warning("No HF_TOKEN!")
@@ -85,7 +89,6 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         # encode target text to label ids
         batch["labels"] = tokenizer(batch["sentence"]).input_ids
         return batch
-
     with catch_time() as t:
         dataset = dataset.map(prepare_dataset,
                               remove_columns=dataset.column_names["train"],
@@ -121,24 +124,26 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     )
 
     logger.info(f"Define training args")
+    # step equals batch, more or less
     training_args = Seq2SeqTrainingArguments(
         output_dir=str(config.output_path),
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=1,  # increase by 2x for every 2x decrease in batch size
         learning_rate=config.learning_rate,
-        warmup_steps=500,
-        gradient_checkpointing=True,
+        warmup_steps=config.warmup_steps,
+        gradient_checkpointing=False, # reduces speed but allows for bigger models
         fp16=True,
-        eval_strategy="epoch",
-        per_device_eval_batch_size=8,
+        eval_strategy="steps",
+        eval_steps=150,
+        save_strategy="steps",
+        save_steps=150,
+        per_device_eval_batch_size=config.batch_size,
         predict_with_generate=True,
         generation_max_length=225,
-        save_strategy="epoch",
-        save_steps=1,
+        save_total_limit=6,
         logging_steps=50,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
-        # max_steps=5,
         greater_is_better=False,
         num_train_epochs=config.num_train_epochs,
         eval_on_start=True,
@@ -169,6 +174,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         processing_class=processor,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
     )
 
     if config.perform_training:
