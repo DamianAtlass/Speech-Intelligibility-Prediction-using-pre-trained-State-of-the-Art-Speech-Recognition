@@ -6,8 +6,6 @@ import torch
 import pytest
 from pathlib import Path
 
-test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
-
 @pytest.mark.parametrize(("transcript", "keywords_to_find", "outcome"), [
     ("a b c d", "b c", [1,2]),
     ("a b c d", "a b c d", [0, 1, 2, 3]),

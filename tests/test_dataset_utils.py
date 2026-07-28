@@ -6,14 +6,11 @@ import pytest
 
 from utils.grid_utils import get_grid
 
-test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
-grid_folder = test_folder / "grid"
-grid_bc_folder = test_folder / "grid_bc"
-real_grid_folder = test_folder.parent / "datasets" / "grid"
+from utils.paths import TEST_GRID_FOLDER, TEST_BC_FOLDER, GRID_FOLDER, BC_FOLDER
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path", "l"), [
-    ("grid", grid_folder, 2000),
-    ("grid_bc", grid_bc_folder, 24)
+    ("grid", TEST_GRID_FOLDER, 2000),
+    ("grid_bc", TEST_BC_FOLDER, 24)
 ])
 def test_get_dataset(dataset_type, dataset_path, l):
     dataset: Dataset = get_dataset(dataset_type=dataset_type, dataset_path=dataset_path)
@@ -43,7 +40,7 @@ def test_get_dataset_exception():
         ((0, 10, 10, 1), (0, 10, 10)),
 ])
 def test_apply_split(split: tuple, resulting_size: tuple):
-    dataset = get_grid(real_grid_folder) # len == 34,000
+    dataset = get_grid(GRID_FOLDER) # len == 34,000
 
     dataset_dict = apply_split(dataset, *split)
 

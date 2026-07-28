@@ -4,8 +4,7 @@ from utils.manipulate_audio import calculate_snr, add_speech_shaped_noise, add_g
 import numpy as np
 import pytest
 from pathlib import Path
-
-test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
+from utils.paths import TEST_FOLDER
 
 @pytest.mark.parametrize(("power_diff", "expected_snr"),[
     (1, 0),
@@ -28,7 +27,7 @@ def test_add_gaussian_noise():
 
 def test_add_speech_shaped_noise():
     s = np.random.normal(0, 0.5, 5000)
-    r = add_speech_shaped_noise(s, 7, filter_path=test_folder.parent/"speechshaped_filter.pkl")
+    r = add_speech_shaped_noise(s, 7, filter_path=TEST_FOLDER.parent/"speechshaped_filter.pkl")
 
     noise = r - s
     assert round(calculate_snr(s, noise)) == 7

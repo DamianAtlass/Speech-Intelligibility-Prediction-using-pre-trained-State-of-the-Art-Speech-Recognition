@@ -1,6 +1,6 @@
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample
-
 import pytest
+
 @pytest.mark.parametrize(("references", "transcripts", "result"),[
     [["test"], ["text"], 1],
     [["test", "X"], ["test", "X"], 0],
@@ -14,6 +14,7 @@ import pytest
     [["this is an example sentence"], ["is an sentence"], 0.4],
     [["this is an example sentence"], ["this an sentence"], 0.4],
 ])
+
 def test_wer_needleman_wunsch(references: list, transcripts: list, result: float | int):
     r = wer_needleman_wunsch(references=references, transcripts=transcripts)
     assert result == r

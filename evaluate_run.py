@@ -8,7 +8,7 @@ import torch
 import logging
 logger = logging.getLogger(__name__)
 from utils.evaluate_utils import get_data, evaluate_individual_run
-from utils.plotting_utils import plot_metrics, boxplot_corr_per_listener, plot_wer_to_snr
+from utils.plotting_utils import plot_metrics, boxplot_corr_per_listener
 import pandas as pd
 from utils.cuda_utils import select_device
 

@@ -8,15 +8,16 @@ from dotenv import load_dotenv
 from torch.utils.data import DataLoader
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
+from utils.paths import TEST_FOLDER, GRID_FOLDER
 
 def test_load_parakeet_model():
     config = InferenceConfig(
         model="parakeet",
         model_type="ctc-0.6b",
         model_path=None,
-        output_path=test_folder / "inference_test",
+        output_path=TEST_FOLDER,
         dataset_type="grid",
-        dataset_path=test_folder.parent / "datasets/grid/",
+        dataset_path=GRID_FOLDER,
         train_split=0,
         test_split=0,
         val_split=1,

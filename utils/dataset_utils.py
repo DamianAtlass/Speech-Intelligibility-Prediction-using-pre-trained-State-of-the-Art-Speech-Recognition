@@ -16,13 +16,13 @@ import numpy as np
 from utils.manipulate_audio import add_noise_transformation
 WANTED_SAMPLE_RATE = 16_000
 SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
-
+from utils.paths import GRID_FOLDER, BC_FOLDER
 
 
 
 default_dataset_paths = {
-    "grid": Path.cwd()/"datasets/grid",
-    "grid_bc": Path.cwd()/"datasets/GridIntelligibilityDatabase"
+    "grid": GRID_FOLDER,
+    "grid_bc": BC_FOLDER
 }
 
 def _get_dataset(dataset_type: str, dataset_path: Path = None) -> Dataset:

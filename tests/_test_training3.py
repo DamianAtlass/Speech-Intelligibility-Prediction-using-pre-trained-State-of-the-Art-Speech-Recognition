@@ -6,8 +6,7 @@ from pathlib import Path
 import shutil
 from utils.config_dataclasses import TrainingConfig
 from utils.cuda_utils import select_device
-from utils.grid_utils import get_grid
-from utils.dataset_utils import apply_split
+from utils.dataset_utils import get_dataset, apply_split
 from train_whisper import train_whisper
 
 
@@ -23,6 +22,7 @@ def test_whisper_training():
         train_split=10,
         test_split=5,
         val_split=1,
+        add_noise=True,
         perform_training=True,
         learning_rate=1e-5,
         num_train_epochs=1,
@@ -32,7 +32,7 @@ def test_whisper_training():
     if config.output_path.exists():
         shutil.rmtree(config.output_path)
 
-    dataset = get_grid(config.dataset_path)
+    dataset = get_dataset(config.dataset_type, add_noise=config.add_noise)
     dataset = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
     config.output_path.mkdir(exist_ok=config.debug)
     device = select_device()

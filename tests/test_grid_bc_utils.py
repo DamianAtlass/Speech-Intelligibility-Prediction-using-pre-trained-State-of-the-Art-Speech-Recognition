@@ -3,22 +3,20 @@ import pytest
 from pathlib import Path
 from datasets import Dataset
 import shutil
-test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
-real_grid_bc_folder = test_folder.parent / "datasets" / "GridIntelligibilityDatabase"
-test_grid_bc_folder = test_folder / "grid_bc"
+from utils.paths import BC_FOLDER, TEST_BC_FOLDER
 
 def test_parse_and_save_grid_bc():
-    if not real_grid_bc_folder.exists():
+    if not BC_FOLDER.exists():
         pytest.fail("Expects '/mtec/db/speech/audio/grid/extra/GridIntelligibilityDatabase' to exist as 'GridIntelligibilityDatabase' in 'datasets/'")
-    if test_grid_bc_folder.exists():
-        shutil.rmtree(test_grid_bc_folder)
+    if TEST_BC_FOLDER.exists():
+        shutil.rmtree(TEST_BC_FOLDER)
 
     max_noise_folders = 3
     max_listener = 2
     max_files_per_listener = 4
 
-    dataset = parse_and_save_grid_bc(grid_bc_folder=real_grid_bc_folder,
-                                     save_at=test_grid_bc_folder,
+    dataset = parse_and_save_grid_bc(grid_bc_folder=BC_FOLDER,
+                                     save_at=TEST_BC_FOLDER,
                                      max_noise_folders=max_noise_folders,
                                      max_listener=max_listener,
                                      max_files_per_listener=max_files_per_listener)
@@ -27,10 +25,10 @@ def test_parse_and_save_grid_bc():
 
 
     assert isinstance(dataset, Dataset)
-    assert test_grid_bc_folder.exists()
+    assert TEST_BC_FOLDER.exists()
 
 def test_get_grid_bc():
 
-    dataset = get_grid_bc(test_grid_bc_folder)
+    dataset = get_grid_bc(TEST_BC_FOLDER)
     assert isinstance(dataset, Dataset)
 # whole actual grid_bc should be 22800 long (12×19×100)

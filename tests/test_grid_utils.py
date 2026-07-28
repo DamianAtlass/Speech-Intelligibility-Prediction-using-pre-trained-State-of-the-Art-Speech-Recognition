@@ -2,35 +2,35 @@ import pytest
 from utils.grid_utils import get_sentence_and_alignments, parse_and_save_grid, download_grid, convert_short_name_to_ref
 from pathlib import Path
 import shutil
-
+from utils.paths import TEST_GRID_FOLDER
 test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
-grid_folder = test_folder / "grid"
-real_grid_folder = test_folder.parent / "datasets" / "grid"
+
+
 
 def test_download_grid():
-    if grid_folder.exists():
-        shutil.rmtree(grid_folder)
+    if TEST_GRID_FOLDER.exists():
+        shutil.rmtree(TEST_GRID_FOLDER)
     # should take only a couple of seconds with good internet connection
 
-    download_grid(grid_folder, max_speaker=2)
-    assert (grid_folder/"downloaded_grid_files").is_dir()
+    download_grid(TEST_GRID_FOLDER, max_speaker=2)
+    assert (TEST_GRID_FOLDER/"downloaded_grid_files").is_dir()
 
 def test_parse_and_save_grid():
     #needs output from test above
 
-    if not grid_folder.exists():
+    if not TEST_GRID_FOLDER.exists():
         pytest.skip()
-    dataset = parse_and_save_grid(grid_folder=grid_folder,
+    dataset = parse_and_save_grid(grid_folder=TEST_GRID_FOLDER,
                         max_speaker=2,
                         max_files_per_speaker=4,
                         )
     assert len(dataset) == 2 * 4
-    assert (grid_folder/"saved_dataset").is_dir()
-    shutil.rmtree(grid_folder/"saved_dataset")
+    assert (TEST_GRID_FOLDER/"saved_dataset").is_dir()
+    shutil.rmtree(TEST_GRID_FOLDER/"saved_dataset")
 
 
 @pytest.mark.parametrize(("file_path", "params", "start_expected"),[
-    (grid_folder / "downloaded_grid_files/align/s1/align/bbaf2n.align", (25_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)), #25kHz
+    (TEST_GRID_FOLDER / "downloaded_grid_files/align/s1/align/bbaf2n.align", (25_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)), #25kHz
     (test_folder.parent / "datasets/GridIntelligibilityDatabase/word16kHz/s1/bbaf2n.align", (16_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)),  # 16kHz
 ])
 def test_get_sentence_and_alignments(file_path, params, start_expected):
