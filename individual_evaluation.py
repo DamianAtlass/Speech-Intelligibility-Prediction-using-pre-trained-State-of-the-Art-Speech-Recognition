@@ -41,7 +41,7 @@ def foo():
     for run in runs:
         config = get_config(Path(run["path"]) / "config.ini")
         with catch_time() as t:
-            summary, df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
+            df_single_run = get_data(config.model, config.output_path, config.dataset_type, config.extract_logprobs, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model_type
         df_single_run["name"] = run["name"]
@@ -53,7 +53,7 @@ def foo():
 
     #step 2: plot
     plot_wer_to_snr(
-        df[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "name"]],
+        df[["human_transcripts_kw", "machine_transcripts", "snr", "references", "references_kw", "name"]],
         only_kw=False,
         shifting_attribute="name",
         shifting_attribute_label="\nWhisper (small) with varying normalization types",
@@ -67,12 +67,13 @@ def foo():
         shifting_attribute="name",
         output_path=subfolder_name)
 
-    plot_x_to_snr(df=df_single_run,
-                  plotting_attribute="average_macroscopic_entropy",
-                  shifting_attribute_label="model",
-                  shifting_attribute="name",
-                  output_path=subfolder_name
-                  )
+    if False:
+        plot_x_to_snr(df=df,
+                      plotting_attribute="average_macroscopic_entropy",
+                      shifting_attribute_label="model",
+                      shifting_attribute="name",
+                      output_path=subfolder_name
+                      )
 
 
 if __name__ == '__main__':

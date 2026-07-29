@@ -486,7 +486,6 @@ def get_data_whisper(output_path: Path,
         "wers_machine": wers_machine,
         "wers_machine_kw": wers_machine_kw,
         "machine_transcripts": machine_transcripts,
-        "decoded_tokens_with_timestamps": decoded_tokens_with_timestamps,
         "machine_transcripts_kw": machine_transcripts_kw,
         "audio_paths": audio_paths,
     }
@@ -501,6 +500,7 @@ def get_data_whisper(output_path: Path,
 
     if extract_logprobs:
         data.update({
+            "decoded_tokens_with_timestamps": decoded_tokens_with_timestamps,
             "logprobs_paths": logprobs_paths,
         })
 
