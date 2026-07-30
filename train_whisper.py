@@ -11,6 +11,8 @@ from utils.config_dataclasses import TrainingConfig
 from utils.logging_utils import capture_stdout, catch_time
 import os
 import json
+from math import ceil
+from utils.dataset_utils import get_dataset, apply_split
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,6 +51,17 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
     if "val" in dataset.keys():
         dataset.pop("val")
+    del dataset
+    train_dataset = get_dataset("grid", add_noise=True)
+    train_dataset = apply_split(train_dataset, train_split=1., test_split=0, val_split=0)
+
+    test_dataset = get_dataset("grid_bc", add_noise=False)
+    test_dataset = apply_split(test_dataset, train_split=0, test_split=.2, val_split=0)
+
+    dataset = DatasetDict(
+        {"train": train_dataset["train"],
+         "test": test_dataset["test"], }
+    )
 
     full_model_name = f"{config.model}-{config.model_type}"
 
@@ -89,15 +102,24 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         # encode target text to label ids
         batch["labels"] = tokenizer(batch["sentence"]).input_ids
         return batch
+
     with catch_time() as t:
-        dataset = dataset.map(prepare_dataset,
-                              remove_columns=dataset.column_names["train"],
-                              num_proc=4,
-                              load_from_cache_file=False,
-                              )  # set cache to false for debugging
+        dataset = dataset.map(
+            prepare_dataset,
+            num_proc=4,
+            load_from_cache_file=False,
+        )# set cache to false for debugging
+
+        for split in dataset:
+            cols_to_remove = [
+                c for c in dataset[split].column_names
+                if c not in {"input_features", "labels"}
+            ]
+            dataset[split] = dataset[split].remove_columns(cols_to_remove)
+
     dataset.set_transform(lambda x: x) # reset transformation
 
-    logger.info(f"Execution time of dataset mapping: {t():.4f} secs")
+    logger.info(f"Execution time of dataset mapping: {t()/60:.4f} min")
 
     logger.info(f"Define model")
 
@@ -122,6 +144,13 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
+    num_training_batches = ceil(len(dataset["train"])/config.batch_size)
+    logger.info(f"Training batches per epoch: {num_training_batches}")
+    logger.info(f"Test batches: {ceil(len(dataset["test"])/config.batch_size)}")
+
+    foo = ceil(num_training_batches/config.save_and_eval_steps)
+    logger.info(f"Saves/evaluations per epoch: {config.save_and_eval_steps}")
+
 
     logger.info(f"Define training args")
     # step equals batch, more or less
@@ -131,23 +160,22 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         gradient_accumulation_steps=1,  # increase by 2x for every 2x decrease in batch size
         learning_rate=config.learning_rate,
         warmup_steps=config.warmup_steps,
-        gradient_checkpointing=False, # reduces speed but allows for bigger models
+        gradient_checkpointing=True, # reduces speed but allows for bigger models
         fp16=True,
         eval_strategy="steps",
-        eval_steps=150,
+        eval_steps=foo,
         save_strategy="steps",
-        save_steps=150,
+        save_steps=foo,
         per_device_eval_batch_size=config.batch_size,
         predict_with_generate=True,
         generation_max_length=225,
-        save_total_limit=6,
+        save_total_limit=15,
         logging_steps=50,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
         greater_is_better=False,
         num_train_epochs=config.num_train_epochs,
-        eval_on_start=True,
-
+        eval_on_start=False,
     )
 
     def compute_metrics(pred):
@@ -185,7 +213,6 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         logger.info(f"Training done")
 
         summary = train_output._asdict()
-        print(summary)
         with open(config.output_path / "summary.json", 'w') as f:
             json.dump({"summary:": summary}, f, indent=4)
     else:
