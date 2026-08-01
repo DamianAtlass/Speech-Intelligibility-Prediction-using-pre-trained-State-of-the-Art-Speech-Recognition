@@ -1,10 +1,10 @@
 from pathlib import Path
 import os
 import pytest
-
+from utils.paths import TEST_FOLDER
 from utils.config_dataclasses import get_config, unfold_config, to_int_or_float
 
-TEST_FOLDER = Path.cwd()/"tests/config_dataclasses"
+CONFIG_TEST_FOLDER = TEST_FOLDER/"config_dataclasses"
 
 @pytest.mark.parametrize("file_name", [
         "test_inference_config.ini",
@@ -13,8 +13,8 @@ TEST_FOLDER = Path.cwd()/"tests/config_dataclasses"
         "test_training_config2.ini",
 ])
 def test_loading_and_saving(file_name):
-    file_path = TEST_FOLDER/file_name
-    tmp_file = TEST_FOLDER/"tmp.ini"
+    file_path = CONFIG_TEST_FOLDER/file_name
+    tmp_file = CONFIG_TEST_FOLDER/"tmp.ini"
 
     if tmp_file.exists():
         os.remove(tmp_file)
@@ -33,7 +33,7 @@ def test_loading_and_saving(file_name):
 
 def test_loading_bad_file(file_name = "test_training_config_bad.ini"):
 
-    file_path = TEST_FOLDER/file_name
+    file_path = CONFIG_TEST_FOLDER/file_name
     try:
         get_config(file_path)
     except ValueError:
@@ -48,7 +48,7 @@ def test_loading_bad_file(file_name = "test_training_config_bad.ini"):
 #        "test_group_training_config.ini",
 ])
 def test_unfold_config(file_name, length):
-    file_path = TEST_FOLDER / file_name
+    file_path = CONFIG_TEST_FOLDER / file_name
     config = get_config(file_path)
 
     configs = unfold_config(config)
