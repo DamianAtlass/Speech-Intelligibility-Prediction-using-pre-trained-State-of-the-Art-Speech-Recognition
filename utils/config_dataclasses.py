@@ -90,7 +90,7 @@ class TrainingConfig(Config):
     learning_rate: float
     num_train_epochs: int
     batch_size: int = 16
-    save_and_eval_steps: int = 100
+    save_and_eval_per_epoch: int = 6
     warmup_steps: int
 
     def __post_init__(self):
@@ -98,7 +98,7 @@ class TrainingConfig(Config):
         self.learning_rate = float(self.learning_rate)
         self.num_train_epochs = int(self.num_train_epochs)
         self.batch_size = int(self.batch_size)
-        self.save_and_eval_steps = int(self.save_and_eval_steps)
+        self.save_and_eval_per_epoch = int(self.save_and_eval_per_epoch)
         self.warmup_steps = int(self.warmup_steps)
         if isinstance(self.perform_training, str):
             self.perform_training = self.perform_training=="True"
@@ -111,7 +111,7 @@ class TrainingConfig(Config):
             'perform_training',
             'learning_rate',
             'batch_size',
-            'save_and_eval_steps',
+            'save_and_eval_per_epoch',
             'num_train_epochs',
             'warmup_steps',
         ]

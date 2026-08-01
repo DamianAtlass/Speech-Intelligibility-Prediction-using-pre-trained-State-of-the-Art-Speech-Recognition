@@ -51,7 +51,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
 
     if "val" in dataset.keys():
         dataset.pop("val")
-    del dataset
+    del dataset # needs to be fully integrated in config
     train_dataset = get_dataset("grid", add_noise=True)
     train_dataset = apply_split(train_dataset, train_split=1., test_split=0, val_split=0)
 
@@ -148,8 +148,8 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     logger.info(f"Training batches per epoch: {num_training_batches}")
     logger.info(f"Test batches: {ceil(len(dataset["test"])/config.batch_size)}")
 
-    foo = ceil(num_training_batches/config.save_and_eval_steps)
-    logger.info(f"Saves/evaluations per epoch: {config.save_and_eval_steps}")
+    save_and_eval_steps = ceil(num_training_batches/config.save_and_eval_per_epoch)
+    logger.info(f"Saves/evaluations per epoch: {config.save_and_eval_per_epoch}")
 
 
     logger.info(f"Define training args")
@@ -163,13 +163,13 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         gradient_checkpointing=True, # reduces speed but allows for bigger models
         fp16=True,
         eval_strategy="steps",
-        eval_steps=foo,
+        eval_steps=save_and_eval_steps,
         save_strategy="steps",
-        save_steps=foo,
+        save_steps=save_and_eval_steps,
         per_device_eval_batch_size=config.batch_size,
         predict_with_generate=True,
         generation_max_length=225,
-        save_total_limit=15,
+        save_total_limit=5,
         logging_steps=50,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
@@ -189,7 +189,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
         label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
 
-        wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+        wer = abs(100 * metric.compute(predictions=pred_str, references=label_str) - 22.887) #experimental
 
         return {"wer": wer}
 
