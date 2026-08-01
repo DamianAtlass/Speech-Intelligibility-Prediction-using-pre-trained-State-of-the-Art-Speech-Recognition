@@ -97,6 +97,8 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                 "condition_on_previous_text": False,
                 "language": "en"
             }
+            if config.extract_logprobs and config.word_timestamps:
+                options.update({"break_after_first_segment": True})
 
             # results will not be equal (therefore not deterministic) if temperature=!0.0
             #  https://github.com/openai/whisper/discussions/81

@@ -50,7 +50,6 @@ def add_speech_shaped_noise(signal: np.ndarray,
     :return:
     noised_signal, np.float32: the noised signal. Needs to be of that dtype
     """
-    logger.info(f"Add speech shaped noise, SNR: {target_snr_db}")
     if target_snr_db is None:
         return signal
 

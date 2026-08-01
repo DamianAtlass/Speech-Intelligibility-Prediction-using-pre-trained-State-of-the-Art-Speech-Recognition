@@ -20,8 +20,7 @@ labels_dict = {
     "wers_machine": "WER machine",
     "wers_machine_kw": "WER machine (keywords only)",
     'avg_logprobs': "Logprob (per sequence)",
-    "machine_transcripts_len": "length of transcripts"
-
+    "machine_transcripts_len": "length of transcripts",
 }
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
@@ -369,9 +368,15 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                               #model: str,
                               #model_type: str ,
+                              x_2: str = "human_transcripts_kw",
                               output_path: Path = None):
     corr_arr = []
     p_val_arr = []
+
+    tmp_labels_dict = {
+        "human_transcripts_kw": "human",
+        "estimated_transcript_kw": "estimated machine", # for calibration
+    }
 
     listeners = df["listener"].unique()
     for kw in tqdm(range(3)):
@@ -381,8 +386,17 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
             df_listener = df[df["listener"] == l]
 
             ref_kw = df_listener["references_kw"].map(lambda x: x.split()[kw])
-            human_kw = df_listener["human_transcripts_kw"].map(lambda x: x.split()[kw])
-            x = [int(r != h) for r, h in zip(ref_kw, human_kw)]  # basically the WER
+
+            if x_2 == "human_transcripts_kw":
+                human_kw = df_listener[x_2].map(lambda x: x.split()[kw])
+                foo = human_kw
+            else:
+                estimated_kw = df_listener[x_2].map(lambda x: x[kw])
+                foo = estimated_kw
+
+
+
+            x = [int(r != h) for r, h in zip(ref_kw, foo)]  # basically the WER
 
             y = df_listener["entropies_kw"].map(lambda x: x[kw])
 
@@ -414,7 +428,7 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between token-level human WER and the corresponding whisper token-level entropy for each listener"
+    title = f"Spearman Correlation between token-level {tmp_labels_dict[x_2]} WER and the corresponding whisper's token-level entropy for each listener"
     plt.title(title + "\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()

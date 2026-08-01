@@ -334,6 +334,7 @@ def evaluate_individual_run(config: InferenceConfig,
                                   model_type=config.model_type,
                                   output_path=config.output_path)
 
+
     if config.extract_logprobs:
 
             plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wers_human_kw"]],
@@ -358,7 +359,14 @@ def evaluate_individual_run(config: InferenceConfig,
 
             boxplot_microscopic_corr_per_listener(
                 df_single_run[["entropies_kw", "listener", "model_type", "references_kw","human_transcripts_kw",
-                               "estimated_transcript_keywords_indices", "machine_transcripts"]],
+                               "estimated_transcript_kw_idx"]],
+                x_2="human_transcripts_kw",
+                output_path=config.output_path)
+
+            boxplot_microscopic_corr_per_listener(
+                df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "human_transcripts_kw",
+                               "estimated_transcript_kw"]],
+                x_2="estimated_transcript_kw",
                 output_path=config.output_path)
 
     with open(config.output_path / "summary.json", 'w') as f:
@@ -515,6 +523,7 @@ def get_data_whisper(output_path: Path,
         entropies_kw = []
         average_macroscopic_entropy = []
         estimated_transcript_keywords_indices = []
+        estimated_transcript_keywords = []
 
         counter = 0
         error_counter = 0
@@ -567,27 +576,34 @@ def get_data_whisper(output_path: Path,
             # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
-            transcript_keywords_indices = cast(list[int | None], get_only_keywords_with_different_approaches(
+
+            estimated_transcript_kw_idx = cast(list[int | None], get_only_keywords_with_different_approaches(
                  reference_kw=row["references_kw"].split(),
                  transcript=decoded_tokens_without_timestamp_tokens,
                  return_idx=True))
+            estimated_transcript_kw = cast(list[int | None], get_only_keywords_with_different_approaches(
+                reference_kw=row["references_kw"].split(),
+                transcript=decoded_tokens_without_timestamp_tokens,
+                return_idx=False))
             #transcript_keywords_indices = [1,3,4]
-            estimated_transcript_keywords_indices.append(transcript_keywords_indices)
-            assert len(transcript_keywords_indices) == 3
+            estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
+            estimated_transcript_keywords.append(estimated_transcript_kw)
+            assert len(estimated_transcript_kw_idx) == 3
 
-            tmp_found_kw = np.sum([1 for o in transcript_keywords_indices if o is not None])
+            tmp_found_kw = np.sum([1 for o in estimated_transcript_kw_idx if o is not None])
             found_kw += tmp_found_kw
             no_kw_in_sentence_found += tmp_found_kw == 0
 
             tmp_wk_entropy = []
-            for idx in transcript_keywords_indices:
+            for idx in estimated_transcript_kw_idx:
                 tmp_wk_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
             del entropies_per_token
             counter += 1
             entropies_kw.append(tmp_wk_entropy)
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy
-        df["estimated_transcript_keywords_indices"] = estimated_transcript_keywords_indices
+        df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
+        df["estimated_transcript_kw"] = estimated_transcript_keywords
         df["entropies_kw"] = entropies_kw
 
         print(f"{error_counter = }")
@@ -776,7 +792,7 @@ def get_data_parakeet(output_path: Path,
             entropies_kw.append(tmp_wk_entropy)
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy
-        df["estimated_transcript_keywords_indices"] = estimated_transcript_keywords_indices
+        df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
         df["entropies_kw"] = entropies_kw
 
         print(f"{error_counter = }")
