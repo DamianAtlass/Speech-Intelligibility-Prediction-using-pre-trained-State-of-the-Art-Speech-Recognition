@@ -3,6 +3,8 @@ from pathlib import Path
 from dataclasses import dataclass, fields, is_dataclass, asdict
 import yaml
 from typing import Any
+from utils.config_dataclasses import InferenceConfig as OldInferenceConfig, TrainingConfig as OldTrainingConfig
+
 from utils.paths import _PROJECT_ROOT
 
 
@@ -109,6 +111,50 @@ def save_config(config: TrainingConfig | InferenceConfig, path: Path) -> None:
     with open(str(path), 'w') as file:
         yaml.dump(config_dict, file, indent=4, sort_keys=False)
 
+def convert_old_config_into_new(config: OldTrainingConfig | OldInferenceConfig) -> TrainingConfig|InferenceConfig:
+
+    if isinstance(config, OldTrainingConfig):
+        config_dict = {
+             'data': {
+                 'test_split':
+                     {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type},
+                 'train_split':
+                     {'end': config.train_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type},
+                 'val_split':
+                     {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type}},
+            'batch_size': config.batch_size,
+             'dataset_scaling': config.dataset_scaling,
+             'debug': config.debug,
+             'learning_rate': config.learning_rate,
+             'num_train_epochs': config.num_train_epochs,
+             'output_path': config.output_path,
+             'perform_training': config.perform_training,
+             'save_and_eval_per_epoch': config.save_and_eval_per_epoch,
+             'task_type': 'training',
+             'warmup_steps': config.warmup_steps
+        }
+
+    elif isinstance(config, OldInferenceConfig):
+        config_dict = {
+            'data':{
+                'test_split':
+                    {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type},
+                'train_split':
+                    {'end': config.train_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type},
+                'val_split':
+                    {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'type': config.dataset_type}},
+            'beam_size': config.beam_size,
+            'extract_logprobs': config.extract_logprobs,
+            'output_path': config.output_path,
+            'task_type': 'inference',
+            'word_timestamps': config.word_timestamps,
+            'dataset_scaling': config.dataset_scaling,
+            'debug': config.debug,
+            }
+    else:
+        raise RuntimeError
+
+    return from_dict(TrainingConfig if config_dict["task_type"]=="training" else InferenceConfig, config_dict)
 
 if __name__ == '__main__':
      # split_config = SplitConfig(**{"start": 0.0, "end": 1.0})

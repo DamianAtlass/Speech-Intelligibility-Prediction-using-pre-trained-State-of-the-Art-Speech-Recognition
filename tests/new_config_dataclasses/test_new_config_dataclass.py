@@ -2,8 +2,9 @@ from utils.paths import TEST_FOLDER, _PROJECT_ROOT
 from pathlib import Path, PosixPath
 import pytest
 from utils.new_config_dataclass import TrainingConfig, InferenceConfig, DatasetConfig, DataSplitConfig, BaseConfig, \
-    load_config, from_dict, save_config
+    load_config, from_dict, save_config, convert_old_config_into_new
 import os
+from utils.config_dataclasses import get_config as get_old_config
 CONFIG_TEST_FOLDER = TEST_FOLDER/"new_config_dataclasses"
 
 
@@ -40,7 +41,6 @@ config_dict = [
  'word_timestamps': False,
  'dataset_scaling': 0.5,
  'debug': True,
-
  }
 ]
 
@@ -109,3 +109,13 @@ def test_correct_writing_of_file(predefined_config):
     assert loaded_config == predefined_config
     if path.exists():
         os.remove(path)
+
+@pytest.mark.parametrize(("path_old_config", "expected_class"), [
+    (TEST_FOLDER/"config_dataclasses/test_inference_config.ini", InferenceConfig),
+    (TEST_FOLDER/"config_dataclasses/test_training_config.ini", TrainingConfig)
+])
+def test_convert_old_config_into_new(path_old_config: Path, expected_class):
+    old_config = get_old_config(path_old_config)
+    new_config = convert_old_config_into_new(old_config)
+    assert isinstance(new_config, expected_class)
+
