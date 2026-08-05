@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import pytest
 from utils.paths import TEST_FOLDER
-from utils.config_dataclasses import get_config, unfold_config, to_int_or_float
+from utils.config_dataclasses import old_get_config, old_unfold_config, to_int_or_float
 
 CONFIG_TEST_FOLDER = TEST_FOLDER/"config_dataclasses"
 
@@ -19,11 +19,11 @@ def test_loading_and_saving(file_name):
     if tmp_file.exists():
         os.remove(tmp_file)
 
-    config = get_config(file_path)
+    config = old_get_config(file_path)
 
     config.save_to_file(tmp_file)
 
-    new_config = get_config(tmp_file)
+    new_config = old_get_config(tmp_file)
 
     assert config == new_config
 
@@ -35,7 +35,7 @@ def test_loading_bad_file(file_name = "test_training_config_bad.ini"):
 
     file_path = CONFIG_TEST_FOLDER/file_name
     try:
-        get_config(file_path)
+        old_get_config(file_path)
     except ValueError:
         assert True
 
@@ -49,9 +49,9 @@ def test_loading_bad_file(file_name = "test_training_config_bad.ini"):
 ])
 def test_unfold_config(file_name, length):
     file_path = CONFIG_TEST_FOLDER / file_name
-    config = get_config(file_path)
+    config = old_get_config(file_path)
 
-    configs = unfold_config(config)
+    configs = old_unfold_config(config)
 
     assert len(configs) == length
 

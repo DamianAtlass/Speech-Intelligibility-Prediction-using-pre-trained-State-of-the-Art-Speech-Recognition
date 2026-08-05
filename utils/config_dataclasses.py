@@ -68,7 +68,7 @@ class Config:
             else:
                 raise FileExistsError(f"Config file already exists! \nPath: {path}")
 
-        save_to_file(self, path, printing_template, len(fields(Config)) )
+        old_save_to_file(self, path, printing_template, len(fields(Config)))
 
     def get_list_fields(self) -> list[str]:
         """
@@ -85,7 +85,7 @@ class Config:
         return getattr(self, key, default)
 
 @dataclass(kw_only=True)
-class TrainingConfig(Config):
+class Old_TrainingConfig(Config):
     perform_training: bool
     learning_rate: float
     num_train_epochs: int
@@ -116,10 +116,10 @@ class TrainingConfig(Config):
             'warmup_steps',
         ]
 
-        save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config) ))
+        old_save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config)))
 
 @dataclass(kw_only=True)
-class InferenceConfig(Config):
+class Old_InferenceConfig(Config):
     extract_logprobs: bool = True
     word_timestamps: bool = True
     beam_size: int | list[int] = 5
@@ -148,9 +148,9 @@ class InferenceConfig(Config):
             'beam_size',
         ]
 
-        save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config)) )
+        old_save_to_file(self, path, printing_template, len(fields(type(self))) - len(fields(Config)))
 
-def get_config(path: Path) -> TrainingConfig | InferenceConfig:
+def old_get_config(path: Path) -> Old_TrainingConfig | Old_InferenceConfig:
     config_parser = configparser.RawConfigParser()
     # configParser.optionxform = str  # preserve original case
     config_parser.read(path)
@@ -162,16 +162,16 @@ def get_config(path: Path) -> TrainingConfig | InferenceConfig:
         for k, v in config_parser[section].items():
             tmp[k] = v
     if "TrainingConfig" in config_parser.sections():
-        return TrainingConfig(**tmp)
+        return Old_TrainingConfig(**tmp)
     elif "InferenceConfig" in config_parser.sections():
-        return InferenceConfig(**tmp)
+        return Old_InferenceConfig(**tmp)
 
     raise ValueError("Not a valid config file!")
 
-def save_to_file(config: Config | TrainingConfig | InferenceConfig,
-                 path: Path,
-                 printing_template: list[str],
-                 num_args_to_write: int) -> None:
+def old_save_to_file(config: Config | Old_TrainingConfig | Old_InferenceConfig,
+                     path: Path,
+                     printing_template: list[str],
+                     num_args_to_write: int) -> None:
 
     value_counter = 0
     with open(path, "a") as f:
@@ -196,7 +196,7 @@ def save_to_file(config: Config | TrainingConfig | InferenceConfig,
 
     assert num_args_to_write == value_counter, "Wrong number of arguments written to config file!"
 
-def unfold_config(config: TrainingConfig | InferenceConfig) -> list[Config]:
+def old_unfold_config(config: Old_TrainingConfig | Old_InferenceConfig) -> list[Config]:
     """
     If a config file has multiple values for specific parameters, this function will unfold them into multiple individual configs.
     If it is a 'normal' config file, it should be returned as only object in the list.

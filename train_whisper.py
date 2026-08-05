@@ -7,12 +7,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Union
 import evaluate
 metric = evaluate.load("wer")
-from utils.config_dataclasses import TrainingConfig
+from utils.new_config_dataclass import TrainingConfig
 from utils.logging_utils import capture_stdout, catch_time
 import os
 import json
 from math import ceil
-from utils.dataset_utils import get_dataset, apply_split
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,35 +48,21 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.device):
 
-    if "val" in dataset.keys():
-        dataset.pop("val")
-    del dataset # needs to be fully integrated in config
-    train_dataset = get_dataset("grid", add_noise=True)
-    train_dataset = apply_split(train_dataset, train_split=1., test_split=0, val_split=0)
-
-    test_dataset = get_dataset("grid_bc", add_noise=False)
-    test_dataset = apply_split(test_dataset, train_split=0, test_split=.2, val_split=0)
-
-    dataset = DatasetDict(
-        {"train": train_dataset["train"],
-         "test": test_dataset["test"], }
-    )
-
-    full_model_name = f"{config.model}-{config.model_type}"
+    full_model_name = f"{config.model.name}-{config.model.model_type}"
 
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
         logger.warning("No HF_TOKEN!")
 
-    if config.model != "whisper":
+    if config.model.name != "whisper":
         raise ValueError("Wrong model.")
 
-    if config.model_type not in available_models():
+    if config.model.model_type not in available_models():
         raise ValueError("That is not an available model!")
     logger.info("load feature extractor")
     feature_extractor = WhisperFeatureExtractor.from_pretrained(f"openai/{full_model_name}", token=hf_token)
 
-    language = None if "en" in config.model_type else "English"
+    language = None if "en" in config.model.model_type else "English"
     tokenizer = WhisperTokenizer.from_pretrained(f"openai/{full_model_name}",
                                                  language=language,
                                                  task="transcribe",

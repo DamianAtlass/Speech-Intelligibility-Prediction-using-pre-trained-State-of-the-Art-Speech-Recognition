@@ -1,0 +1,28 @@
+output_path: trained_models/delete_me
+task_type: training
+data:
+    train_split:
+        dataset_type: grid
+        path: null
+        start: 0
+        end: 1.
+        noise: true
+        scaling: 1.0
+    test_split:
+        dataset_type: grid_bc
+        path: null
+        start: 0
+        end: 0.2
+        noise: false
+        scaling: 1.0
+model:
+    name: whisper
+    model_type: base
+    path: null
+debug: true
+perform_training: true
+learning_rate: 1.0e-05
+num_train_epochs: 2
+batch_size: 16
+save_and_eval_per_epoch: 5
+warmup_steps: 500

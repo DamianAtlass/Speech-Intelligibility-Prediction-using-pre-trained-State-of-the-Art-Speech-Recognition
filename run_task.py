@@ -25,19 +25,19 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 
 # custom imports
-from utils.config_dataclasses import get_config, TrainingConfig, InferenceConfig, unfold_config
+from utils.new_config_dataclass import InferenceConfig, TrainingConfig, load_config, save_config
 from train_whisper import train_whisper
 from inference import inference
 from utils.cuda_utils import select_device
 from utils.logging_utils import catch_time
-from utils.dataset_utils import get_dataset, apply_split
+from utils.dataset_utils import get_dataset_dict
 from evaluate_run import evaluate_run
 
 INDIVIDUAL_WHISPER_MODELS = ['tiny.en', 'tiny', 'base.en', 'base', 'small.en', 'small', 'medium.en', 'medium', 'large-v1', 'large-v2', 'large-v3', 'large-v3-turbo']
 
 print("Imports done!")
 
-def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
+def create_logger(output_path: Path) -> logging.Logger:
     """
     Create a logger. Needs to happen in this file!
     config: InferenceConfig | TrainingConfig, contains output path
@@ -47,7 +47,7 @@ def create_logger(config: InferenceConfig | TrainingConfig) -> logging.Logger:
         level=logging.INFO, #dont set to DEBUG
         format='%(asctime)s:%(name)s:%(levelname)s: %(message)s',
         handlers=[
-            logging.FileHandler(config.output_path / "logfile.log", mode='w'),
+            logging.FileHandler(output_path / "logfile.log", mode='w'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -75,60 +75,35 @@ def main():
     load_dotenv()
 
     config_path = Path(parser.parse_args().f)
-
-    config = get_config(config_path)
+    config = load_config(config_path)
 
     Path.mkdir(config.output_path.parent, exist_ok=True)
     if config.output_path.exists() and "delete_me" in config.output_path.name and config.debug:
         shutil.rmtree(config.output_path)
     Path.mkdir(config.output_path, exist_ok=config.debug)
 
-    logger = create_logger(config)
-    logger.info("Logger instantiated")
+    logger = create_logger(config.output_path)
+    logger.info("Logger instantiated.")
 
-    # check for fields that are lists, implying multiple tasks / group task
-
-    logger.info("Unfold configs")
-    configs = unfold_config(config)
-    logger.info(f"New configs: {len(configs)}")
-
-
-    if len(configs) > 1:
-        copyfile(Path.cwd()/config_path, config.output_path/"config.ini")
-
-    logger.info("Set devices")
+    logger.info("Set cuda device...")
     device = select_device()
 
+    logger.info(f"Save to {config.output_path.relative_to(Path.cwd())}")
+    logger.info(f"Task config: {config}")
+
+    save_config(config, config.output_path/"config.yaml")
+
+    dataset: DatasetDict = get_dataset_dict(config.data)
     with catch_time() as t:
-        for i, current_config in enumerate(configs):
-            logger.info(f"Task: {i+1}/{len(configs)}, save to {current_config.output_path.relative_to(Path.cwd())}")
-            logger.info(f"Task config: {current_config}")
-            if len(configs) > 1:
-                Path.mkdir(current_config.output_path, exist_ok=current_config.debug)
+        if isinstance(config, TrainingConfig):
+            logger.info(f"Enter training")
+            train_whisper(config, dataset, device)
+        if isinstance(config, InferenceConfig):
+            logger.info(f"Enter inference")
+            inference(config, dataset, device)
+    logger.info(f"Execution time: {t()/3600:.2f} h")
 
-            current_config.save_to_file(current_config.output_path/"config.ini")
-
-            logger.info(f"Task: {i+1}/{len(configs)}, get dataset")
-            dataset: Dataset= get_dataset(current_config.dataset_type)
-
-            logger.info(f"Task: {i+1}/{len(configs)}, apply split")
-            dataset: DatasetDict= apply_split(dataset,
-                                              current_config.train_split,
-                                              current_config.test_split,
-                                              current_config.val_split,
-                                              current_config.dataset_scaling)
-
-            with catch_time() as t2:
-                if isinstance(current_config, TrainingConfig):
-                    logger.info(f"Task: {i + 1}/{len(configs)}, enter training")
-                    train_whisper(current_config, dataset, device)
-                if isinstance(current_config, InferenceConfig):
-                    logger.info(f"Task: {i + 1}/{len(configs)}, enter inference")
-                    inference(current_config, dataset, device)
-            logger.info(f"Task: {i+1} - execution time: {i + 1}: {t2()/3600:.2f} h")
-
-    logger.info(f"Execution time of all tasks: {t()/3600:.2f} h")
-    logger.info(f"All tasks are finished!")
+    logger.info(f"Tasked finished!")
     if isinstance(config, InferenceConfig):
         logger.info("Evalute run.")
         evaluate_run(config.output_path, device)

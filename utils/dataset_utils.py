@@ -17,6 +17,7 @@ from utils.manipulate_audio import add_noise_transformation
 WANTED_SAMPLE_RATE = 16_000
 SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 from utils.paths import GRID_FOLDER, BC_FOLDER
+from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
 
 
 
@@ -25,28 +26,40 @@ default_dataset_paths = {
     "grid_bc": BC_FOLDER
 }
 
-def _get_dataset(dataset_type: str, dataset_path: Path = None) -> Dataset:
+def _get_dataset(dataset_type: str,
+                 path: Path|None) -> Dataset:
+    if dataset_type not in default_dataset_paths.keys():
+        raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
 
-    if not dataset_path:
+    if not path:
         dataset_path = default_dataset_paths[dataset_type]
+    else:
+        dataset_path = path
 
-    if dataset_type=="grid":
-        return get_grid(dataset_path if dataset_path else default_dataset_paths[dataset_type])
-    elif dataset_type=="grid_bc":
-        return get_grid_bc(dataset_path if dataset_path else default_dataset_paths[dataset_type])
-    raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
+    return get_grid(dataset_path)
 
-def get_dataset(dataset_type: str, dataset_path: Path|None = None, add_noise: bool = False) -> Dataset:
-    dataset = _get_dataset(dataset_type, dataset_path)
+def get_dataset(split: DataSplitConfig) -> Dataset:
+
+    dataset = _get_dataset(split.dataset_type, split.path)
     dataset = dataset.shuffle(seed=0)
-    
-    if add_noise:
-        if dataset_type=="grid_bc":
-            raise ValueError("Do you really wanna do this?")
+    dataset = apply_split(dataset, split.start, split.end, split.scaling)
+    if split.noise:
         dataset = add_noise_to_dataset(dataset)
+
     return dataset
 
-def add_noise_to_dataset(dataset: Dataset):
+def get_dataset_dict(config: DatasetConfig) -> DatasetDict:
+    dataset_dict = {}
+    for split, label in zip([config.train_split, config.test_split, config.val_split], ["train", "test", "val"]):
+        if split is None:
+            continue
+        dataset = get_dataset(split)
+        dataset_dict[label] = dataset
+
+    dataset_dict = DatasetDict(dataset_dict)
+    return dataset_dict
+
+def add_noise_to_dataset(dataset: Dataset) -> Dataset:
     logger.info(f"Add noise to all {len(dataset)} samples.")
     rng = np.random.default_rng(0)
     dataset = dataset.add_column("snr", rng.choice(SNRS, size=len(dataset)))
@@ -54,10 +67,9 @@ def add_noise_to_dataset(dataset: Dataset):
     return dataset
 
 def apply_split(dataset : Dataset,
-                train_split: int | float,
-                test_split: int | float,
-                val_split: int | float,
-                dataset_scaling: int | float = 1) -> DatasetDict:
+                start: int | float = 0,
+                end: int | float = 1.,
+                scaling: int | float = 1) -> Dataset:
     """
     Split the dataset depending on the given parameters.
 
@@ -68,37 +80,14 @@ def apply_split(dataset : Dataset,
         return cast(int, int(n * len_) if isinstance(n, float) else n)
 
     l = len(dataset)
-    train_size = calculate_size(l, train_split)
-    test_size = calculate_size(l, test_split)
-    val_size = calculate_size(l, val_split)
+    start = calculate_size(l, start)
+    end = calculate_size(l, end)
 
-    d = {}
-    for label, split_value in zip(["train", "test", "val"], [train_size, test_size, val_size]):
-        if split_value == 0:
-            continue
+    start = int(start * scaling)
+    end = int(end * scaling)
 
-        elif split_value == l:
-            d[label] = dataset
-            l = 0
+    if not (start == 0 and end == len(dataset)):
+        dataset =  dataset.select(range(start, end))
 
-        else:
-            split = dataset.train_test_split(
-                train_size=split_value,
-                shuffle=False,
-            )
-            d[label] = split["train"]
-            dataset = split["test"]
-            l = len(dataset)
 
-    dataset_dict = DatasetDict(d)
-
-    if dataset_scaling != 1:
-        for split in ["train", "test", "val"]:
-            try:
-                dataset_dict[split] = dataset_dict[split].select(range(
-                    int(len(dataset_dict[split]) * dataset_scaling)
-                ))
-            except KeyError as e:
-                pass
-
-    return dataset_dict
+    return dataset

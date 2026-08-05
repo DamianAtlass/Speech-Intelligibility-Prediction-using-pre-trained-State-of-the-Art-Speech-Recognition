@@ -4,7 +4,7 @@ from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader
 
-from utils.config_dataclasses import InferenceConfig
+from utils.new_config_dataclass import InferenceConfig
 import numpy as np
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -19,7 +19,7 @@ from typing import Callable
 
 def load_parakeet_model(config: InferenceConfig, device: torch.device):
     model: EncDecCTCModelBPE = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
-        model_name=f"nvidia/{config.model}-{config.model_type}").to(device)
+        model_name=f"nvidia/{config.model.name}-{config.model.model_type}").to(device)
     return model
 
 def get_collate_fn(device: torch.device) -> Callable:

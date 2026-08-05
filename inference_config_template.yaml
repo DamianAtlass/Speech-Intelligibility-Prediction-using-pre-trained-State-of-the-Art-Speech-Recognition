@@ -1,0 +1,18 @@
+output_path: inferences/delete_me
+task_type: inference
+data:
+    val_split:
+        dataset_type: grid_bc
+        path: null
+        start: 295
+        end: 296
+        noise: false
+        scaling: 1.0
+model:
+    name: whisper
+    model_type: tiny
+    path: null
+debug: true
+extract_logprobs: true
+word_timestamps: false
+beam_size: 5

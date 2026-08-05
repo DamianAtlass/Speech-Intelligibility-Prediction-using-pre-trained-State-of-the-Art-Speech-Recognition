@@ -1,41 +1,38 @@
 from inference import inference
 import pytest
-from pathlib import Path
 
-from utils.config_dataclasses import InferenceConfig
-from utils.dataset_utils import get_dataset, apply_split
+from utils.new_config_dataclass import DataSplitConfig, DatasetConfig, InferenceConfig, ModelConfig
+from utils.dataset_utils import get_dataset_dict
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch'!
 import torch
 import shutil
 import json
-from utils.paths import TEST_FOLDER, GRID_FOLDER
+from utils.paths import TEST_FOLDER
 
 def test_logprob_extraction():
     config = InferenceConfig(
-        model="whisper",
-        model_type="tiny",
-        model_path=None,
-        output_path=TEST_FOLDER/"logprob_extraction",
-        dataset_type="grid",
-        dataset_path=GRID_FOLDER,
-        train_split=0,
-        test_split=0,
-        val_split=1,
+        output_path=TEST_FOLDER / "inference_test",
+        task_type='inference',
+        data=DatasetConfig(
+            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+        debug=False,
         extract_logprobs=True,
-        word_timestamps=False,
-        beam_size=5
+        word_timestamps=False, # has no effect here
+        beam_size=5,
+        model=ModelConfig(name="whisper", model_type="tiny", path=None),
     )
+
     if config.output_path.exists():
         shutil.rmtree(config.output_path)
 
-    dataset = get_dataset("grid", dataset_path=GRID_FOLDER)
-    dataset = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
+    dataset_dict = get_dataset_dict(config.data)
     config.output_path.mkdir(exist_ok=config.debug)
-    inference(config, dataset, torch.device("cuda"))
-    with open(str(TEST_FOLDER/"logprob_extraction"/"data"/"s26_pwwizs.json")) as f:
+    inference(config, dataset_dict, torch.device("cuda"))
+    print((TEST_FOLDER/"inference_test"/"data"/"s26_pwwizs.json").exists())
+    with open(str(TEST_FOLDER/"inference_test"/"data"/"s26_pwwizs.json")) as f:
         data = json.load(f)
-    tensor = torch.load(TEST_FOLDER/"logprob_extraction"/"logprobs"/"s26_pwwizs.pt")
+    tensor = torch.load(TEST_FOLDER/"inference_test"/"logprobs"/"s26_pwwizs.pt")
     print()
 
     tokens = data["prediction_result"]["decoded_tokens_with_timestamps"]

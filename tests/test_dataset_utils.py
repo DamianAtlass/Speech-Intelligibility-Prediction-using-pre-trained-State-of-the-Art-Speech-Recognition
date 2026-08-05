@@ -1,7 +1,7 @@
-from utils.config_dataclasses import Config
-from utils.dataset_utils import get_dataset, apply_split
+
+from utils.new_config_dataclass import DataSplitConfig, DatasetConfig
+from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset
 from datasets import Dataset, DatasetDict
-from pathlib import Path
 import pytest
 
 from utils.grid_utils import get_grid
@@ -12,77 +12,51 @@ from utils.paths import TEST_GRID_FOLDER, TEST_BC_FOLDER, GRID_FOLDER, BC_FOLDER
     ("grid", TEST_GRID_FOLDER, 2000),
     ("grid_bc", TEST_BC_FOLDER, 24)
 ])
-def test_get_dataset(dataset_type, dataset_path, l):
-    dataset: Dataset = get_dataset(dataset_type=dataset_type, dataset_path=dataset_path)
+def test__get_dataset(dataset_type, dataset_path, l):
+    dataset: Dataset = get_dataset(DataSplitConfig(dataset_type=dataset_type, path=dataset_path, start=0, end=l, noise=False))
     assert isinstance(dataset, Dataset)
     assert l == len(dataset)
 
 def test_get_dataset_exception():
     try:
-        dataset: Dataset = get_dataset(dataset_type="asdf", add_noise=False)
-    except KeyError:
+        dataset: Dataset = get_dataset(DataSplitConfig(dataset_type="sdfs", path="dataset_path", start=0, end=10, noise=False))
+    except NotImplementedError:
         assert True
 
 
-@pytest.mark.parametrize(("split", "resulting_size"), [
-        ((0.7, 0.2, 0.1, 1), (23_800, 6800, 3400)),
-        ((0.5, 0.35, 0.15, 1), (17000, 11900, 5100)),
-        ((0.5, 0.1, 0.1, 1), (17000, 3400, 3400)),
-        ((0.8, 0.2, 0, 1), (27200, 6800, 0)),
-        ((1, 2, 3, 1), (1, 2, 3)),
-        ((0.5, 0.1, 0.1, 0.5), (8500, 1700, 1700)),
-        ((100, 101, 102, 1), (100, 101, 102)),
-        ((1., 0, 0, 1), (34000, 0, 0)),
-        ((0, 1., 0, 1), (0, 34000, 0)),
-        ((0, 0, 1., 1), (0, 0, 34000)),
-        ((10, 10, 0, 1), (10, 10, 0)),
-        ((10, 0, 10, 1), (10, 0, 10)),
-        ((0, 10, 10, 1), (0, 10, 10)),
+@pytest.mark.parametrize(("start", "end", "scaling", "expected_size"), [
+    (0, 34_000, 1, 34_000),
+    (0, 20_000, 1, 20_000),
+    (0, 20_000, 0.5, 10_000),
+    (0, 5_000, 1, 5_000),
+    (5_000, 10_000, 1, 5_000),
 ])
-def test_apply_split(split: tuple, resulting_size: tuple):
+def test_apply_split(start, end, scaling, expected_size: int):
     dataset = get_grid(GRID_FOLDER) # len == 34,000
-
-    dataset_dict = apply_split(dataset, *split)
-
-    for s, n in zip(["train", "test", "val"], [0,1,2]):
-        if resulting_size[n] != 0:
-            assert len(dataset_dict[s]) == resulting_size[n]
-        else:
-            try:
-                assert len(dataset_dict[s]) == resulting_size[n]
-                assert False
-            except KeyError:
-                assert True
-
-
-@pytest.mark.parametrize(("scale", "resulting_size"), [
-    (1, 34000),
-    (0.5, 17000)
-])
-def test_apply_split_for_full_val_split(scale: int | float, resulting_size: int):
-    dataset = get_grid(GRID_FOLDER) # len == 34,000
-    config = Config(model="",
-                    model_type="",
-                    model_path=Path(""),
-                    output_path=Path("tests/inference_test"),
-                    dataset_type="grid",
-                    dataset_path=Path("datasets/grid/"),
-                    train_split=0,
-                    test_split=0,
-                    val_split=1.,
-                    dataset_scaling=scale)
-
-    dataset_dict = apply_split(dataset, config.train_split, config.test_split, config.val_split, config.dataset_scaling)
-    assert len(dataset_dict["val"]) == resulting_size
+    dataset = apply_split(dataset, start=start, end=end, scaling=scaling)
+    assert len(dataset) == expected_size
 
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path"), [
     ("grid", GRID_FOLDER),
     ("grid_bc", BC_FOLDER),
 ])
-def test_get_dataset_and_add_noise(dataset_type, dataset_path):
-    try:
-        dataset  = get_dataset(dataset_type=dataset_type, dataset_path=dataset_path, add_noise=True)
-        assert dataset_type=="grid"
-    except ValueError:
-        assert dataset_type=="grid_bc"
+def test_add_noise(dataset_type, dataset_path):
+    dataset = get_dataset(DataSplitConfig(dataset_type=dataset_type, path=dataset_path, start=0, end=1, noise=True))
+
+    assert isinstance(dataset, Dataset)
+
+
+def test_get_dataset():
+    config = DataSplitConfig(dataset_type="grid", path=None, start=0, end=10, scaling=1, noise=True)
+    dataset: Dataset = get_dataset(config)
+    assert isinstance(dataset, Dataset)
+
+def test_get_dataset_dict():
+    dataset_config = DatasetConfig(
+        train_split= DataSplitConfig(dataset_type="grid", path=None, start=0, end=1., scaling=1, noise=True),
+        test_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=0, end=.2, scaling=1, noise=False),
+        val_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=.2, end=1., scaling=1, noise=False),
+    )
+    data_dict = get_dataset_dict(dataset_config)
+    assert isinstance(data_dict, DatasetDict)

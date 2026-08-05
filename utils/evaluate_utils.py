@@ -11,16 +11,16 @@ from scipy.stats import entropy
 import numpy as np
 from tqdm import tqdm
 import os
-from utils.config_dataclasses import Config
-
+from dataclasses import asdict
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
     boxplot_microscopic_corr_per_listener
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
+from utils.dataset_utils import get_dataset
 
 logger = logging.getLogger(__name__)
-from utils.config_dataclasses import InferenceConfig
+from utils.new_config_dataclass import InferenceConfig
 
 from panphon.distance import Distance
 dist = Distance()
@@ -214,17 +214,17 @@ def get_only_keywords_by_accepting_other_options(
         r.extend([None for _ in range(rest)])
     return r
 
-def plot_regr_lines(df: pd.DataFrame, config):
+def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
     summary = []
     #wers_human_kw, wers_machine_kw, avg_logprobs
     # calc person correlation
 
-    # name = f"WER of human result and {config.model}({config.model_type})"
+    # name = f"WER of human result and {config.model.name}({config.model.model_type})"
     # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "wers_machine_kw"]],
     #                                                                   output_path=config.output_path,
     #                                                                   name=name,
     #                                                                   xlabel=f"WER of human results (only keywords)",
-    #                                                                   ylabel=f"WER ({config.model}, only keywords)")
+    #                                                                   ylabel=f"WER ({config.model.name}, only keywords)")
     # summary.append({
     #     "metric": "person correlation",
     #     "of": name,
@@ -234,12 +234,12 @@ def plot_regr_lines(df: pd.DataFrame, config):
     #     "y_normality_p_value": f"{y_normality_p:.10f}",
     # })
 
-    # name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
+    # name = f"the WER of human results and average log probability score of {config.model.name}({config.model.model_type})"
     # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "avg_logprobs"]],
     #                                                                   output_path=config.output_path,
     #                                                                   name=name,
     #                                                                   xlabel=f"WER of human results (only keywords)",
-    #                                                                   ylabel=f"average logprob ({config.model})")
+    #                                                                   ylabel=f"average logprob ({config.model.name})")
     # summary.append({
     #     "metric": "person correlation",
     #     "of": name,
@@ -250,12 +250,12 @@ def plot_regr_lines(df: pd.DataFrame, config):
     # })
 
     # calc spearman correlation
-    name = f"the WER of human transcripts and {config.model}({config.model_type}) whisper transcripts (kw only)"
+    name = f"the WER of human transcripts and {config.model.name}({config.model.model_type}) whisper transcripts (kw only)"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
                                                     output_path=config.output_path,
                                                     name=name,
                                                     xlabel=f"WER of human results (only keywords)",
-                                                    ylabel=f"WER ({config.model}, only keywords)")
+                                                    ylabel=f"WER ({config.model.name}, only keywords)")
 
     summary.append({
         "metric": "spearman correlation",
@@ -264,7 +264,7 @@ def plot_regr_lines(df: pd.DataFrame, config):
         "p_value": f"{p_val:.10f}",
     })
 
-    name = f"the WER of human results and average log probability score of {config.model}({config.model_type})"
+    name = f"the WER of human results and average log probability score of {config.model.name}({config.model.model_type})"
     r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "avg_logprobs"]],
                                                     output_path=config.output_path,
                                                     name=name,
@@ -279,18 +279,15 @@ def plot_regr_lines(df: pd.DataFrame, config):
 
     return summary
 
-from utils.dataset_utils import get_dataset, apply_split
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame,
                             device: torch.device):
     # check for missing rows
-    d = get_dataset(dataset_type=config.dataset_type,dataset_path=config.dataset_path,add_noise=config.add_noise)
-    d = apply_split(d, train_split=config.train_split, test_split=config.test_split,
-                val_split=config.val_split, dataset_scaling=config.dataset_scaling)
-    if len(d["val"])!=len(df_single_run):
+    d = get_dataset(config.data.val_split)
+    if len(d)!=len(df_single_run):
         print(f"Dataframe is missing rows! Expected {len(d["val"])}, got {len(df_single_run)}.")
     del d
-    summary = get_summary(df=df_single_run, dataset_type=config.dataset_type)
+    summary = get_summary(df=df_single_run, dataset_type=config.data.val_split.dataset_type)
 
     metrics = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
 
@@ -298,10 +295,10 @@ def evaluate_individual_run(config: InferenceConfig,
 
     for m in tqdm(metrics):
         plot_metrics(data=[df_single_run[m]],
-                     x_label=[config.model_type],
+                     x_label=[config.model.model_type],
                      output_path=config.output_path)
 
-    if config.dataset_type != "grid":
+    if config.data.val_split.dataset_type != "grid":
         print("Generate correlation plots")
 
         plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts", "snr", "references_kw", "references", "model_type"]],
@@ -318,41 +315,41 @@ def evaluate_individual_run(config: InferenceConfig,
 
         boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
                                   correlate_to="wers_machine_kw",
-                                  model=config.model,
-                                  model_type=config.model_type,
+                                  model=config.model.name,
+                                  model_type=config.model.model_type,
                                   output_path=config.output_path)
 
         boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine", "model_type", "listener"]],
                                   correlate_to="wers_machine",
-                                  model=config.model,
-                                  model_type=config.model_type,
+                                  model=config.model.name,
+                                  model_type=config.model.model_type,
                                   output_path=config.output_path)
 
         boxplot_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
                                   correlate_to="avg_logprobs",
-                                  model=config.model,
-                                  model_type=config.model_type,
+                                  model=config.model.name,
+                                  model_type=config.model.model_type,
                                   output_path=config.output_path)
 
 
     if config.extract_logprobs:
-
+        if config.data.val_split.dataset_type == "grid_bc":
             plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wers_human_kw"]],
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
                           shifting_attribute="model_type",
-                          output_path=config.output_path
-                          )
+                          output_path=config.output_path)
 
+        if config.data.val_split.dataset_type == "grid_bc":
             boxplot_corr_per_listener(
                 df_single_run[["average_macroscopic_entropy", "wers_human_kw", "model_type", "listener"]],
                 correlate_to="average_macroscopic_entropy",
-                model=config.model,
-                model_type=config.model_type,
+                model=config.model.name,
+                model_type=config.model.model_type,
                 output_path=config.output_path)
 
 
-
+        if config.extract_logprobs and config.data.val_split.dataset_type == "grid_bc":
             plot_microscopic_entropy(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
                                      shifting_attribute="model_type",
                                      output_path=config.output_path)

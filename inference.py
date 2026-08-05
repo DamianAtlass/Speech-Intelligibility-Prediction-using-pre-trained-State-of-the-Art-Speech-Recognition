@@ -3,7 +3,7 @@ import torch
 import whisper
 import sip_whisper
 from datasets import Dataset, DatasetDict
-from utils.config_dataclasses import InferenceConfig
+from utils.new_config_dataclass import InferenceConfig
 from typing import Any
 import json
 from pathlib import Path
@@ -37,6 +37,8 @@ class NpEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, torch.Tensor):
+            return obj.item()
         return super(NpEncoder, self).default(obj)
 
 def save_result(sample_dict: dict,
@@ -105,7 +107,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
             result: dict = transcribe_fn(**options)
 
             audio_path = Path(sample["audio_path"])
-            file_name = create_filename(config.dataset_type, sample)
+            file_name = create_filename(config.data.val_split.dataset_type, sample)
 
             if config.extract_logprobs:
                 extracted_logprobs = result.pop("extracted_logprobs")
@@ -154,7 +156,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                     result = asdict(result)
 
 
-                    result_file_name = create_filename(config.dataset_type, sample)
+                    result_file_name = create_filename(config.data.val_split.dataset_type, sample)
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
@@ -165,7 +167,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                     result["alignments_path"] = str(alignments_data_file_path.relative_to(Path.cwd()))
 
                     result["y_sequence"] = [int(a) for a in result["y_sequence"]]
-                    result["score"] = result["score"].item()
+                    result["score"] = result["score"]#.item()
 
                     save_result(sample_dict=dict(sample),
                                 result=result,
@@ -185,9 +187,9 @@ def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.devic
     model = load_model(config, device)
 
     #dataset["val"] = dataset["val"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
-    if config.model =="whisper":
+    if config.model.name =="whisper":
         inference_whisper(config, model, dataset["val"], device)
-    elif config.model =="parakeet":
+    elif config.model.name =="parakeet":
         inference_parekeet(config, model, dataset["val"], device)
     else:
         raise NotImplementedError

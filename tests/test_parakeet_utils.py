@@ -1,29 +1,25 @@
-from utils.config_dataclasses import InferenceConfig
+from utils.new_config_dataclass import InferenceConfig, DatasetConfig, ModelConfig, DataSplitConfig
 from utils.parakeet_utils import load_parakeet_model
-from pathlib import Path
-test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
-from utils.cuda_utils import select_device
 from dotenv import load_dotenv
-from torch.utils.data import DataLoader
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
-from utils.paths import TEST_FOLDER, GRID_FOLDER
+from utils.paths import TEST_FOLDER
 
 def test_load_parakeet_model():
+
+
     config = InferenceConfig(
-        model="parakeet",
-        model_type="ctc-0.6b",
-        model_path=None,
         output_path=TEST_FOLDER,
-        dataset_type="grid",
-        dataset_path=GRID_FOLDER,
-        train_split=0,
-        test_split=0,
-        val_split=1,
+        task_type='inference',
+        data=DatasetConfig(
+            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+        debug=False,
         extract_logprobs=False,
-        word_timestamps=False,
-        beam_size=2
+        word_timestamps=False,  # has no effect here
+        beam_size=2,
+        model=ModelConfig(name="parakeet", model_type="ctc-0.6b", path=None),
     )
+    #dont load cudo here with select_device function. GPU could still be a bit busy
     model = load_parakeet_model(config, torch.device("cpu"))
     assert isinstance(model, EncDecCTCModelBPE)
