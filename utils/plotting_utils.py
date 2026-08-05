@@ -21,6 +21,7 @@ labels_dict = {
     "wers_machine_kw": "WER machine (keywords only)",
     'avg_logprobs': "Logprob (per sequence)",
     "machine_transcripts_len": "length of transcripts",
+    "empty transcripts": "Amount of empty transcrips in %"
 }
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
@@ -223,7 +224,11 @@ def plot_x_to_snr(df: pd.DataFrame,
         values_per_df = []
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
-            value = np.mean(df_snr[plotting_attribute].values)
+            if plotting_attribute == "empty transcripts":
+                value = sum(df_snr["machine_transcripts"] == "") / len(df_snr)
+            else:
+                v = torch.tensor(df_snr[plotting_attribute].values)
+                value = torch.mean(v[~v.isnan()])
             values_per_df.append(value)
         values.append(torch.tensor(values_per_df))
 
@@ -234,7 +239,7 @@ def plot_x_to_snr(df: pd.DataFrame,
     for mv,l in zip(values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"{labels_dict[plotting_attribute]} {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"{labels_dict[plotting_attribute]} for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")

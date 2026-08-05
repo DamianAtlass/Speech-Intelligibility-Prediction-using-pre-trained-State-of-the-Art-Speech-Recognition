@@ -299,7 +299,11 @@ def evaluate_individual_run(config: InferenceConfig,
                      output_path=config.output_path)
 
     if config.data.val_split.dataset_type != "grid":
-        print("Generate correlation plots")
+        plot_x_to_snr(df=df_single_run[["machine_transcripts", "snr", "model_type"]],
+                      plotting_attribute="empty transcripts",
+                      shifting_attribute_label="whisper",
+                      shifting_attribute="model_type",
+                      output_path=config.output_path)
 
         plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts", "snr", "references_kw", "references", "model_type"]],
                         only_kw=False,
@@ -311,6 +315,7 @@ def evaluate_individual_run(config: InferenceConfig,
                         shifting_attribute="model_type",
                         output_path=config.output_path)
 
+        print("Generate correlation plots")
         corr_summary = plot_regr_lines(df_single_run, config)
 
         boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
@@ -512,9 +517,6 @@ def get_data_whisper(output_path: Path,
     df = pd.DataFrame(data)
 
     # evaluate logprobs
-    found_kw = 0
-    no_kw_in_sentence_found = 0
-
     if extract_logprobs:
         print("Evaluate logprobs")
         entropies_kw = []
@@ -523,90 +525,87 @@ def get_data_whisper(output_path: Path,
         estimated_transcript_keywords = []
 
         counter = 0
-        error_counter = 0
+        no_transcript_counter = 0
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
             #load logprobs
-            if row["logprobs_paths"] == "":
-                error_counter += 1
-                continue
-            logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
-                row["logprobs_paths"]).name
-            logprob_tensor = torch.load(logprob_path)
+            if no_transcript:=(row["logprobs_paths"] == ""):
+                no_transcript_counter += 1
+            if not no_transcript:
+                logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
+                    row["logprobs_paths"]).name
+                logprob_tensor = torch.load(logprob_path)
 
-            # calculate entropy
-            posteriors = logprob_tensor.exp()
-            del logprob_tensor
-            decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
-            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
-            entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
-            del posteriors
-            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+                # calculate entropy
+                posteriors = logprob_tensor.exp()
+                del logprob_tensor
+                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+                assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
+                assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+                entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+                del posteriors
+                assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
-            # rm timestamp tokens
-            no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
-                           decoded_tokens_with_timestamps]
-            entropies_per_token = entropies_per_token[no_timestamp_idx]
-            decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if
-                                                       b]
-            del decoded_tokens_with_timestamps
+                # rm timestamp tokens
+                no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
+                               decoded_tokens_with_timestamps]
+                entropies_per_token = entropies_per_token[no_timestamp_idx]
+                decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if
+                                                           b]
+                del decoded_tokens_with_timestamps
 
-            average_macroscopic_entropy.append(float(entropies_per_token.mean()))
+                average_macroscopic_entropy.append(float(entropies_per_token.mean()))
+                counter+=1
 
-            # get kw specific entropy
-            decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in
-                                                       decoded_tokens_without_timestamp_tokens]
-            ## find "correct" kw position
-            decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
-                                                                apply_separate_numbers_from_letter=False,
-                                                                apply_numbers_to_words=True,
-                                                                apply_werpy_normalize=False)
+                # get kw specific entropy
+                decoded_tokens_without_timestamp_tokens = [o.lower().strip() for o in
+                                                           decoded_tokens_without_timestamp_tokens]
+                ## find "correct" kw position
+                decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
+                                                                    apply_separate_numbers_from_letter=False,
+                                                                    apply_numbers_to_words=True,
+                                                                    apply_werpy_normalize=False)
 
-            # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
-            #                                                       decoded_tokens_without_timestamp_tokens,
-            #                                                       return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
-            #                                                                      decoded_tokens_without_timestamp_tokens,
-            #                                                                      return_idx=True)
-            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
-            #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
-            #                                                                   return_idx=True)
+                # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+                #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+                #                                                       decoded_tokens_without_timestamp_tokens,
+                #                                                       return_idx=True)
+                #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+                #                                                                      decoded_tokens_without_timestamp_tokens,
+                #                                                                      return_idx=True)
+                # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+                #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
+                #                                                                   return_idx=True)
 
-            estimated_transcript_kw_idx = cast(list[int | None], get_only_keywords_with_different_approaches(
-                 reference_kw=row["references_kw"].split(),
-                 transcript=decoded_tokens_without_timestamp_tokens,
-                 return_idx=True))
-            estimated_transcript_kw = cast(list[int | None], get_only_keywords_with_different_approaches(
-                reference_kw=row["references_kw"].split(),
-                transcript=decoded_tokens_without_timestamp_tokens,
-                return_idx=False))
-            #transcript_keywords_indices = [1,3,4]
-            estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
-            estimated_transcript_keywords.append(estimated_transcript_kw)
-            assert len(estimated_transcript_kw_idx) == 3
+                estimated_transcript_kw_idx = cast(list[int | None], get_only_keywords_with_different_approaches(
+                     reference_kw=row["references_kw"].split(),
+                     transcript=decoded_tokens_without_timestamp_tokens,
+                     return_idx=True))
+                estimated_transcript_kw = cast(list[int | None], get_only_keywords_with_different_approaches(
+                    reference_kw=row["references_kw"].split(),
+                    transcript=decoded_tokens_without_timestamp_tokens,
+                    return_idx=False))
+                #transcript_keywords_indices = [1,3,4]
+                estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
+                estimated_transcript_keywords.append(estimated_transcript_kw)
+                assert len(estimated_transcript_kw_idx) == 3
 
-            tmp_found_kw = np.sum([1 for o in estimated_transcript_kw_idx if o is not None])
-            found_kw += tmp_found_kw
-            no_kw_in_sentence_found += tmp_found_kw == 0
-
-            tmp_wk_entropy = []
-            for idx in estimated_transcript_kw_idx:
-                tmp_wk_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
-            del entropies_per_token
-            counter += 1
-            entropies_kw.append(tmp_wk_entropy)
+                tmp_kw_entropy = []
+                for idx in estimated_transcript_kw_idx:
+                    tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
+                del entropies_per_token
+                counter += 1
+                entropies_kw.append(tmp_kw_entropy)
+            else:
+                average_macroscopic_entropy.append(torch.nan)
+                estimated_transcript_keywords_indices.append([None, None, None])
+                estimated_transcript_keywords.append([None, None, None])
+                entropies_kw.append([torch.nan, torch.nan, torch.nan])
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy
         df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
         df["estimated_transcript_kw"] = estimated_transcript_keywords
         df["entropies_kw"] = entropies_kw
-
-        print(f"{error_counter = }")
-        print(f"{found_kw = }, -> {round(found_kw / (((len(df) - error_counter) * 3)), 2) * 100}%")
-        print(
-            f"{no_kw_in_sentence_found = }, -> {round(no_kw_in_sentence_found / len(df) - error_counter, 2) * 100}%")
 
     df.to_pickle(output_path/"df.pkl")
     return df
@@ -710,7 +709,7 @@ def get_data_parakeet(output_path: Path,
     # evaluate logprobs
     found_kw = 0
     no_kw_in_sentence_found = 0
-
+    # todo fix logprob extraction with parakeet!!!
     if extract_logprobs:
         print("Evaluate logprobs")
         entropies_kw = []

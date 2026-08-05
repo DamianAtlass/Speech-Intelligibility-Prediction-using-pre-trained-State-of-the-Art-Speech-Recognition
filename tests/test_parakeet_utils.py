@@ -20,6 +20,6 @@ def test_load_parakeet_model():
         beam_size=2,
         model=ModelConfig(name="parakeet", model_type="ctc-0.6b", path=None),
     )
-    #dont load cudo here with select_device function. GPU could still be a bit busy
+    #dont load cuda here with select_device function. GPU could still be a bit busy
     model = load_parakeet_model(config, torch.device("cpu"))
     assert isinstance(model, EncDecCTCModelBPE)
