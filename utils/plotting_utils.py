@@ -6,7 +6,7 @@ import torch
 from matplotlib import pyplot as plt
 from scipy import stats as stats
 from tqdm import tqdm
-from typing import Literal
+from typing import Literal, cast
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 
 sorting_reverse = {
@@ -23,6 +23,15 @@ labels_dict = {
     "machine_transcripts_len": "length of transcripts",
     "empty transcripts": "Amount of empty transcrips in %"
 }
+
+def join_kw_list_if_necessary(transcript_kw_or_similar: list[str]|list[list[str]]) -> list[str]:
+    if isinstance(transcript_kw_or_similar[0], str):
+        #assume this is list[str]
+        return cast(list[str] ,transcript_kw_or_similar)
+    elif isinstance(transcript_kw_or_similar[0], list):
+        return [" ".join(w for w in t if w is not None) for t in transcript_kw_or_similar]
+    else:
+        raise RuntimeError
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
                                     name: str,
@@ -153,14 +162,21 @@ def plot_metrics(data: list[pd.Series],
 
 def plot_wer_to_snr(
         df: pd.DataFrame,
-        only_kw: bool,
+        ref_col: Literal["references", "references_kw"],
+        trans_col: Literal["machine_transcripts", "machine_transcripts_kw", "machine_trans_kw_from_time_align"],
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         output_path: Path = None, ):
 
+    if ("kw" in ref_col) != ("kw" in trans_col):
+        raise RuntimeError("Sure those are the correct columns?")
+
+
+
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     one_run_attribute: str = list_shifting_attribute[0]
 
+    #plot human values
     df_human_data = df[df[shifting_attribute]==one_run_attribute]
 
     human_values = []
@@ -173,17 +189,17 @@ def plot_wer_to_snr(
     del df_human_data
     x_labels = np.sort(df["snr"].unique())
 
-    ref_col = "references_kw" if only_kw else "references"
-    plotting_attribute = "machine_transcripts_kw" if only_kw else "machine_transcripts"
-
+    #plot machine values
     machine_values: list = []
     for attr in tqdm(list_shifting_attribute):
         df_attr = df[df[shifting_attribute] == attr]
         mv_temp = []
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
+
+            transcripts = join_kw_list_if_necessary(df_snr[trans_col].values)
             wer_snr = wer_needleman_wunsch(references=df_snr[ref_col].values,
-                                           transcripts=df_snr[plotting_attribute].values)
+                                           transcripts=transcripts)
             mv_temp.append(wer_snr)
         machine_values.append(torch.tensor(mv_temp) * 100)
 
@@ -196,7 +212,9 @@ def plot_wer_to_snr(
     for mv,l in zip(machine_values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"WER of human transcription vs machine transcripts{" (keyword only)" if only_kw else ""} by {shifting_attribute_label or shifting_attribute}"
+    align_info_str = ", derived from time alignments" if "align" in trans_col else ""
+    kw_info_str = f" (keyword only{align_info_str})" if "kw" in ref_col else ""
+    figure_title = f"WER of human transcription vs machine transcripts{kw_info_str} by {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -255,6 +273,7 @@ def plot_x_to_snr(df: pd.DataFrame,
 
 
 def plot_microscopic_entropy(df: pd.DataFrame,
+                             entropy_col: Literal["entropies_kw", "entropies_kw_from_time_align"],
                              shifting_attribute: str = "model_type",
                              shifting_attribute_label = None,
                              output_path: Path = None, ):
@@ -273,7 +292,7 @@ def plot_microscopic_entropy(df: pd.DataFrame,
             tmp = []
             for kw in range(3):
 
-                mean_entropies_for_this_kw = df_snr["entropies_kw"].apply(lambda x: x[kw])
+                mean_entropies_for_this_kw = df_snr[entropy_col].apply(lambda x: x[kw])
                 mean_entropies_for_this_kw = mean_entropies_for_this_kw[mean_entropies_for_this_kw.notnull()]
                 mean_entropy_for_this_kw = np.mean(mean_entropies_for_this_kw)
                 assert mean_entropy_for_this_kw != np.nan
@@ -291,7 +310,8 @@ def plot_microscopic_entropy(df: pd.DataFrame,
         for kw, lt in zip(range(3), line_type):
             plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
 
-    figure_title = f"Average entropy of keywords for {shifting_attribute_label or shifting_attribute}"
+
+    figure_title = f"Average entropy of keywords {"(derived from time alignments)" if "align" in entropy_col else ""} for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -370,40 +390,46 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     #plt.show()
     plt.close()
 
-def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
-                              #model: str,
-                              #model_type: str ,
-                              x_2: str = "human_transcripts_kw",
-                              output_path: Path = None):
+def boxplot_microscopic_corr_per_listener(
+        df: pd.DataFrame,
+        #model: str,
+        #model_type: str ,
+        entropy_col: Literal["entropies_kw", "entropies_kw_from_time_align"],
+        col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"],  #kw column, estimated_transcript_kw for calibration
+        output_path: Path|None = None):
     corr_arr = []
     p_val_arr = []
 
     tmp_labels_dict = {
-        "human_transcripts_kw": "human",
-        "estimated_transcript_kw": "estimated machine", # for calibration
+        "human_transcripts_kw": "human (calibration)",
+        "estimated_transcript_kw": ", estimated machine", # specifically for calibration
+        "machine_trans_kw_from_time_align": ", time-alignment-derived machine",  # specifically for calibration, #todo split this!!!
     }
 
+    # the speech intelligibility is basically the wer between human transcripts and reference.
+    # we want to measure a correlation between that, and the entropies. no need for  machine_trans_kw(_from_time_align) here!
+    # To check the calibration, we measure correlation between the wer of the machine (ref_kw vs machine_trans_kw).
+
     listeners = df["listener"].unique()
-    for kw in tqdm(range(3)):
+    for kw_idx in tqdm(range(3)):
         corr_arr_per_kw = []
         p_val_arr_per_kw = []
         for l in listeners:
             df_listener = df[df["listener"] == l]
 
-            ref_kw = df_listener["references_kw"].map(lambda x: x.split()[kw])
+            ref_kw = df_listener["references_kw"].map(lambda x: x.split()[kw_idx])
 
-            if x_2 == "human_transcripts_kw":
-                human_kw = df_listener[x_2].map(lambda x: x.split()[kw])
-                foo = human_kw
+            if col_compare_against_ref_kw == "human_transcripts_kw":
+                # calibration
+                keywords = df_listener[col_compare_against_ref_kw].map(lambda x: x.split()[kw_idx])
             else:
-                estimated_kw = df_listener[x_2].map(lambda x: x[kw])
-                foo = estimated_kw
+                #regular case
+                keywords = df_listener[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
 
 
+            x = [int(r != k) for r, k in zip(ref_kw, keywords)]  # basically the WER
 
-            x = [int(r != h) for r, h in zip(ref_kw, foo)]  # basically the WER
-
-            y = df_listener["entropies_kw"].map(lambda x: x[kw])
+            y = df_listener[entropy_col].map(lambda x: x[kw_idx])
 
             filter = y.isna()
             y = y[~filter]
@@ -433,7 +459,7 @@ def boxplot_microscopic_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between token-level {tmp_labels_dict[x_2]} WER and the corresponding whisper's token-level entropy for each listener"
+    title = f"Spearman Correlation between token-level {tmp_labels_dict[col_compare_against_ref_kw]} WER and the corresponding whisper's token-level entropy for each listener"
     plt.title(title + "\nand maximum p-value to the rounded 4th digit")
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()

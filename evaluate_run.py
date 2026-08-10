@@ -21,7 +21,13 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
     with catch_time() as t:
-        df_single_run = get_data(config.model.name, config.output_path, config.data.val_split.dataset_type, config.extract_logprobs, device)
+        df_single_run = get_data(
+            config.model.name,
+            config.output_path,
+            config.data.val_split.dataset_type,
+            config.extract_logprobs,
+            config.word_timestamps,
+            device)
     print(f"Reading the generated files took: {t():.4f} s")
 
     df_single_run["model_type"] = config.model.model_type
@@ -30,4 +36,4 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     #with pd.option_context('display.max_rows', None, 'display.max_columns', None, "display.width", 10000):
         #print(df_single_run[["references_kw", "machine_transcripts", "machine_transcripts_kw", "wers_machine_kw"]])
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/turbo_default"))
+    evaluate_run(Path("inferences/delete_me3"))

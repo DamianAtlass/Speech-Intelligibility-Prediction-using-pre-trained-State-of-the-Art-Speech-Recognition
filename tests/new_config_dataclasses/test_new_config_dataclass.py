@@ -43,6 +43,7 @@ config_dict = [
 'output_path': 'output/path', # supposed to be a str
 'task_type': 'inference',
 'word_timestamps': False,
+'subword_timestamps': False,
 'debug': True,
 'model':{
     'name': 'whisper',
@@ -78,6 +79,7 @@ InferenceConfig(
     debug=True,
     extract_logprobs=False,
     word_timestamps=False,
+    subword_timestamps=False,
     beam_size=5,
     model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
 )
