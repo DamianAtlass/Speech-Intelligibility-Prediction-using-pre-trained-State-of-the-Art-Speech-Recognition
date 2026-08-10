@@ -24,6 +24,25 @@ labels_dict = {
     "empty transcripts": "Amount of empty transcrips in %"
 }
 
+def wrap_text(text: str, max_chars: int = 75) -> str:
+    """Insert line breaks so each line is at most max_chars characters."""
+    words = text.split()
+    lines = []
+    current = ""
+
+    for word in words:
+        # Would adding this word exceed the limit?
+        if current and len(current) + 1 + len(word) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = word if not current else f"{current} {word}"
+
+    if current:
+        lines.append(current)
+
+    return "\n".join(lines)
+
 def join_kw_list_if_necessary(transcript_kw_or_similar: list[str]|list[list[str]]) -> list[str]:
     if isinstance(transcript_kw_or_similar[0], str):
         #assume this is list[str]
@@ -58,9 +77,10 @@ def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
     if ("WER" in xlabel) and ("WER" in ylabel):
         plt.ylim(0)
         plt.ylim(0)
-    title = f"Regression line and Pearson correlation coefficient of {name}"
+    title = wrap_text(f"Regression line and Pearson correlation coefficient of {name}", 75)
     plt.suptitle(title)
-    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}, stderr: {regr.stderr:.4f},")
+
+    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}, stderr: {regr.stderr:.4f}")
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.grid(True)
@@ -91,9 +111,9 @@ def plot_regr_line_for_spearman_corr(df: pd.DataFrame,
     plt.figure(figsize=(10, 7))
     plt.plot(x_ranked, y_ranked, "o", label="ranked data")
     plt.grid(True)
-    title = f"Regression line and Spearman correlation coefficient of \n{name}"
-    plt.suptitle(title)
-    plt.title(f"\nSpearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}, stderr: {regr.stderr:.4f}")
+    title = f"Regression line and Spearman correlation coefficient of {name}"
+    plt.suptitle(wrap_text(title))
+    plt.title(f"Spearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}, stderr: {regr.stderr:.4f}")
     plt.xlabel("ranked " + xlabel)
     plt.ylabel("ranked " + ylabel)
     if ("WER" in xlabel) and ("WER" in ylabel):
@@ -147,7 +167,7 @@ def plot_metrics(data: list[pd.Series],
 
     if len(data) > 1:
         figure_title += ", sorted by means"
-    plt.title(figure_title)
+    plt.title(wrap_text(figure_title))
     plt.ylabel(labels_dict[column_name])
     ax.grid()
     plt.xticks(positions, x_label)
@@ -376,8 +396,10 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
     }
 
-    title = f"Spearman Correlation Coefficient of human WER and \n{model}'s {d[correlate_to]} for each listener"
-    plt.title(title +"\nand maximum p-value to the rounded 4th digit")
+    title = f"Spearman Correlation Coefficient of human WER and {model}'s {d[correlate_to]} for each listener"
+    plot_title = title +" and maximum p-value to the rounded 4th digit"
+    plt.title(wrap_text(plot_title, 75))
+
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
     x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t,p, c in zip(list_shifting_attribute, p_val_arr, corr_arr)]
@@ -401,10 +423,11 @@ def boxplot_microscopic_corr_per_listener(
     p_val_arr = []
 
     tmp_labels_dict = {
-        "human_transcripts_kw": "human (calibration)",
-        "estimated_transcript_kw": ", estimated machine", # specifically for calibration
-        "machine_trans_kw_from_time_align": ", time-alignment-derived machine",  # specifically for calibration, #todo split this!!!
+        "human_transcripts_kw": "listener's",
+        "estimated_transcript_kw": " machine's", # specifically for calibration
+        "machine_trans_kw_from_time_align": "time-alignment-derived machine's time-alignment-derived, ",  # specifically for calibration
     }
+    cali = " (calibration)" if "machine_trans_kw" in col_compare_against_ref_kw else ""
 
     # the speech intelligibility is basically the wer between human transcripts and reference.
     # we want to measure a correlation between that, and the entropies. no need for  machine_trans_kw(_from_time_align) here!
@@ -459,8 +482,9 @@ def boxplot_microscopic_corr_per_listener(
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between token-level {tmp_labels_dict[col_compare_against_ref_kw]} WER and the corresponding whisper's token-level entropy for each listener"
-    plt.title(title + "\nand maximum p-value to the rounded 4th digit")
+    title = f"Spearman Correlation between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level entropy for each listener{cali}"
+    plot_title = title + "and maximum p-value to the rounded 4th digit"
+    plt.title(wrap_text(plot_title))
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
     x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
