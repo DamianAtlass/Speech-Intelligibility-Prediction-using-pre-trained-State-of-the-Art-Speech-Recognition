@@ -292,33 +292,38 @@ def plot_x_to_snr(df: pd.DataFrame,
     plt.close()
 
 
-def plot_microscopic_entropy(df: pd.DataFrame,
-                             entropy_col: Literal["entropies_kw", "entropies_kw_from_time_align"],
-                             shifting_attribute: str = "model_type",
-                             shifting_attribute_label = None,
-                             output_path: Path = None, ):
+def plot_microscopic_x_to_snr(df: pd.DataFrame,
+                              col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
+                              value_label: str,
+                              y_axis_label: str = None,
+                              shifting_attribute: str = "model_type",
+                              shifting_attribute_label = None,
+                              output_path: Path = None, ):
+
+    if "kw" not in col_name:
+        raise ValueError("This plot is for microscopic plotting (per kw)!")
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
 
     x_labels = np.sort(df["snr"].unique())
 
-    entropy_means: list = []
+    values_means: list = []
     for attr in tqdm(list_shifting_attribute):
         df_attr = df[df[shifting_attribute] == attr]
-        entropies_per_snr = []
+        values_per_snr = []
         for snr in np.sort(df_attr["snr"].unique()):
 
             df_snr = df_attr[df_attr["snr"] == snr]
-            tmp = []
+            values_current_snr = []
             for kw in range(3):
 
-                mean_entropies_for_this_kw = df_snr[entropy_col].apply(lambda x: x[kw])
-                mean_entropies_for_this_kw = mean_entropies_for_this_kw[mean_entropies_for_this_kw.notnull()]
-                mean_entropy_for_this_kw = np.mean(mean_entropies_for_this_kw)
-                assert mean_entropy_for_this_kw != np.nan
-                tmp.append(mean_entropy_for_this_kw)
-            entropies_per_snr.append(tmp)
-        entropy_means.append(entropies_per_snr)
+                values_for_this_kw = df_snr[col_name].apply(lambda x: x[kw])
+                values_for_this_kw = values_for_this_kw[values_for_this_kw.notnull()]
+                tmp2 = np.mean(values_for_this_kw)
+                assert tmp2 != np.nan
+                values_current_snr.append(tmp2)
+            values_per_snr.append(values_current_snr)
+        values_means.append(values_per_snr)
 
     kw_labels = ["color", "letter", "digit"]
 
@@ -326,16 +331,18 @@ def plot_microscopic_entropy(df: pd.DataFrame,
     plt.figure(figsize=[10, 5])
     colors = ["b", "g", "c", "r", ]
     line_type = ['-', '--', ':']
-    for mv,l,c in zip(entropy_means, list_shifting_attribute, colors):
+    for mv,l,c in zip(values_means, list_shifting_attribute, colors):
         for kw, lt in zip(range(3), line_type):
             plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
 
 
-    figure_title = f"Average entropy of keywords {"(derived from time alignments)" if "align" in entropy_col else ""} for {shifting_attribute_label or shifting_attribute}"
+
+
+    figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel("microscopic entropy")
+    plt.ylabel(f"microscopic {y_axis_label or value_label}")
     plt.ylim(0)
     plt.grid()
     plt.legend()
@@ -416,8 +423,9 @@ def boxplot_microscopic_corr_per_listener(
         df: pd.DataFrame,
         #model: str,
         #model_type: str ,
-        entropy_col: Literal["entropies_kw", "entropies_kw_from_time_align"],
+        col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
         col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"],  #kw column, estimated_transcript_kw for calibration
+        col_title: Literal["entropy", "TAD"] = "entropy",
         output_path: Path|None = None):
     corr_arr = []
     p_val_arr = []
@@ -452,7 +460,7 @@ def boxplot_microscopic_corr_per_listener(
 
             x = [int(r != k) for r, k in zip(ref_kw, keywords)]  # basically the WER
 
-            y = df_listener[entropy_col].map(lambda x: x[kw_idx])
+            y = df_listener[col_name].map(lambda x: x[kw_idx])
 
             filter = y.isna()
             y = y[~filter]
@@ -482,8 +490,8 @@ def boxplot_microscopic_corr_per_listener(
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level entropy for each listener{cali}"
-    plot_title = title + "and maximum p-value to the rounded 4th digit"
+    title = f"Spearman Correlation between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} for each listener{cali}"
+    plot_title = title + " and maximum p-value to the rounded 4th digit"
     plt.title(wrap_text(plot_title))
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()

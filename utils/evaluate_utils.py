@@ -5,14 +5,12 @@ import torch
 from pandas import DataFrame
 from torch.distributions import Categorical
 from pathlib import Path
-import werpy
 import logging
-from scipy.stats import entropy
 import numpy as np
 from tqdm import tqdm
 import os
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
-    plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_entropy, plot_x_to_snr, \
+    plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
     boxplot_microscopic_corr_per_listener, join_kw_list_if_necessary
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
@@ -34,6 +32,7 @@ grid_vocab = {
                'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
     "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
 }
+grid_kw_index = [1,3,4]
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -62,9 +61,13 @@ def find_ordered_indices(transcript: list, keywords_to_find: list) -> list[int]:
     assert len(indices) == len(keywords_to_find)
     return indices
 
+def ref_alignments_to_secods_and_rm_non_words(ref_alignments: list[dict]) -> list[dict]:
+    for r in ref_alignments:
+        r["start"] = int(r["start"])/16000
+        r["end"] = int(r["end"])/16000
 
+    return [a for a in ref_alignments if a["word"] not in ["sil", "sp"]]
 
-    return indices if j == len(keywords_to_find) else None
 
 def get_kw_by_index(string) -> str:
     """
@@ -215,10 +218,6 @@ def get_kw_by_accepting_other_options_from_vocab(
 def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
                                        transcript_alignments: list[dict]
                                        ) -> tuple[list[list[int]|None], list[int|None]]:
-    grid_kw_index = [1,3,4]
-    for r in reference_alignments:
-        r["start"] = int(r["start"])/16000
-        r["end"] = int(r["end"])/16000
 
     token_idx_list = []
     c = 0
@@ -230,10 +229,8 @@ def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
             c+=1
         token_idx_list.append(tmp)
 
-    reference_alignments = [a for a in reference_alignments if a["word"] not in ["sil", "sp"]]
     offset = reference_alignments[0]["start"]
     assert len(reference_alignments) == 6
-
 
     kw_token_idx_list: list[list[int]|None] = []
     kw_word_idx_list: list[int|None] = []
@@ -321,13 +318,47 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
 
     return summary
 
+def calculate_tad(reference_alignments: list[dict],
+                  transcript_alignments: list[dict],
+                  machine_transcript_kw_idx: list[int | None]) -> list[float]:
+    """
+    Calculate the TAD (time alignment difference as in: Karbasi, Mahdie; Kolossa, Dorothea (2017): ASR-based
+    Measures for Microscopic Speech Intelligibility Prediction).
+    Note 1) the variables in the TAD are in frame length and whisper's is 25ms (although its timestamps resolution is 20sm)
+    Note 2) the formula of TAD contains a divisor, the "word length in frames". It is not absolutely clear from the paper,
+    if it's referring to the reference or the transcript.
+    Returns:
+        list[float|np.nan]: TAD per keyword
+    """
+    whisper_frame_length = 25#ms
+    assert len(reference_alignments) == 6
+
+    offset = reference_alignments[0]["start"]
+
+    tad_per_kw: list[float|np.nan] = []
+
+    for ref_kw_idx, trans_idx in zip(grid_kw_index, machine_transcript_kw_idx):
+        if trans_idx is None:
+            tad_per_kw.append(np.nan)
+            continue
+        ref_start = reference_alignments[ref_kw_idx]["start"]/whisper_frame_length
+        ref_end = reference_alignments[ref_kw_idx]["end"]/whisper_frame_length
+        trans_start = (transcript_alignments[trans_idx]["start"] + offset)/whisper_frame_length
+        trans_end = (transcript_alignments[trans_idx]["end"] + offset)/whisper_frame_length
+
+        tad = (abs(trans_start - ref_start) + abs(trans_end - ref_end))/(ref_end - ref_start)
+        tad_per_kw.append(tad)
+
+    return tad_per_kw
+
+
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame,
                             device: torch.device):
     # check for missing rows
     d = get_dataset(config.data.val_split)
     if len(d)!=len(df_single_run):
-        print(f"Dataframe is missing rows! Expected {len(d["val"])}, got {len(df_single_run)}.")
+        print(f"Dataframe is missing rows! Expected {len(d)}, got {len(df_single_run)}.")
     del d
     summary = get_summary(df=df_single_run, dataset_type=config.data.val_split.dataset_type)
 
@@ -399,21 +430,22 @@ def evaluate_individual_run(config: InferenceConfig,
 
 
         if config.extract_logprobs and config.data.val_split.dataset_type == "grid_bc":
-            plot_microscopic_entropy(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
-                                     entropy_col="entropies_kw",
-                                     shifting_attribute="model_type",
-                                     output_path=config.output_path)
+            plot_microscopic_x_to_snr(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
+                                      col_name="entropies_kw",
+                                      value_label="entropy",
+                                      shifting_attribute="model_type",
+                                      output_path=config.output_path)
 
             boxplot_microscopic_corr_per_listener(
                 df_single_run[["entropies_kw", "listener", "model_type", "references_kw","human_transcripts_kw"]],
-                entropy_col="entropies_kw",
+                col_name="entropies_kw",
                 col_compare_against_ref_kw="human_transcripts_kw",
                 output_path=config.output_path)
 
             #calibration
             boxplot_microscopic_corr_per_listener(
                 df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "estimated_transcript_kw"]],
-                entropy_col="entropies_kw",
+                col_name="entropies_kw",
                 col_compare_against_ref_kw="estimated_transcript_kw",
                 output_path=config.output_path)
 
@@ -432,24 +464,42 @@ def evaluate_individual_run(config: InferenceConfig,
 
             if config.extract_logprobs:
 
-                plot_microscopic_entropy(df_single_run[["entropies_kw_from_time_align", "listener", "model_type", "snr"]],
-                                         entropy_col="entropies_kw_from_time_align",
-                                         shifting_attribute="model_type",
-                                         output_path=time_align_folder)
+                plot_microscopic_x_to_snr(df_single_run[["entropies_kw_from_time_align", "listener", "model_type", "snr"]],
+                                          col_name="entropies_kw_from_time_align",
+                                          value_label="entropy",
+                                          shifting_attribute="model_type",
+                                          output_path=time_align_folder)
 
                 boxplot_microscopic_corr_per_listener(
                     df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcripts_kw"]],
-                    entropy_col="entropies_kw_from_time_align",
+                    col_name="entropies_kw_from_time_align",
                     col_compare_against_ref_kw="human_transcripts_kw",
                     output_path=time_align_folder)
 
 
                 boxplot_microscopic_corr_per_listener(
                     df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
-                    entropy_col="entropies_kw_from_time_align",
+                    col_name="entropies_kw_from_time_align",
                     col_compare_against_ref_kw="machine_trans_kw_from_time_align",
                     output_path=time_align_folder)
 
+                plot_microscopic_x_to_snr(
+                    df_single_run[["listener", "model_type", "snr", "tad_kw"]],
+                    col_name="tad_kw",
+                    value_label="time alignment difference (TAD)",
+                    y_axis_label="TAD in seconds",
+                    shifting_attribute="model_type",
+                    output_path=time_align_folder)
+
+                boxplot_microscopic_corr_per_listener(
+                    df_single_run[["references_kw", "listener", "model_type", "tad_kw",
+                                   "human_transcripts_kw"]],
+                    col_name="tad_kw",
+                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_title="TAD",
+                    output_path=time_align_folder)
+
+            # average detected kw position
             idx_list = [[], [], []]
             foo = []
             for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
@@ -470,6 +520,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
     with open(config.output_path / "summary.json", 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
+
 
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:
@@ -566,13 +617,14 @@ def get_data_whisper(output_path: Path,
                 machine_transcripts.append(json_file["prediction_result"]["text"])
                 if extract_logprobs:
                     decoded_tokens_with_timestamps.append(json_file["prediction_result"]["decoded_tokens_with_timestamps"])
+                if word_timestamps:
 
-                words = []
-                for s in json_file["prediction_result"]["segments"]:
-                    words.extend(s["words"])
-                for w in words:
-                    w.pop("probability") #dont need that currently
-                transcript_alignments.append(words)
+                    words = []
+                    for s in json_file["prediction_result"]["segments"]:
+                        words.extend(s["words"])
+                    for w in words:
+                        w.pop("probability") #dont need that currently
+                    transcript_alignments.append(words)
 
             references.append(json_file["sentence"])
             references_alignments.append([{"start": a[0], "end": a[1], "word": a[2]} for a in json_file["alignment"]])
@@ -645,10 +697,14 @@ def get_data_whisper(output_path: Path,
         average_macroscopic_entropy = []
         estimated_transcript_keywords_indices: list[list[int|None]] = []
         estimated_transcript_keywords: list[list[str|None]] = []
+        normalized_decoded_tokens_without_timestamps_list: list[list[str|None]] = []
         #for time_alignments
         machine_trans_kw_from_time_align: list[list[str|None]] = []
         trans_kw_idx_from_align: list[list[int|None]] = []
         entropies_kw_from_time_align: list[list[float|np.nan]] = []
+        #for tad
+        tad_list: list[list[float|np.nan]] = []
+
 
         counter = 0
         no_transcript_counter = 0
@@ -677,6 +733,7 @@ def get_data_whisper(output_path: Path,
                                decoded_tokens_with_timestamps]
                 entropies_per_token = entropies_per_token[no_timestamp_idx]
                 decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
+
                 del decoded_tokens_with_timestamps
 
                 average_macroscopic_entropy.append(float(entropies_per_token.mean()))
@@ -689,6 +746,8 @@ def get_data_whisper(output_path: Path,
                                                                     apply_separate_numbers_from_letter=False,
                                                                     apply_numbers_to_words=True,
                                                                     apply_werpy_normalize=False)
+                normalized_decoded_tokens_without_timestamps_list.append(decoded_tokens_without_timestamp_tokens)
+
 
                 # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
                 #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
@@ -720,15 +779,20 @@ def get_data_whisper(output_path: Path,
                 if word_timestamps:
                     assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
                         decoded_tokens_without_timestamp_tokens)
+                    ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["references_alignments"])
+                    trans_alignment =row["transcript_alignments"]
+                    for o in trans_alignment:
+                        o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
                     place_holder = get_kw_idx_through_time_alignments(
-                        row["references_alignments"], row["transcript_alignments"])
-                    kw_token_idx_from_alignment: list[list[int | None]] = place_holder[0]
+                        reference_alignments=ref_alignments,
+                        transcript_alignments=row["transcript_alignments"])
+                    kw_token_idx_from_alignment: list[list[int]|None] = place_holder[0]
                     kw_word_idx_list: list[int | None] = place_holder[1]
 
 
                     trans_kw_idx_from_align.append(kw_word_idx_list)
                     kw_from_alignment: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
-                    kw_from_alignment: list[str|None] = [o.lower().strip() for o in kw_from_alignment]
+                    kw_from_alignment: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_alignment]
                     machine_trans_kw_from_time_align.append(kw_from_alignment)
 
                     # assume word_timestamps and extract_logprobs are True
@@ -736,8 +800,13 @@ def get_data_whisper(output_path: Path,
                     tmp_kw_entropy: list[float|np.nan] = []
                     for idx in kw_token_idx_from_alignment:
                         tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx].mean()))
-                    assert all([len(a)==1 for a in kw_token_idx_from_alignment if a is not None])
+
                     entropies_kw_from_time_align.append(tmp_kw_entropy)
+
+                    #tad
+                    tad_list.append(calculate_tad(reference_alignments=ref_alignments,
+                                                  transcript_alignments=row["transcript_alignments"],
+                                                  machine_transcript_kw_idx=kw_word_idx_list))
 
             else:
                 # no transcript
@@ -746,23 +815,27 @@ def get_data_whisper(output_path: Path,
                 estimated_transcript_keywords_indices.append([None, None, None])
                 estimated_transcript_keywords.append([None, None, None])
                 entropies_kw.append([torch.nan, torch.nan, torch.nan])
+                normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
 
                 if word_timestamps:
                     machine_trans_kw_from_time_align.append([None, None, None])
                     entropies_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
                     trans_kw_idx_from_align.append([None, None, None])
+                    tad_list.append([torch.nan, torch.nan, torch.nan])
 
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy
         df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
         df["estimated_transcript_kw"] = estimated_transcript_keywords
         df["entropies_kw"] = entropies_kw
+        df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
         del (average_macroscopic_entropy, estimated_transcript_keywords_indices, estimated_transcript_keywords, entropies_kw)
 
         if word_timestamps:
             df["machine_trans_kw_from_time_align"] = machine_trans_kw_from_time_align
             df["entropies_kw_from_time_align"] = entropies_kw_from_time_align
             df["trans_kw_idx_from_align"] = trans_kw_idx_from_align
+            df["tad_kw"] = tad_list
 
 
 
