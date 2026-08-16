@@ -433,7 +433,7 @@ def boxplot_microscopic_corr_per_listener(
     tmp_labels_dict = {
         "human_transcripts_kw": "listener's",
         "estimated_transcript_kw": " machine's", # specifically for calibration
-        "machine_trans_kw_from_time_align": "time-alignment-derived machine's time-alignment-derived, ",  # specifically for calibration
+        "machine_trans_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
     }
     cali = " (calibration)" if "machine_trans_kw" in col_compare_against_ref_kw else ""
 

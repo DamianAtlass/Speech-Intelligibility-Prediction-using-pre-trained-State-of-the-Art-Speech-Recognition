@@ -346,7 +346,10 @@ def calculate_tad(reference_alignments: list[dict],
         trans_start = (transcript_alignments[trans_idx]["start"] + offset)/whisper_frame_length
         trans_end = (transcript_alignments[trans_idx]["end"] + offset)/whisper_frame_length
 
-        tad = (abs(trans_start - ref_start) + abs(trans_end - ref_end))/(ref_end - ref_start)
+        length_of_transcript_in_tokens = len(transcript_alignments[trans_idx]["tokens"])
+        # original formula states frame length, but that's an DNN/HMM based model. Should mostly be 1 with grid/bc
+
+        tad = abs(trans_start - ref_start) + abs(trans_end - ref_end) / length_of_transcript_in_tokens
         tad_per_kw.append(tad)
 
     return tad_per_kw

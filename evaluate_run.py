@@ -14,7 +14,7 @@ from utils.cuda_utils import select_device
 
 def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
-        device = select_device()
+        device = torch.device("cpu")
 
 
     config = load_config(path/"config.yaml")
