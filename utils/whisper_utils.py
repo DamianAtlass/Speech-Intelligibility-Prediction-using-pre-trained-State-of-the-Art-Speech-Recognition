@@ -26,7 +26,7 @@ def load_whisper_model(config: InferenceConfig, device: torch.device) -> Whisper
     Returns: Whisper | sip_Whisper
     """
     if not config.model.path:
-        if config.extract_logprobs:
+        if config.extract_logprobs or config.word_timestamps or config.subword_timestamps:# todo fix later
             return sip_whisper.load_model(config.model.model_type, device=device)
         else:
             return whisper.load_model(config.model.model_type, device=device)

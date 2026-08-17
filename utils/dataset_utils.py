@@ -7,7 +7,7 @@ from shutil import rmtree
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
 import wave
-from datasets import Audio
+from datasets import Audio, load_dataset
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ WANTED_SAMPLE_RATE = 16_000
 SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 from utils.paths import GRID_FOLDER, BC_FOLDER
 from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
+import os
 
 
 
@@ -28,15 +29,28 @@ default_dataset_paths = {
 
 def _get_dataset(dataset_type: str,
                  path: Path|None) -> Dataset:
-    if dataset_type not in default_dataset_paths.keys():
-        raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
+    if dataset_type != "libri":
+        if dataset_type not in default_dataset_paths.keys():
+            pass
+            raise NotImplementedError(f"Dataset type {dataset_type} not implemented")
 
-    if not path:
-        dataset_path = default_dataset_paths[dataset_type]
-    else:
-        dataset_path = path
+        if not path:
+            dataset_path = default_dataset_paths[dataset_type]
+        else:
+            dataset_path = path
 
-    return get_grid(dataset_path)
+    match dataset_type:
+        case "grid":
+            return get_grid(dataset_path)
+        case "grid_bc":
+            return get_grid_bc(dataset_path)
+        case "libri":
+            return get_libri()
+    raise RuntimeError(f"Dataset type {dataset_type} not implemented")
+
+def get_libri() -> Dataset:
+    ds = load_dataset("openslr/librispeech_asr", token=os.getenv("HF_TOKEN"))
+    return ds["validation.clean"]
 
 def get_dataset(split: DataSplitConfig) -> Dataset:
 

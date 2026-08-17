@@ -44,6 +44,7 @@ config_dict = [
 'task_type': 'inference',
 'word_timestamps': False,
 'subword_timestamps': False,
+'temperature': 0,
 'debug': True,
 'model':{
     'name': 'whisper',
@@ -81,6 +82,7 @@ InferenceConfig(
     word_timestamps=False,
     subword_timestamps=False,
     beam_size=5,
+    temperature=0,
     model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
 )
 ]

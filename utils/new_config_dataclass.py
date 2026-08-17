@@ -85,6 +85,7 @@ class InferenceConfig(BaseConfig):
     word_timestamps: bool = True
     beam_size: int = 5
     subword_timestamps: bool = False
+    temperature: float = 0
 
     def __post_init__(self):
         super().__post_init__()

@@ -7,7 +7,7 @@ from utils.evaluate_utils import get_kw_using_mixed_approaches
 from utils.evaluate_utils import join_kw_list_if_necessary
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 from utils.werpy_utils import normalize
-path = Path("inferences/delete_me6")
+path = Path("inferences/turbo_default_grid_subwords")
 config: InferenceConfig = load_config(path/"config.yaml")
 
 
@@ -35,10 +35,16 @@ sns.set_theme(style="whitegrid")
 #df_clean = df_clean[df["wers_machine_kw"]==1]
 
 n_keywords = 3
+kw_label = ["color", "letter", "digit"]
 fig, axes = plt.subplots(n_keywords, 1, figsize=(12, 4 * n_keywords))
 
-for pos in range(n_keywords):
+for pos, label in enumerate(kw_label):
     sub_pairs = Counter()
+
+    kw_specific_wer = wer_needleman_wunsch(
+        references=[o.split()[pos] for o in df["references_kw"]],
+        transcripts=[o[pos] for o in df["machine_trans_kw_from_time_align"]])
+    kw_specific_wer = round(kw_specific_wer*100, 2)
 
     for _, row in df.iterrows():
         ref = row["references_kw"].split()[pos]
@@ -52,18 +58,20 @@ for pos in range(n_keywords):
         if ref != hyp:
             sub_pairs[(ref, hyp)] += 1
 
-    top_subs = pd.Series(sub_pairs).sort_values(ascending=False).head(5)
+    top_subs = pd.Series(sub_pairs).sort_values(ascending=False).head(7)
     top_subs.index = [f"{r} → {h}" for r, h in top_subs.index]
 
     ax = axes[pos]
     top_subs.plot(kind="barh", ax=ax, color="tab:purple")
     ax.invert_yaxis()
-    ax.set_title(f"Top mismatches — keyword position {pos} (SNR=40)")
+    ax.set_title(f"Top mismatches — keyword: {label}, WER: {kw_specific_wer}%")
     ax.set_xlabel("Count")
 
-print(f"wer: {wer_needleman_wunsch(references=df["references_kw"], transcripts=join_kw_list_if_necessary(df["machine_trans_kw_from_time_align"])):}")
-fig.tight_layout()
-plt.show()
 
-for _, row in df.iterrows():
-    print(row["decoded_tokens_without_timestamp_tokens"])
+print(f"wer: {wer_needleman_wunsch(
+    references=df["references_kw"],
+    transcripts=join_kw_list_if_necessary(df["machine_trans_kw_from_time_align"])
+):}")
+fig.tight_layout()
+plt.savefig("file.png")
+plt.show()

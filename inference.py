@@ -19,13 +19,15 @@ from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
 def create_filename(dataset_type: str, sample: dict) -> str:
-    audio_path = Path(sample["audio_path"])
+    audio_path = Path(sample["audio_path"]) if "audio_path" in sample.keys() else None
     match dataset_type:
         case "grid_bc":
             snr_str = f"{"m" if int(sample["snr_db"]) < 0 else ""}{abs(int(sample["snr_db"]))}"
             return f"snr_{snr_str}_l{sample["listener"]}_s{sample["speaker"]}_{audio_path.stem.split("_")[1]}"
         case "grid":
             return f"s{sample["speaker"]}_{audio_path.stem}"
+        case "libri":
+            return sample["id"]
         case _:
             raise RuntimeError("Unknown dataset type")
 
@@ -78,13 +80,13 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
 
     Returns: None
     """
-    transcribe_fn = sip_whisper.transcribe if config.extract_logprobs else whisper.transcribe
+    transcribe_fn = sip_whisper.transcribe if config.extract_logprobs or config.word_timestamps or config.subword_timestamps else whisper.transcribe
     counter = 0
 
     with torch.inference_mode():
         for sample in tqdm(dataset):
             counter = counter + 1
-            logger.info(f"Transcribe {sample["audio_path"]}...")
+            logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]}...")
 
             audio_array = torch.tensor(sample["audio"]["array"]).to(device)
             audio_array = whisper.pad_or_trim(audio_array)
@@ -99,9 +101,9 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                 "condition_on_previous_text": False,
                 "language": "en",
             }
-            if config.extract_logprobs and config.word_timestamps:
+            if config.extract_logprobs or config.word_timestamps or config.subword_timestamps:
                 options.update(
-                    {"break_after_first_segment": True,
+                    {"break_after_first_segment": False if config.model.path is None else True, # only with trained models
                      "subword_timestamps": config.subword_timestamps,
                      })
 
@@ -109,7 +111,6 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
             #  https://github.com/openai/whisper/discussions/81
             result: dict = transcribe_fn(**options)
 
-            audio_path = Path(sample["audio_path"])
             file_name = create_filename(config.data.val_split.dataset_type, sample)
 
             if config.extract_logprobs:

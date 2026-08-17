@@ -629,17 +629,25 @@ def get_data_whisper(output_path: Path,
                         w.pop("probability") #dont need that currently
                     transcript_alignments.append(words)
 
-            references.append(json_file["sentence"])
-            references_alignments.append([{"start": a[0], "end": a[1], "word": a[2]} for a in json_file["alignment"]])
-            audio_paths.append(json_file["audio_path"])
+            references.append(json_file["sentence" if dataset_type!="libri" else "text"])
+            if dataset_type != "libri":
+                references_alignments.append([{"start": a[0], "end": a[1], "word": a[2]} for a in json_file["alignment"]])
+                audio_paths.append(json_file["audio_path"])
 
-            if dataset_type != "grid":
+            if dataset_type == "grid_bc":
                 human_transcripts_kw.append(json_file["human_recognized_words"])
                 snr.append(int(json_file["snr_db"]))
                 listener.append(json_file["listener"])
 
             if extract_logprobs:
                 logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
+
+    if dataset_type == "libri":
+        wer = wer_needleman_wunsch(normalize(references), normalize(machine_transcripts))
+        print(f"librispeech wer: {round(wer*100, 2)}%", )
+        print("Exit program...")
+        exit()
+
     #post-processing
     references_kw: list[str] = [get_kw_by_index(o) for o in references]
     machine_transcripts: list[str] = normalize(machine_transcripts)
@@ -692,153 +700,156 @@ def get_data_whisper(output_path: Path,
 
     df = pd.DataFrame(data)
 
-    # evaluate logprobs
-    if extract_logprobs:
-        print("Evaluate logprobs")
-        # for logprobs
-        entropies_kw: list[list[float|np.nan]] = []
-        average_macroscopic_entropy = []
-        estimated_transcript_keywords_indices: list[list[int|None]] = []
-        estimated_transcript_keywords: list[list[str|None]] = []
-        normalized_decoded_tokens_without_timestamps_list: list[list[str|None]] = []
-        #for time_alignments
-        machine_trans_kw_from_time_align: list[list[str|None]] = []
-        trans_kw_idx_from_align: list[list[int|None]] = []
-        entropies_kw_from_time_align: list[list[float|np.nan]] = []
-        #for tad
-        tad_list: list[list[float|np.nan]] = []
+    # for logprobs
+    entropies_kw: list[list[float|np.nan]] = []
+    average_macroscopic_entropy = []
+    estimated_transcript_keywords_indices: list[list[int|None]] = []
+    estimated_transcript_keywords: list[list[str|None]] = []
+    normalized_decoded_tokens_without_timestamps_list: list[list[str|None]] = []
+    #for time_alignments
+    machine_trans_kw_from_time_align: list[list[str|None]] = []
+    trans_kw_idx_from_align: list[list[int|None]] = []
+    entropies_kw_from_time_align: list[list[float|np.nan]] = []
+    #for tad
+    tad_list: list[list[float|np.nan]] = []
 
 
-        counter = 0
-        no_transcript_counter = 0
+    counter = 0
+    no_transcript_counter = 0
 
-        for index, row in tqdm(df.iterrows(), total=len(df)):
-            #load logprobs
-            if no_transcript:=(row["logprobs_paths"] == ""):
-                no_transcript_counter += 1
-            if not no_transcript:
-                logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
-                    row["logprobs_paths"]).name
-                logprob_tensor = torch.load(logprob_path)
+    for index, row in tqdm(df.iterrows(), total=len(df)):
 
-                # calculate entropy
-                posteriors = logprob_tensor.exp()
-                del logprob_tensor
-                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-                assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
-                assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
-                entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
-                del posteriors
-                assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+        transcript_exists = row["machine_transcripts"] != ""
+        if not transcript_exists:
+            no_transcript_counter += 1
+            average_macroscopic_entropy.append(torch.nan)
+            estimated_transcript_keywords_indices.append([None, None, None])
+            estimated_transcript_keywords.append([None, None, None])
+            entropies_kw.append([torch.nan, torch.nan, torch.nan])
+            normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
 
-                ## rm timestamp tokens
-                no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
-                               decoded_tokens_with_timestamps]
-                entropies_per_token = entropies_per_token[no_timestamp_idx]
-                decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
+            if word_timestamps:
+                machine_trans_kw_from_time_align.append([None, None, None])
+                trans_kw_idx_from_align.append([None, None, None])
+                tad_list.append([torch.nan, torch.nan, torch.nan])
 
-                del decoded_tokens_with_timestamps
+            if word_timestamps and extract_logprobs:
+                entropies_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
+            continue
 
-                average_macroscopic_entropy.append(float(entropies_per_token.mean()))
+        if extract_logprobs:
+            logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
+                row["logprobs_paths"]).name
+            logprob_tensor = torch.load(logprob_path)
 
-                ## 1) get kw idx by: get_only_keywords_with_different_approaches
-                ### find "correct" kw position
-                decoded_tokens_without_timestamp_tokens: list[str] = [o.lower().strip() for o in
-                                                           decoded_tokens_without_timestamp_tokens]
-                decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
-                                                                    apply_separate_numbers_from_letter=False,
-                                                                    apply_numbers_to_words=True,
-                                                                    apply_werpy_normalize=False)
-                normalized_decoded_tokens_without_timestamps_list.append(decoded_tokens_without_timestamp_tokens)
+            # calculate entropy
+            posteriors = logprob_tensor.exp()
+            del logprob_tensor
+            decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
+            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+            entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+            del posteriors
+            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
+            ## rm timestamp tokens
+            no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
+                           decoded_tokens_with_timestamps]
+            entropies_per_token = entropies_per_token[no_timestamp_idx]
+            decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
 
-                # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-                #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
-                #                                                       decoded_tokens_without_timestamp_tokens,
-                #                                                       return_idx=True)
-                #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
-                #                                                                      decoded_tokens_without_timestamp_tokens,
-                #                                                                      return_idx=True)
-                # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
-                #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
-                #                                                                   return_idx=True)
-                estimated_transcript_kw_idx = cast(list[int | None], get_kw_using_mixed_approaches(
-                     reference_kw=row["references_kw"].split(),
-                     transcript=decoded_tokens_without_timestamp_tokens,
-                     return_idx=True))
-                assert len(estimated_transcript_kw_idx) == 3
-                #technically, this is not taking into account, words could be split up into subwords, which is however not likely considering the grid vocab
-                estimated_transcript_kw: list[str|None] = [None if idx is None else decoded_tokens_without_timestamp_tokens[idx] for idx in estimated_transcript_kw_idx]
+            del decoded_tokens_with_timestamps
 
-                estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
-                estimated_transcript_keywords.append(estimated_transcript_kw)
+            average_macroscopic_entropy.append(float(entropies_per_token.mean()))
 
-                tmp_kw_entropy: list[float|np.nan] = []
-                for idx in estimated_transcript_kw_idx:
-                    tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
-                entropies_kw.append(tmp_kw_entropy)
-
-                ## 2) get kw idx by using the time-alignments
-                if word_timestamps:
-                    assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
-                        decoded_tokens_without_timestamp_tokens)
-                    ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["references_alignments"])
-                    trans_alignment =row["transcript_alignments"]
-                    for o in trans_alignment:
-                        o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
-                    place_holder = get_kw_idx_through_time_alignments(
-                        reference_alignments=ref_alignments,
-                        transcript_alignments=row["transcript_alignments"])
-                    kw_token_idx_from_alignment: list[list[int]|None] = place_holder[0]
-                    kw_word_idx_list: list[int | None] = place_holder[1]
+            ## 1) get kw idx by: get_only_keywords_with_different_approaches
+            ### find "correct" kw position
+            decoded_tokens_without_timestamp_tokens: list[str] = [o.lower().strip() for o in
+                                                       decoded_tokens_without_timestamp_tokens]
+            decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
+                                                                apply_separate_numbers_from_letter=False,
+                                                                apply_numbers_to_words=True,
+                                                                apply_werpy_normalize=False)
+            normalized_decoded_tokens_without_timestamps_list.append(decoded_tokens_without_timestamp_tokens)
 
 
-                    trans_kw_idx_from_align.append(kw_word_idx_list)
-                    kw_from_alignment: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
-                    kw_from_alignment: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_alignment]
-                    machine_trans_kw_from_time_align.append(kw_from_alignment)
+            # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
+            #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+            #                                                       decoded_tokens_without_timestamp_tokens,
+            #                                                       return_idx=True)
+            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+            #                                                                      decoded_tokens_without_timestamp_tokens,
+            #                                                                      return_idx=True)
+            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+            #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
+            #                                                                   return_idx=True)
+            estimated_transcript_kw_idx = cast(list[int | None], get_kw_using_mixed_approaches(
+                 reference_kw=row["references_kw"].split(),
+                 transcript=decoded_tokens_without_timestamp_tokens,
+                 return_idx=True)) #todo does this require logprobs?
+            assert len(estimated_transcript_kw_idx) == 3
+            #technically, this is not taking into account, words could be split up into subwords, which is however not likely considering the grid vocab
+            estimated_transcript_kw: list[str|None] = [None if idx is None else decoded_tokens_without_timestamp_tokens[idx] for idx in estimated_transcript_kw_idx]
 
-                    # assume word_timestamps and extract_logprobs are True
-                    # kw_token_idx_from_alignment: list[list[int|None]] idx for logprobs
-                    tmp_kw_entropy: list[float|np.nan] = []
-                    for idx in kw_token_idx_from_alignment:
-                        tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx].mean()))
+            estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
+            estimated_transcript_keywords.append(estimated_transcript_kw)
 
-                    entropies_kw_from_time_align.append(tmp_kw_entropy)
+            tmp_kw_entropy: list[float|np.nan] = []
+            for idx in estimated_transcript_kw_idx:
+                tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
+            entropies_kw.append(tmp_kw_entropy)
 
-                    #tad
-                    tad_list.append(calculate_tad(reference_alignments=ref_alignments,
-                                                  transcript_alignments=row["transcript_alignments"],
-                                                  machine_transcript_kw_idx=kw_word_idx_list))
-
-            else:
-                # no transcript
-
-                average_macroscopic_entropy.append(torch.nan)
-                estimated_transcript_keywords_indices.append([None, None, None])
-                estimated_transcript_keywords.append([None, None, None])
-                entropies_kw.append([torch.nan, torch.nan, torch.nan])
-                normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
-
-                if word_timestamps:
-                    machine_trans_kw_from_time_align.append([None, None, None])
-                    entropies_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
-                    trans_kw_idx_from_align.append([None, None, None])
-                    tad_list.append([torch.nan, torch.nan, torch.nan])
-
-
-        df["average_macroscopic_entropy"] = average_macroscopic_entropy
-        df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
-        df["estimated_transcript_kw"] = estimated_transcript_keywords
-        df["entropies_kw"] = entropies_kw
-        df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
-        del (average_macroscopic_entropy, estimated_transcript_keywords_indices, estimated_transcript_keywords, entropies_kw)
-
+        ## 2) get kw idx by using the time-alignments
         if word_timestamps:
-            df["machine_trans_kw_from_time_align"] = machine_trans_kw_from_time_align
-            df["entropies_kw_from_time_align"] = entropies_kw_from_time_align
-            df["trans_kw_idx_from_align"] = trans_kw_idx_from_align
-            df["tad_kw"] = tad_list
+            if extract_logprobs:
+                assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
+                    decoded_tokens_without_timestamp_tokens)
+
+            ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["references_alignments"])
+            trans_alignment = row["transcript_alignments"]
+            for o in trans_alignment:
+                o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
+
+            kw_token_idx_from_alignment: list[list[int]|None]
+            kw_word_idx_list: list[int | None]
+            kw_token_idx_from_alignment, kw_word_idx_list = get_kw_idx_through_time_alignments(
+                reference_alignments=ref_alignments,
+                transcript_alignments=row["transcript_alignments"])
+
+
+
+            trans_kw_idx_from_align.append(kw_word_idx_list)
+            kw_from_alignment: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
+            kw_from_alignment: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_alignment]
+            machine_trans_kw_from_time_align.append(kw_from_alignment)
+
+        if word_timestamps and extract_logprobs:
+            # assume word_timestamps and extract_logprobs are True
+            # kw_token_idx_from_alignment: list[list[int|None]] idx for logprobs
+            tmp_kw_entropy: list[float|np.nan] = []
+            for idx in kw_token_idx_from_alignment:
+                tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx].mean()))
+
+            entropies_kw_from_time_align.append(tmp_kw_entropy)
+
+            #tad
+            tad_list.append(calculate_tad(reference_alignments=ref_alignments,
+                                          transcript_alignments=row["transcript_alignments"],
+                                          machine_transcript_kw_idx=kw_word_idx_list))
+
+
+    df["average_macroscopic_entropy"] = average_macroscopic_entropy
+    df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
+    df["estimated_transcript_kw"] = estimated_transcript_keywords
+    df["entropies_kw"] = entropies_kw
+    df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
+    del (average_macroscopic_entropy, estimated_transcript_keywords_indices, estimated_transcript_keywords, entropies_kw)
+
+    if word_timestamps:
+        df["machine_trans_kw_from_time_align"] = machine_trans_kw_from_time_align
+        df["entropies_kw_from_time_align"] = entropies_kw_from_time_align
+        df["trans_kw_idx_from_align"] = trans_kw_idx_from_align
+        df["tad_kw"] = tad_list
 
 
 
