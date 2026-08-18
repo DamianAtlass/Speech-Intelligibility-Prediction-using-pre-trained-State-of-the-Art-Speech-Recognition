@@ -15,8 +15,6 @@ from utils.paths import GRID_FOLDER, TEST_FOLDER
 @pytest.mark.parametrize("time_stamps", [False,True])
 @pytest.mark.parametrize("extract_logprobs", [False,True])
 def test_batch_inference_whisper(time_stamps, extract_logprobs):
-    if time_stamps and not extract_logprobs:
-        pytest.skip("unvalid constallation") #todo fix later
 
     config = InferenceConfig(
         output_path=TEST_FOLDER / "inference_test",

@@ -1,13 +1,11 @@
-import whisper
 import sip_whisper
+from sip_whisper import Whisper as sip_Whisper
 import re
 import torch
 import os
 from safetensors.torch import load_file
 from pathlib import Path
 
-from whisper import Whisper
-from sip_whisper import Whisper as sip_Whisper
 
 from utils.new_config_dataclass import InferenceConfig
 from pathlib import Path
@@ -17,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 WHISPER_OPENAI_MODEL_NAME = "whisper_openai_format.pt"
 
-def load_whisper_model(config: InferenceConfig, device: torch.device) -> Whisper | sip_Whisper:
+def load_whisper_model(config: InferenceConfig, device: torch.device) -> sip_Whisper:
     """
     Load a model from whisper or sip_whipser depending on the config.
 
@@ -26,14 +24,11 @@ def load_whisper_model(config: InferenceConfig, device: torch.device) -> Whisper
     Returns: Whisper | sip_Whisper
     """
     if not config.model.path:
-        if config.extract_logprobs or config.word_timestamps or config.subword_timestamps:# todo fix later
-            return sip_whisper.load_model(config.model.model_type, device=device)
-        else:
-            return whisper.load_model(config.model.model_type, device=device)
+        return sip_whisper.load_model(config.model.model_type, device=device)
     else:
         return load_whisper_from_hf_checkpoint(config, device=device)
 
-def load_whisper_from_hf_checkpoint(config: InferenceConfig, device: torch.device) -> Whisper | sip_Whisper:
+def load_whisper_from_hf_checkpoint(config: InferenceConfig, device: torch.device) -> sip_Whisper:
     """
     Load a Whisper instance from an HF checkpoint.
 
@@ -41,24 +36,21 @@ def load_whisper_from_hf_checkpoint(config: InferenceConfig, device: torch.devic
     """
     model_type = config.model.model_type
     if model_type is None:
-        type_list = [s for s in whisper.available_models() if s in config.model.path]
+        type_list = [s for s in sip_whisper.available_models() if s in config.model.path]
 
         if len(type_list) == 0:
-            raise ValueError(f"Can't derive model type/size from path, no keyword: {config.model.model_path}")
+            raise ValueError(f"Can't derive model type/size from path, no keyword: {config.model.path}")
         else:
             model_type = type_list[0]
 
     if not (config.model.path/WHISPER_OPENAI_MODEL_NAME).is_file():
         convert_hf_model_to_openai_whisper(hf_checkpoint_file_path=config.model.path, safe_file=WHISPER_OPENAI_MODEL_NAME, model_type=model_type)
 
-    if config.extract_logprobs:
-        model = sip_whisper.load_model(str(config.model.path/WHISPER_OPENAI_MODEL_NAME), device=device)
-    else:
-        model = whisper.load_model(str(config.model.path/WHISPER_OPENAI_MODEL_NAME), device=device)
+    model = sip_whisper.load_model(str(config.model.path/WHISPER_OPENAI_MODEL_NAME), device=device)
 
-    model.set_alignment_heads(whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
+    model.set_alignment_heads(sip_whisper._ALIGNMENT_HEADS[model_type])  # see last line of whisper/__init__.load_model()
 
-    if not isinstance(model, sip_Whisper if config.extract_logprobs else Whisper):
+    if not isinstance(model, sip_Whisper):
         raise ValueError(f"Loading the model from {config.model.path} wasn't successful!")
     return model
 
@@ -87,7 +79,7 @@ def convert_hf_model_to_openai_whisper(
         hf_state_dict[new_key] = hf_state_dict.pop(key)
 
     #load ORIGINAL(!) whisper_folder model from module
-    model_from_module = whisper.load_model(model_type)
+    model_from_module = sip_whisper.load_model(model_type)
     module_state = model_from_module.state_dict()
 
     for k in hf_state_dict.keys():
@@ -138,19 +130,19 @@ def main():
     hf_model_path = "/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/trained_models/training_output_test_folder"
     model = load_whisper_model(Path(hf_model_path), explicit_model_type="tiny")
     #################################################################
-    audio = whisper.load_audio("../sample_audio_small.mp3")
-    audio = whisper.pad_or_trim(audio)
+    audio = sip_whisper.load_audio("../sample_audio_small.mp3")
+    audio = sip_whisper.pad_or_trim(audio)
 
     # make log-Mel spectrogram and move to the same device as the model
-    mel = whisper.log_mel_spectrogram(audio, n_mels=model.dims.n_mels).to(model.device)
+    mel = sip_whisper.log_mel_spectrogram(audio, n_mels=model.dims.n_mels).to(model.device)
 
     # detect the spoken language
     #_, probs = model.detect_language(mel)
     #logger.info(f"Detected language: {max(probs, key=probs.get)}")
 
     # decode the audio
-    options = whisper.DecodingOptions(without_timestamps=False)
-    result = whisper.decode(model, mel, options)
+    options = sip_whisper.DecodingOptions(without_timestamps=False)
+    result = sip_whisper.decode(model, mel, options)
 
     # print the recognized text
     logger.info(result.text)

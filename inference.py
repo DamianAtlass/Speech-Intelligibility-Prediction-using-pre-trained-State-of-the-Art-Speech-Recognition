@@ -1,6 +1,5 @@
 from tqdm import tqdm
 import torch
-import whisper
 import sip_whisper
 from datasets import Dataset, DatasetDict
 from utils.new_config_dataclass import InferenceConfig
@@ -80,7 +79,6 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
 
     Returns: None
     """
-    transcribe_fn = sip_whisper.transcribe if config.extract_logprobs or config.word_timestamps or config.subword_timestamps else whisper.transcribe
     counter = 0
 
     with torch.inference_mode():
@@ -89,27 +87,25 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
             logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]}...")
 
             audio_array = torch.tensor(sample["audio"]["array"]).to(device)
-            audio_array = whisper.pad_or_trim(audio_array)
+            audio_array = sip_whisper.pad_or_trim(audio_array)
 
             options = {
                 "model": model,
                 "audio": audio_array,
                 "fp16": False,
                 "beam_size": config.beam_size,
-                "temperature": 0,
+                "temperature": config.temperature,
+                "extract_logprobs": config.extract_logprobs,
                 "word_timestamps": config.word_timestamps,
                 "condition_on_previous_text": False,
                 "language": "en",
+                "break_after_first_segment": False if config.model.path is None else True, # only with trained models
+                "subword_timestamps": config.subword_timestamps,
             }
-            if config.extract_logprobs or config.word_timestamps or config.subword_timestamps:
-                options.update(
-                    {"break_after_first_segment": False if config.model.path is None else True, # only with trained models
-                     "subword_timestamps": config.subword_timestamps,
-                     })
 
-            # results will not be equal (therefore not deterministic) if temperature=!0.0
+            # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
             #  https://github.com/openai/whisper/discussions/81
-            result: dict = transcribe_fn(**options)
+            result: dict = sip_whisper.transcribe(**options)
 
             file_name = create_filename(config.data.val_split.dataset_type, sample)
 
