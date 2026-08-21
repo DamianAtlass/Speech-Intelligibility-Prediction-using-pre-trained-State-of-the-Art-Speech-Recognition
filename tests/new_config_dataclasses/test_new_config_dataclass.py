@@ -132,3 +132,8 @@ def test_convert_old_config_into_new(path_old_config: Path, expected_class):
     new_config = convert_old_config_into_new(old_config)
     assert isinstance(new_config, expected_class)
 
+def test_lists_of_args():
+    path = CONFIG_TEST_FOLDER/"inference_config_with_list_args.yaml"
+    config = load_config(path)
+    assert isinstance(config.temperature, list)
+    assert config.temperature == [1,2,3,4]

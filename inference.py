@@ -3,7 +3,7 @@ import torch
 import sip_whisper
 from datasets import Dataset, DatasetDict
 from utils.new_config_dataclass import InferenceConfig
-from typing import Any
+from typing import Any, cast
 import json
 from pathlib import Path
 import logging
@@ -17,18 +17,29 @@ from utils.parakeet_utils import get_collate_fn
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
-def create_filename(dataset_type: str, sample: dict) -> str:
+def create_filename(dataset_type: str, sample: dict, temperature: float|None = None) -> str:
     audio_path = Path(sample["audio_path"]) if "audio_path" in sample.keys() else None
+    l = []
     match dataset_type:
         case "grid_bc":
             snr_str = f"{"m" if int(sample["snr_db"]) < 0 else ""}{abs(int(sample["snr_db"]))}"
-            return f"snr_{snr_str}_l{sample["listener"]}_s{sample["speaker"]}_{audio_path.stem.split("_")[1]}"
+            l.append(f"SNR{snr_str}")
+            l.append(f"l{sample["listener"]}")
+            l.append(f"s{sample["speaker"]}")
+            tail = f"{audio_path.stem.split("_")[1]}"
         case "grid":
-            return f"s{sample["speaker"]}_{audio_path.stem}"
+            l.append(f"s{sample["speaker"]}")
+            tail = audio_path.stem
         case "libri":
-            return sample["id"]
+            tail = sample["id"]
         case _:
             raise RuntimeError("Unknown dataset type")
+    if temperature is not None:
+        l.append(f"temp{temperature}")
+
+    l.append(tail)
+    filename = "_".join(l)
+    return filename
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -79,54 +90,67 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
 
     Returns: None
     """
+    is_list = {
+        "temp": isinstance(config.temperature, list)
+    }
+    if (is_list["temp"] or config.temperature!=0) and config.beam_size!=1:
+        raise ValueError("Beamsize would be overridden for temperature !=1!")
+
     counter = 0
-
     with torch.inference_mode():
-        for sample in tqdm(dataset):
-            counter = counter + 1
-            logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]}...")
+        transcriptions_per_file = len(config.temperature) if is_list["temp"] else 1
+        with tqdm(total=len(dataset) * transcriptions_per_file) as pbar:
+            for t in cast(list, config.temperature if is_list["temp"] else [config.temperature]):
+                for sample in dataset:
+                    counter = counter + 1
+                    logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} "
+                                f"{f"with temperature {t}" if is_list["temp"] else ""}...")
 
-            audio_array = torch.tensor(sample["audio"]["array"]).to(device)
-            audio_array = sip_whisper.pad_or_trim(audio_array)
+                    audio_array = torch.tensor(sample["audio"]["array"]).to(device)
+                    audio_array = sip_whisper.pad_or_trim(audio_array)
 
-            options = {
-                "model": model,
-                "audio": audio_array,
-                "fp16": False,
-                "beam_size": config.beam_size,
-                "temperature": config.temperature,
-                "extract_logprobs": config.extract_logprobs,
-                "word_timestamps": config.word_timestamps,
-                "condition_on_previous_text": False,
-                "language": "en",
-                "break_after_first_segment": False if config.model.path is None else True, # only with trained models
-                "subword_timestamps": config.subword_timestamps,
-            }
+                    options = {
+                        "model": model,
+                        "audio": audio_array,
+                        "fp16": False,
+                        "beam_size": config.beam_size,
+                        "temperature": t,
+                        "extract_logprobs": config.extract_logprobs,
+                        "word_timestamps": config.word_timestamps,
+                        "condition_on_previous_text": False,
+                        "language": "en",
+                        "break_after_first_segment": False if config.model.path is None else True, # only with trained models
+                        "subword_timestamps": config.subword_timestamps,
+                    }
 
-            # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
-            #  https://github.com/openai/whisper/discussions/81
-            result: dict = sip_whisper.transcribe(**options)
+                    # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
+                    #  https://github.com/openai/whisper/discussions/81
+                    result: dict = sip_whisper.transcribe(**options)
 
-            file_name = create_filename(config.data.val_split.dataset_type, sample)
+                    file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=t if is_list["temp"] else None)
 
-            if config.extract_logprobs:
-                extracted_logprobs = result.pop("extracted_logprobs")
-                tokens = [x for s in result["segments"] for x in s["tokens"]]
-                assert len(tokens) == (0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
+                    if config.extract_logprobs:
+                        extracted_logprobs = result.pop("extracted_logprobs")
+                        tokens = [x for s in result["segments"] for x in s["tokens"]]
+                        assert len(tokens) == (0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
 
-                if extracted_logprobs is not None:
-                    logprob_file_path = config.output_path/"logprobs"/f"{file_name}.pt"
-                    if logprob_file_path.exists(): raise FileExistsError
-                    logger.info(f"Save logprobs to {logprob_file_path}")
-                    torch.save(extracted_logprobs, logprob_file_path)
-                    result["logprobs_path"] = str(logprob_file_path.relative_to(Path.cwd()))
+                        if extracted_logprobs is not None:
+                            logprob_file_path = config.output_path/"logprobs"/f"{file_name}.pt"
+                            if logprob_file_path.exists(): raise FileExistsError
+                            logger.info(f"Save logprobs to {logprob_file_path}")
+                            torch.save(extracted_logprobs, logprob_file_path)
+                            result["logprobs_path"] = str(logprob_file_path.relative_to(Path.cwd()))
 
-                else:
-                    result["logprobs_path"] = ""
-                    logger.info("No logprobs to save.")
+                        else:
+                            result["logprobs_path"] = ""
+                            logger.info("No logprobs to save.")
 
-            result_data_file_path = config.output_path / "data" / f"{file_name}.json"
-            save_result(dict(sample), result, result_data_file_path, counter, True)
+                    if is_list["temp"]:
+                        sample.update({"varrying_transcription_options": {"temperature": t} })
+
+                    result_data_file_path = config.output_path / "data" / f"{file_name}.json"
+                    save_result(sample, result, result_data_file_path, counter, True)
+                    pbar.update(1)
 
 
 def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, dataset: Dataset, device: torch.device) -> None:
