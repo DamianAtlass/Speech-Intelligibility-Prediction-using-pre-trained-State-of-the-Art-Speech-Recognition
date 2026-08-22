@@ -100,11 +100,11 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
     with torch.inference_mode():
         transcriptions_per_file = len(config.temperature) if is_list["temp"] else 1
         with tqdm(total=len(dataset) * transcriptions_per_file) as pbar:
-            for t in cast(list, config.temperature if is_list["temp"] else [config.temperature]):
+            for temperature in cast(list, config.temperature if is_list["temp"] else [config.temperature]):
                 for sample in dataset:
                     counter = counter + 1
                     logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} "
-                                f"{f"with temperature {t}" if is_list["temp"] else ""}...")
+                                f"{f"with {temperature = }" if is_list["temp"] else ""} ...")
 
                     audio_array = torch.tensor(sample["audio"]["array"]).to(device)
                     audio_array = sip_whisper.pad_or_trim(audio_array)
@@ -114,7 +114,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                         "audio": audio_array,
                         "fp16": False,
                         "beam_size": config.beam_size,
-                        "temperature": t,
+                        "temperature": temperature,
                         "extract_logprobs": config.extract_logprobs,
                         "word_timestamps": config.word_timestamps,
                         "condition_on_previous_text": False,
@@ -127,7 +127,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                     #  https://github.com/openai/whisper/discussions/81
                     result: dict = sip_whisper.transcribe(**options)
 
-                    file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=t if is_list["temp"] else None)
+                    file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=temperature if is_list["temp"] else None)
 
                     if config.extract_logprobs:
                         extracted_logprobs = result.pop("extracted_logprobs")
@@ -146,7 +146,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                             logger.info("No logprobs to save.")
 
                     if is_list["temp"]:
-                        sample.update({"varrying_transcription_options": {"temperature": t} })
+                        sample.update({"varrying_transcription_options": {"temperature": temperature} })
 
                     result_data_file_path = config.output_path / "data" / f"{file_name}.json"
                     save_result(sample, result, result_data_file_path, counter, True)
