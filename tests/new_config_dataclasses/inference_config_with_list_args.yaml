@@ -1,0 +1,33 @@
+output_path: output/path
+model:
+  name: whisper
+  model_type: base
+  model_path: trained_models/foo
+data:
+  train_split:
+    noise: True
+    dataset_type: grid
+    path: grid/path
+    start: 0.1
+    end: 0.3
+    scaling: 0.5
+  test_split:
+    noise: True
+    dataset_type: grid
+    path: grid/path
+    start: 100
+    end: 4000
+    scaling: 0.5
+  val_split:
+    noise: True
+    dataset_type: grid_bc
+    path: grid_bc/path
+    start: 0.
+    end: 1.
+    scaling: 0.5
+task_type: inference
+temperature: [1,2,3,4]
+extract_logprobs: False
+word_timestamps: False
+beam_size: 5
+debug: True

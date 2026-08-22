@@ -124,14 +124,20 @@ def load_config(config_file_path: str | Path) -> TrainingConfig | InferenceConfi
             raise FileNotFoundError("No config file present!")
 
 
+class FlowStyleDumper(yaml.Dumper):
+    pass
 
+def represent_list(dumper, data):
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+FlowStyleDumper.add_representer(list, represent_list)
 
 def save_config(config: TrainingConfig | InferenceConfig, path: Path) -> None:
     if path.exists(): raise FileExistsError()
     config_dict = config_to_dict(config)
 
     with open(str(path), 'w') as file:
-        yaml.dump(config_dict, file, indent=4, sort_keys=False)
+        yaml.dump(config_dict, file, indent=4, sort_keys=False, Dumper=FlowStyleDumper)
 
 def convert_old_config_into_new(config: Old_TrainingConfig | Old_InferenceConfig) -> TrainingConfig|InferenceConfig:
 
