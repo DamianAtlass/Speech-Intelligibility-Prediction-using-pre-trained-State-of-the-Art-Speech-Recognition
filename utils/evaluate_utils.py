@@ -11,7 +11,7 @@ from tqdm import tqdm
 import os
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_corr_per_listener, join_kw_list_if_necessary
+    boxplot_microscopic_corr_per_listener, join_kw_list_if_necessary, boxplot_microscopic_x_to_snr
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -396,25 +396,26 @@ def evaluate_individual_run(config: InferenceConfig,
                         output_path=config.output_path)
 
         print("Generate correlation plots")
-        corr_summary = plot_regr_lines(df_single_run, config)
+        if False:
+            corr_summary = plot_regr_lines(df_single_run, config)
 
-        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
-                                  correlate_to="wers_machine_kw",
-                                  model=config.model.name,
-                                  model_type=config.model.model_type,
-                                  output_path=config.output_path)
+            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
+                                      correlate_to="wers_machine_kw",
+                                      model=config.model.name,
+                                      model_type=config.model.model_type,
+                                      output_path=config.output_path)
 
-        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine", "model_type", "listener"]],
-                                  correlate_to="wers_machine",
-                                  model=config.model.name,
-                                  model_type=config.model.model_type,
-                                  output_path=config.output_path)
+            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine", "model_type", "listener"]],
+                                      correlate_to="wers_machine",
+                                      model=config.model.name,
+                                      model_type=config.model.model_type,
+                                      output_path=config.output_path)
 
-        boxplot_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
-                                  correlate_to="avg_logprobs",
-                                  model=config.model.name,
-                                  model_type=config.model.model_type,
-                                  output_path=config.output_path)
+            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
+                                      correlate_to="avg_logprobs",
+                                      model=config.model.name,
+                                      model_type=config.model.model_type,
+                                      output_path=config.output_path)
 
 
     if config.extract_logprobs:
@@ -494,6 +495,13 @@ def evaluate_individual_run(config: InferenceConfig,
                     value_label="time alignment difference (TAD)",
                     y_axis_label="TAD in seconds",
                     shifting_attribute="model_type",
+                    output_path=time_align_folder)
+
+                boxplot_microscopic_x_to_snr(
+                    df_single_run[["references_kw", "listener", "model_type", "snr", "tad_kw"]],
+                    col_name="tad_kw",
+                    value_label="time alignment difference (TAD)",
+                    y_axis_label="TAD in seconds",
                     output_path=time_align_folder)
 
                 boxplot_microscopic_corr_per_listener(

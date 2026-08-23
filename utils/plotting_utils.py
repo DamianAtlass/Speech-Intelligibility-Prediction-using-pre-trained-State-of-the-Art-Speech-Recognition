@@ -9,6 +9,17 @@ from tqdm import tqdm
 from typing import Literal, cast
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 
+grid_vocab = {
+    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
+    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
+    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
+}
+
+kw_labels = ["color", "letter", "digit"]
+kw_colors = ["green", "blue", "red"]
+kw_colors_short = ["g", "b", "r"]
+
 sorting_reverse = {
     "wers_machine": True,
     "avg_logprobs": False,
@@ -325,27 +336,102 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
             values_per_snr.append(values_current_snr)
         values_means.append(values_per_snr)
 
-    kw_labels = ["color", "letter", "digit"]
-
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
     colors = ["b", "g", "c", "r", ]
     line_type = ['-', '--', ':']
-    for mv,l,c in zip(values_means, list_shifting_attribute, colors):
-        for kw, lt in zip(range(3), line_type):
+    for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
+        for kw, c in zip(range(3), kw_colors_short):
             plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
 
 
-
-
     figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
-    plt.suptitle(figure_title)
+    plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel(f"microscopic {y_axis_label or value_label}")
     plt.ylim(0)
     plt.grid()
     plt.legend()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    #plt.show()
+    plt.close()
+
+from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp, axes
+
+def boxplot_microscopic_x_to_snr(df: pd.DataFrame,
+                              col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
+                              value_label: str,
+                              y_axis_label: str = None,
+                              output_path: Path = None, ):
+    if "kw" not in col_name:
+        raise ValueError("This plot is for microscopic plotting (per kw)!")
+
+    x_labels = np.sort(df["snr"].unique())
+
+    values_per_snr = []
+    for snr in np.sort(df["snr"].unique()):
+
+        df_snr = df[df["snr"] == snr]
+        values_current_snr = []
+        for i_kw in range(3):
+            values_listener = []
+            keywords: list[str] = grid_vocab[kw_labels[i_kw]]
+            for keyword in keywords:
+                df_snr_keyword = df_snr[
+                    df_snr["references_kw"].str.split().str[i_kw].eq(keyword)
+                ]
+                values_for_this_listener = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
+                values_for_this_listener = values_for_this_listener[values_for_this_listener.notnull()]
+
+                tmp2 = np.mean(values_for_this_listener)
+                assert tmp2 != np.nan
+                values_listener.append(tmp2)
+            values_current_snr.append(values_listener)
+        values_per_snr.append(values_current_snr)
+
+    space_between_plots = 2
+    a = 3 + space_between_plots
+
+    positions = torch.Tensor(range(len(x_labels)))*a+1
+    plt.figure(figsize=[10, 5])
+
+    #https://stackoverflow.com/questions/16592222/how-to-create-grouped-boxplots
+    def setBoxColors(bp):
+        for i in range(3):
+            c = kw_colors[i]
+            setp(bp['boxes'][i], color=c)
+            setp(bp['caps'][i*2], color=c)
+            setp(bp['caps'][i*2+1], color=c)
+            setp(bp['whiskers'][i*2], color=c)
+            setp(bp['whiskers'][i*2+1], color=c)
+            setp(bp['fliers'][i], markeredgecolor=c)
+            setp(bp['medians'][i], color=c)
+
+    for i, snr_values in enumerate(values_per_snr):
+        pos = list(range(i*a, (i*a)+a))[:-space_between_plots]
+        bp = boxplot(snr_values, positions = pos, widths = 0.6)
+        setBoxColors(bp)
+
+    # create lines, use them for the legend and make them invisible afterwards
+    hG, = plot([1, 1], 'g-')
+    hB, = plot([1, 1], 'b-')
+    hR, = plot([1, 1], 'r-')
+
+    legend((hG, hB, hR), (kw_labels[0], kw_labels[1], kw_labels[2]))
+    hB.set_visible(False)
+    hB.set_visible(False)
+    hG.set_visible(False)
+
+    figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""}grouped by reference keywords"
+    plt.suptitle(wrap_text(figure_title))
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel(f"microscopic {y_axis_label or value_label}")
+    plt.ylim(0, 0.020)
+    plt.grid()
+
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
     #plt.show()
