@@ -330,7 +330,6 @@ def calculate_tad(reference_alignments: list[dict],
     Returns:
         list[float|np.nan]: TAD per keyword
     """
-    whisper_frame_length = 25#ms
     assert len(reference_alignments) == 6
 
     offset = reference_alignments[0]["start"]
@@ -341,10 +340,10 @@ def calculate_tad(reference_alignments: list[dict],
         if trans_idx is None:
             tad_per_kw.append(np.nan)
             continue
-        ref_start = reference_alignments[ref_kw_idx]["start"]/whisper_frame_length
-        ref_end = reference_alignments[ref_kw_idx]["end"]/whisper_frame_length
-        trans_start = (transcript_alignments[trans_idx]["start"] + offset)/whisper_frame_length
-        trans_end = (transcript_alignments[trans_idx]["end"] + offset)/whisper_frame_length
+        ref_start = reference_alignments[ref_kw_idx]["start"] # all in s
+        ref_end = reference_alignments[ref_kw_idx]["end"]
+        trans_start = (transcript_alignments[trans_idx]["start"] + offset)
+        trans_end = (transcript_alignments[trans_idx]["end"] + offset)
 
         length_of_transcript_in_tokens = len(transcript_alignments[trans_idx]["tokens"])
         # original formula states frame length, but that's an DNN/HMM based model. Should mostly be 1 with grid/bc

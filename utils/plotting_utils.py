@@ -429,7 +429,7 @@ def boxplot_microscopic_x_to_snr(df: pd.DataFrame,
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel(f"microscopic {y_axis_label or value_label}")
-    plt.ylim(0, 0.020)
+    plt.ylim(0)
     plt.grid()
 
     if output_path:
