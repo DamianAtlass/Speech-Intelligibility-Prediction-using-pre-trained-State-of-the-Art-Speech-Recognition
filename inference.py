@@ -96,61 +96,71 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
     if (is_list["temp"] or config.temperature!=0) and config.beam_size!=1:
         raise ValueError("Beamsize would be overridden for temperature !=1!")
 
-    counter = 0
+    exception_log: list[int] = []
     with torch.inference_mode():
-        transcriptions_per_file = len(config.temperature) if is_list["temp"] else 1
-        with tqdm(total=len(dataset) * transcriptions_per_file) as pbar:
+        num_total_transciptions = len(dataset) * (len(config.temperature) if is_list["temp"] else 1)
+        with tqdm(total=num_total_transciptions) as pbar:
+            counter = 0
             for temperature in cast(list, config.temperature if is_list["temp"] else [config.temperature]):
-                for sample in dataset:
-                    counter = counter + 1
-                    logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} "
+                for idx_sample, sample in enumerate(dataset):
+                    logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} (#{idx_sample}) "
                                 f"{f"with {temperature = }" if is_list["temp"] else ""} ...")
+                    try:
+                        audio_array = torch.tensor(sample["audio"]["array"]).to(device)
+                        audio_array = sip_whisper.pad_or_trim(audio_array)
 
-                    audio_array = torch.tensor(sample["audio"]["array"]).to(device)
-                    audio_array = sip_whisper.pad_or_trim(audio_array)
+                        options = {
+                            "model": model,
+                            "audio": audio_array,
+                            "fp16": False,
+                            "beam_size": config.beam_size,
+                            "temperature": temperature,
+                            "extract_logprobs": config.extract_logprobs,
+                            "word_timestamps": config.word_timestamps,
+                            "condition_on_previous_text": False,
+                            "language": "en",
+                            "break_after_first_segment": False if config.model.path is None else True, # only with trained models
+                            "subword_timestamps": config.subword_timestamps,
+                        }
 
-                    options = {
-                        "model": model,
-                        "audio": audio_array,
-                        "fp16": False,
-                        "beam_size": config.beam_size,
-                        "temperature": temperature,
-                        "extract_logprobs": config.extract_logprobs,
-                        "word_timestamps": config.word_timestamps,
-                        "condition_on_previous_text": False,
-                        "language": "en",
-                        "break_after_first_segment": False if config.model.path is None else True, # only with trained models
-                        "subword_timestamps": config.subword_timestamps,
-                    }
+                        # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
+                        #  https://github.com/openai/whisper/discussions/81
+                        result: dict = sip_whisper.transcribe(**options)
 
-                    # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
-                    #  https://github.com/openai/whisper/discussions/81
-                    result: dict = sip_whisper.transcribe(**options)
+                        file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=temperature if is_list["temp"] else None)
 
-                    file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=temperature if is_list["temp"] else None)
+                        if config.extract_logprobs:
+                            extracted_logprobs = result.pop("extracted_logprobs")
+                            tokens = [x for s in result["segments"] for x in s["tokens"]]
+                            assert len(tokens) == (0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
 
-                    if config.extract_logprobs:
-                        extracted_logprobs = result.pop("extracted_logprobs")
-                        tokens = [x for s in result["segments"] for x in s["tokens"]]
-                        assert len(tokens) == (0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
+                            if extracted_logprobs is not None:
+                                logprob_file_path = config.output_path/"logprobs"/f"{file_name}.pt"
+                                if logprob_file_path.exists(): raise FileExistsError
+                                logger.info(f"Save logprobs to {logprob_file_path}")
+                                torch.save(extracted_logprobs, logprob_file_path)
+                                result["logprobs_path"] = str(logprob_file_path.relative_to(Path.cwd()))
 
-                        if extracted_logprobs is not None:
-                            logprob_file_path = config.output_path/"logprobs"/f"{file_name}.pt"
-                            if logprob_file_path.exists(): raise FileExistsError
-                            logger.info(f"Save logprobs to {logprob_file_path}")
-                            torch.save(extracted_logprobs, logprob_file_path)
-                            result["logprobs_path"] = str(logprob_file_path.relative_to(Path.cwd()))
+                            else:
+                                result["logprobs_path"] = ""
+                                logger.info("No logprobs to save.")
 
-                        else:
-                            result["logprobs_path"] = ""
-                            logger.info("No logprobs to save.")
+                        if is_list["temp"]:
+                            sample.update({"varrying_transcription_options": {"temperature": temperature} })
 
-                    if is_list["temp"]:
-                        sample.update({"varrying_transcription_options": {"temperature": temperature} })
-
-                    result_data_file_path = config.output_path / "data" / f"{file_name}.json"
-                    save_result(sample, result, result_data_file_path, counter, True)
+                        result_data_file_path = config.output_path / "data" / f"{file_name}.json"
+                        save_result(sample, result, result_data_file_path, counter, True)
+                    except Exception as e:
+                        logger.critical(e)
+                        exception_log.append(counter)
                     pbar.update(1)
+                    counter+=1
+
+    if len(exception_log) == 0:
+        logger.info("No exceptions occured.")
+    else:
+        logger.critical(f"{len(exception_log)} exceptions occured! ({round(len(exception_log)/num_total_transciptions, 3)*100}%)")
+        logger.critical(f"Bad transcriptions at counter= {exception_log}")
 
 
 def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, dataset: Dataset, device: torch.device) -> None:

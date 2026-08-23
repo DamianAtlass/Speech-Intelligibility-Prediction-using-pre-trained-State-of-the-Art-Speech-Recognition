@@ -360,8 +360,10 @@ def evaluate_individual_run(config: InferenceConfig,
                             device: torch.device):
     # check for missing rows
     d = get_dataset(config.data.val_split)
-    if len(d)!=len(df_single_run):
-        print(f"Dataframe is missing rows! Expected {len(d)}, got {len(df_single_run)}.")
+
+    expected_df_len = len(d)*(len(config.temperature) if isinstance(config.temperature, list) else 1)
+    if expected_df_len != len(df_single_run):
+        print(f"Dataframe is missing rows! Expected {expected_df_len}, got {len(df_single_run)}.")
     del d
     summary = get_summary(df=df_single_run, dataset_type=config.data.val_split.dataset_type)
 
