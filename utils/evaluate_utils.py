@@ -11,7 +11,7 @@ from tqdm import tqdm
 import os
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_corr_per_listener, join_kw_list_if_necessary, boxplot_microscopic_x_to_snr
+    boxplot_microscopic_special_metric_per_keyword, join_kw_list_if_necessary, boxplot_microscopic_x_to_snr
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -416,7 +416,7 @@ def evaluate_individual_run(config: InferenceConfig,
                                       model_type=config.model.model_type,
                                       output_path=config.output_path)
 
-
+    # should be reordered at some point todo
     if config.extract_logprobs:
         if config.data.val_split.dataset_type == "grid_bc":
             plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wers_human_kw"]],
