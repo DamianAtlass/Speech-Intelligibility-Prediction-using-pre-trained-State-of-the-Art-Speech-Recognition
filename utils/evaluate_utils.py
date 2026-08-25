@@ -1,6 +1,7 @@
 import json
-from typing import Tuple, List, Literal, cast
+from typing import Tuple, List, Literal, cast, Callable
 import pandas as pd
+from pandas.api.typing import DataFrameGroupBy
 import torch
 from pandas import DataFrame
 from torch.distributions import Categorical
@@ -9,6 +10,8 @@ import logging
 import numpy as np
 from tqdm import tqdm
 import os
+
+from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
     boxplot_microscopic_special_metric_per_keyword, join_kw_list_if_necessary, boxplot_microscopic_x_to_snr
@@ -355,8 +358,7 @@ def calculate_tad(reference_alignments: list[dict],
 
 
 def evaluate_individual_run(config: InferenceConfig,
-                            df_single_run: pd.DataFrame,
-                            device: torch.device):
+                            df_single_run: pd.DataFrame) -> None:
     # check for missing rows
     d = get_dataset(config.data.val_split)
 
@@ -560,6 +562,104 @@ def evaluate_individual_run(config: InferenceConfig,
     with open(config.output_path / "summary.json", 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
+def evaluate_varrying_run(config: InferenceConfig,
+                          df_varrying_run: pd.DataFrame) -> None:
+
+    #SPLIT
+
+    plot_microscopic_x_to_snr(df_varrying_run[["entropies_kw_from_time_align", "temperature", "snr"]],
+                              col_name="entropies_kw_from_time_align",
+                              value_label="entropy per keyword",
+                              shifting_attribute_label="different temperatures",
+                              shifting_attribute="temperature",
+                              output_path=config.output_path)
+
+    plot_wer_to_snr(df=df_varrying_run[["human_transcripts_kw", "machine_trans_kw_from_time_align", "snr", "references_kw",
+                                      "references", "temperature"]],
+                    ref_col="references_kw",
+                    trans_col="machine_trans_kw_from_time_align",
+                    shifting_attribute_label="different temperatures",
+                    shifting_attribute="temperature",
+                    output_path=config.output_path)
+
+    plot_microscopic_x_to_snr(df_varrying_run[["entropies_kw_from_time_align", "temperature", "snr"]],
+                              col_name="entropies_kw_from_time_align",
+                              value_label="entropy per keyword",
+                              shifting_attribute_label="different temperatures",
+                              shifting_attribute="temperature",
+                              output_path=config.output_path)
+
+    plot_microscopic_x_to_snr(df_varrying_run[["tad_kw", "temperature", "snr"]],
+                              col_name="tad_kw",
+                              value_label="TAD per keyword",
+                              shifting_attribute_label="different temperatures",
+                              shifting_attribute="temperature",
+                              output_path=config.output_path)
+
+
+    #raise RuntimeError
+
+    # GROUPED
+    ## create grouped df
+    def wrapper(func: Callable) -> Callable:
+        def inner(x) -> torch.Tensor:
+            x = torch.Tensor(x.tolist())
+            result: torch.Tensor = torch.stack([
+                func(col[~torch.isnan(col)])
+                for col in x.T
+            ])
+            assert result.shape == (3,)
+            return result
+        return inner
+
+    grouped_df: DataFrameGroupBy = df_varrying_run.groupby(["audio_paths", "snr", "references_kw", "human_transcripts_kw"])
+
+    def compute_stats(group: pd.DataFrame):
+        return pd.Series({
+            "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
+            "entropy_kw_var": wrapper(torch.var)(group["entropies_kw_from_time_align"]),
+        })
+    print("Creating the grouped dataframe ...")
+    with catch_time() as t:
+        grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+
+    print(f"...took: {t():.2f} s")
+
+    ## plot stuff
+
+    labels = {
+        "tad_kw_var": "varience of the TAD",
+        "entropy_kw_var": "varience of the entropy",
+    }
+
+    for m in ["tad_kw_var", "entropy_kw_var"]:
+        output_path = config.output_path/m
+        if not output_path.exists():
+            os.mkdir(output_path)
+        l = labels[m]
+        boxplot_microscopic_x_to_snr(
+            grouped_df,
+            col_name=m,
+            value_label="varience of the TAD",
+            output_path=output_path)
+
+        boxplot_microscopic_special_metric_per_keyword(
+            grouped_df[["references_kw", m, "human_transcripts_kw"]],
+            col_name=m,
+            special_metric="spearman_correlation",
+            col_compare_against_ref_kw="human_transcripts_kw",
+            col_title=f"{l} over different temperatures",
+            output_path=output_path)
+
+        boxplot_microscopic_special_metric_per_keyword(
+            grouped_df[["references_kw", m, "human_transcripts_kw"]],
+            col_name=m,
+            special_metric="mutual_information",
+            col_compare_against_ref_kw="human_transcripts_kw",
+            col_title=f"{l} over different temperatures",
+            output_path=output_path)
+
+    print()
 
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:
@@ -632,6 +732,8 @@ def get_data_whisper(output_path: Path,
     references_alignments = []
     transcript_alignments = []
 
+    temperature = []
+
     logger.info("Read files...")
     counter = 0
     # read files
@@ -677,6 +779,10 @@ def get_data_whisper(output_path: Path,
 
             if extract_logprobs:
                 logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
+            if "varrying_transcription_options" in json_file:
+                varrying_opt = json_file["varrying_transcription_options"]
+                if "temperature" in varrying_opt:
+                    temperature.append(varrying_opt["temperature"])
 
     if dataset_type == "libri":
         wer = wer_needleman_wunsch(normalize(references), normalize(machine_transcripts))
@@ -733,6 +839,8 @@ def get_data_whisper(output_path: Path,
         data.update({
             "transcript_alignments": transcript_alignments
         })
+    if len(temperature)>0:
+        data.update({"temperature": temperature})
 
     df = pd.DataFrame(data)
 

@@ -90,6 +90,9 @@ class InferenceConfig(BaseConfig):
     def __post_init__(self):
         super().__post_init__()
 
+    def has_varrying_field(self) -> bool:
+        return isinstance(self.temperature, list)
+
 @dataclass(kw_only=True)
 class TrainingConfig(BaseConfig):
     perform_training: bool

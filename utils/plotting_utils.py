@@ -248,7 +248,7 @@ def plot_wer_to_snr(
     align_info_str = ", derived from time alignments" if "align" in trans_col else ""
     kw_info_str = f" (keyword only{align_info_str})" if "kw" in ref_col else ""
     figure_title = f"WER of human transcription vs machine transcripts{kw_info_str} by {shifting_attribute_label or shifting_attribute}"
-    plt.suptitle(figure_title)
+    plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel("Average WER in %")
@@ -346,7 +346,7 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
     colors = ["b", "g", "c", "r", ]
-    line_type = ['-', '--', ':']
+    line_type = ['-', '--', ':', '-.']
     for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
         for kw, c in zip(range(3), kw_colors_short):
             plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
@@ -398,10 +398,10 @@ def boxplot_microscopic_x_to_snr(
                 ]
                 #calculate metric to plot
                 if not special_metric:
-                    values_for_this_listener = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
-                    values_for_this_listener = values_for_this_listener[values_for_this_listener.notnull()]
+                    values_for_this_keyword = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
+                    values_for_this_keyword = values_for_this_keyword[values_for_this_keyword.notnull()]
 
-                    tmp2 = np.mean(values_for_this_listener)
+                    tmp2 = np.mean(values_for_this_keyword)
                     assert tmp2 != np.nan
                     values_keyword.append(tmp2)
                 elif special_metric == "correlation":
@@ -602,6 +602,7 @@ def boxplot_microscopic_special_metric_per_keyword(
                 p_val_arr_per_kw.append(regr.pvalue)
 
             elif special_metric == "mutual_information":
+                x = torch.hstack(x.tolist())
                 mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
                 value_array_per_kw.append(mi[0])
             else:
