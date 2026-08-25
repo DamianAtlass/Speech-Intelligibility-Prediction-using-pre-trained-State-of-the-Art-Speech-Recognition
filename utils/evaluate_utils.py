@@ -441,15 +441,17 @@ def evaluate_individual_run(config: InferenceConfig,
                                       shifting_attribute="model_type",
                                       output_path=config.output_path)
 
-            boxplot_microscopic_corr_per_listener(
-                df_single_run[["entropies_kw", "listener", "model_type", "references_kw","human_transcripts_kw"]],
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "human_transcripts_kw"]],
+                special_metric="spearman_correlation",
                 col_name="entropies_kw",
                 col_compare_against_ref_kw="human_transcripts_kw",
                 output_path=config.output_path)
 
             #calibration
-            boxplot_microscopic_corr_per_listener(
+            boxplot_microscopic_special_metric_per_keyword(
                 df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "estimated_transcript_kw"]],
+                special_metric="spearman_correlation",
                 col_name="entropies_kw",
                 col_compare_against_ref_kw="estimated_transcript_kw",
                 output_path=config.output_path)
@@ -475,15 +477,24 @@ def evaluate_individual_run(config: InferenceConfig,
                                           shifting_attribute="model_type",
                                           output_path=time_align_folder)
 
-                boxplot_microscopic_corr_per_listener(
+                boxplot_microscopic_special_metric_per_keyword(
                     df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcripts_kw"]],
+                    special_metric="spearman_correlation",
                     col_name="entropies_kw_from_time_align",
                     col_compare_against_ref_kw="human_transcripts_kw",
                     output_path=time_align_folder)
 
+                boxplot_microscopic_special_metric_per_keyword(
+                    df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align",
+                                   "human_transcripts_kw"]],
+                    special_metric="mutual_information",
+                    col_name="entropies_kw_from_time_align",
+                    col_compare_against_ref_kw="human_transcripts_kw",
+                    output_path=time_align_folder)
 
-                boxplot_microscopic_corr_per_listener(
+                boxplot_microscopic_special_metric_per_keyword(
                     df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
+                    special_metric="spearman_correlation",
                     col_name="entropies_kw_from_time_align",
                     col_compare_against_ref_kw="machine_trans_kw_from_time_align",
                     output_path=time_align_folder)
@@ -503,10 +514,26 @@ def evaluate_individual_run(config: InferenceConfig,
                     y_axis_label="TAD in seconds",
                     output_path=time_align_folder)
 
-                boxplot_microscopic_corr_per_listener(
-                    df_single_run[["references_kw", "listener", "model_type", "tad_kw",
-                                   "human_transcripts_kw"]],
+                # boxplot_microscopic_x_to_snr(
+                #     df_single_run[["references_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"]],
+                #     col_name="machine_trans_kw_from_time_align",
+                #     value_label="TODO",
+                #     y_axis_label="something with correlation i guess",
+                #     special_metric="correlation",
+                #     output_path=None)
+
+                boxplot_microscopic_special_metric_per_keyword(
+                    df_single_run[["references_kw", "listener", "model_type", "tad_kw", "human_transcripts_kw"]],
                     col_name="tad_kw",
+                    special_metric="spearman_correlation",
+                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_title="TAD",
+                    output_path=time_align_folder)
+
+                boxplot_microscopic_special_metric_per_keyword(
+                    df_single_run[["references_kw", "listener", "model_type", "tad_kw", "human_transcripts_kw"]],
+                    col_name="tad_kw",
+                    special_metric="mutual_information",
                     col_compare_against_ref_kw="human_transcripts_kw",
                     col_title="TAD",
                     output_path=time_align_folder)

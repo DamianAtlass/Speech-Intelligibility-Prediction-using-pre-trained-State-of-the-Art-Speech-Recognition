@@ -8,6 +8,7 @@ from scipy import stats as stats
 from tqdm import tqdm
 from typing import Literal, cast
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
+from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
 
 grid_vocab = {
     "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
@@ -198,11 +199,12 @@ def plot_wer_to_snr(
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         output_path: Path = None, ):
+    """
+    Plot the WER for each SNR and add the human WER values for comparison.
+    """
 
     if ("kw" in ref_col) != ("kw" in trans_col):
         raise RuntimeError("Sure those are the correct columns?")
-
-
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     one_run_attribute: str = list_shifting_attribute[0]
@@ -264,6 +266,9 @@ def plot_x_to_snr(df: pd.DataFrame,
                     shifting_attribute_label: str = None,
                     output_path: Path|None = None, ):
 
+    """
+    Plot a specific column to all SNRs, without human WER data for comparison.
+    """
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     x_labels = np.sort(df["snr"].unique())
 
@@ -310,7 +315,9 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
                               shifting_attribute: str = "model_type",
                               shifting_attribute_label = None,
                               output_path: Path = None, ):
-
+    """
+    Regular plot for unspecific columns to (line)plot for each SNR.
+    """
     if "kw" not in col_name:
         raise ValueError("This plot is for microscopic plotting (per kw)!")
 
@@ -360,12 +367,19 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
 
 from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp, axes
 
-def boxplot_microscopic_x_to_snr(df: pd.DataFrame,
-                              col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-                              value_label: str,
-                              y_axis_label: str = None,
-                              output_path: Path = None, ):
-    if "kw" not in col_name:
+def boxplot_microscopic_x_to_snr(
+        df: pd.DataFrame,
+        col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
+        value_label: str,
+        special_metric: Literal["correlation"]|None = None,
+        y_axis_label: str = None,
+        output_path: Path = None):
+    """
+    Create 3 boxplots per SNR and group values by the keyword.
+    CAN be used to plot correlation to human_transcripts_kw per keyword and SNR, but doesn't have to.
+    """
+
+    if not special_metric and "kw" not in col_name:
         raise ValueError("This plot is for microscopic plotting (per kw)!")
 
     x_labels = np.sort(df["snr"].unique())
@@ -376,19 +390,37 @@ def boxplot_microscopic_x_to_snr(df: pd.DataFrame,
         df_snr = df[df["snr"] == snr]
         values_current_snr = []
         for i_kw in range(3):
-            values_listener = []
+            values_keyword = []
             keywords: list[str] = grid_vocab[kw_labels[i_kw]]
             for keyword in keywords:
                 df_snr_keyword = df_snr[
                     df_snr["references_kw"].str.split().str[i_kw].eq(keyword)
                 ]
-                values_for_this_listener = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
-                values_for_this_listener = values_for_this_listener[values_for_this_listener.notnull()]
+                #calculate metric to plot
+                if not special_metric:
+                    values_for_this_listener = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
+                    values_for_this_listener = values_for_this_listener[values_for_this_listener.notnull()]
 
-                tmp2 = np.mean(values_for_this_listener)
-                assert tmp2 != np.nan
-                values_listener.append(tmp2)
-            values_current_snr.append(values_listener)
+                    tmp2 = np.mean(values_for_this_listener)
+                    assert tmp2 != np.nan
+                    values_keyword.append(tmp2)
+                elif special_metric == "correlation":
+                    x = df_snr_keyword["tad_kw"].apply(lambda x: x[i_kw])
+
+                    y1 = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
+                    y2 = df_snr_keyword["human_transcripts_kw"].apply(lambda x: x.split()[i_kw])
+                    y = (y1!=y2).astype(int) # wer with human results basically
+                    x_ranked = stats.rankdata(x)
+                    y_ranked = stats.rankdata(y)
+                    del y, x
+
+                    # spearman corr == pearson corr of ranks
+                    regr = stats.pearsonr(x_ranked, y_ranked)
+                    values_keyword.append(regr.statistic)
+                    #regr.pvalue
+                else:
+                    raise NotImplementedError
+            values_current_snr.append(values_keyword)
         values_per_snr.append(values_current_snr)
 
     space_between_plots = 2
@@ -434,7 +466,6 @@ def boxplot_microscopic_x_to_snr(df: pd.DataFrame,
 
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
-    #plt.show()
     plt.close()
 
 def boxplot_corr_per_listener(df: pd.DataFrame,
@@ -443,6 +474,9 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                               model_type: str | list[str],
                               output_path: Path = None,
                               shifting_attribute = "model_type"):
+    """
+    Boxplots grouped by listeners. May need an update.
+    """
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     corr_arr = []
@@ -457,8 +491,8 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         listeners = df_model_type["listener"].unique()
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
-            x = df_listener["wers_human_kw"]
-            y = df_listener[correlate_to]
+            x = df_listener[correlate_to]
+            y = df_listener["wers_human_kw"]
             x_ranked = stats.rankdata(x)
             y_ranked = stats.rankdata(y)
             del y, x
@@ -505,16 +539,16 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     #plt.show()
     plt.close()
 
-def boxplot_microscopic_corr_per_listener(
+def boxplot_microscopic_special_metric_per_keyword(
         df: pd.DataFrame,
-        #model: str,
-        #model_type: str ,
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
         col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"],  #kw column, estimated_transcript_kw for calibration
+        special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
         col_title: Literal["entropy", "TAD"] = "entropy",
         output_path: Path|None = None):
-    corr_arr = []
-    p_val_arr = []
+    """
+    3 boxplots for either spearman correlation or mutual information
+    """
 
     tmp_labels_dict = {
         "human_transcripts_kw": "listener's",
@@ -522,46 +556,58 @@ def boxplot_microscopic_corr_per_listener(
         "machine_trans_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
     }
     cali = " (calibration)" if "machine_trans_kw" in col_compare_against_ref_kw else ""
+    metric_name = {
+        "spearman_correlation": "Spearman Correlation",
+        "mutual_information": "Mutual Information"
+    }
 
     # the speech intelligibility is basically the wer between human transcripts and reference.
     # we want to measure a correlation between that, and the entropies. no need for  machine_trans_kw(_from_time_align) here!
     # To check the calibration, we measure correlation between the wer of the machine (ref_kw vs machine_trans_kw).
 
-    listeners = df["listener"].unique()
+    value_array = []
+    p_val_arr = []
     for kw_idx in tqdm(range(3)):
-        corr_arr_per_kw = []
+        value_array_per_kw = []
         p_val_arr_per_kw = []
-        for l in listeners:
-            df_listener = df[df["listener"] == l]
+        for kw in grid_vocab[kw_labels[kw_idx]]:
+            df_keyword = df[
+                df["references_kw"].str.split().str[kw_idx].eq(kw)
+            ]
 
-            ref_kw = df_listener["references_kw"].map(lambda x: x.split()[kw_idx])
+            ref_kw = df_keyword["references_kw"].map(lambda x: x.split()[kw_idx])
 
             if col_compare_against_ref_kw == "human_transcripts_kw":
                 # calibration
-                keywords = df_listener[col_compare_against_ref_kw].map(lambda x: x.split()[kw_idx])
+                keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x.split()[kw_idx])
             else:
                 #regular case
-                keywords = df_listener[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
+                keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
 
-
-            x = [int(r != k) for r, k in zip(ref_kw, keywords)]  # basically the WER
-
-            y = df_listener[col_name].map(lambda x: x[kw_idx])
+            x = df_keyword[col_name].map(lambda x: x[kw_idx])
+            y = (ref_kw!=keywords).astype(int)  # basically the WER
 
             filter = y.isna()
             y = y[~filter]
             x = np.array(x)[~filter]
+            if special_metric == "spearman_correlation":
 
-            x_ranked = stats.rankdata(x)
-            y_ranked = stats.rankdata(y)
-            del y, x
+                x_ranked = stats.rankdata(x)
+                y_ranked = stats.rankdata(y)
+                del y, x
 
-            # spearman corr == pearson corr of ranks
-            regr = stats.pearsonr(x_ranked, y_ranked)
-            corr_arr_per_kw.append(regr.statistic)
-            p_val_arr_per_kw.append(regr.pvalue)
+                # spearman corr == pearson corr of ranks
+                regr = stats.pearsonr(x=x_ranked, y=y_ranked)
+                value_array_per_kw.append(regr.statistic)
+                p_val_arr_per_kw.append(regr.pvalue)
 
-        corr_arr.append(torch.tensor(corr_arr_per_kw))
+            elif special_metric == "mutual_information":
+                mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
+                value_array_per_kw.append(mi[0])
+            else:
+                raise NotImplementedError
+
+        value_array.append(torch.tensor(value_array_per_kw))
         p_val_arr.append(torch.tensor(p_val_arr_per_kw))
 
     fig, ax = plt.subplots(figsize=(9, 7))
@@ -569,20 +615,25 @@ def boxplot_microscopic_corr_per_listener(
     positions = range(1, 3 + 1)
 
 
-    tmp = ax.boxplot(corr_arr,
+    tmp = ax.boxplot(value_array,
                      # notch=False,
                      positions=positions,
                      # meanline=True,
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} for each listener{cali}"
-    plot_title = title + " and maximum p-value to the rounded 4th digit"
+    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} for each keyword{cali}"
+    plot_title = title + (" and maximum p-value to the rounded 4th digit" if special_metric == "spearman_correlation" else "")
     plt.title(wrap_text(plot_title))
-    plt.ylabel("Spearman Correlation Coefficient")
+    plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
     ax.grid()
-    x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
-               zip(["color", "letter", "digit"], p_val_arr, corr_arr)]
+    if special_metric == "spearman_correlation":
+        x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
+                   zip(kw_labels, p_val_arr, value_array)]
+    else:
+        x_label = [f"{t}\nmean={c.mean():.4f}\n" for t, c in
+                   zip(kw_labels, value_array)]
+
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
     plt.ylim(-1, 1)
