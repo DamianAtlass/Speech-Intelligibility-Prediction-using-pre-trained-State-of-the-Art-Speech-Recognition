@@ -39,9 +39,9 @@ def test_find_ordered_indices_throw_exception(transcript, keywords_to_find):
 
 
 @pytest.mark.parametrize(("string", "output", "exception"), [
-    ("one two three four five six", "two four five", False),
-    ("one two three four", "two four", True),
-    ("place red with j three again", "red j three", False),
+    ("one two three four five six", ["two", "four", "five"], False),
+    ("one two three four", ["two", "four"], True),
+    ("place red with j three again", ["red", "j", "three"], False),
 ])
 def test_get_kw_by_index(string, output, exception):
     try:

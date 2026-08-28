@@ -14,7 +14,7 @@ import os
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_special_metric_per_keyword, join_kw_list_if_necessary, boxplot_microscopic_x_to_snr
+    boxplot_microscopic_special_metric_per_keyword, join_kw_list, boxplot_microscopic_x_to_snr
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -72,7 +72,7 @@ def ref_alignments_to_secods_and_rm_non_words(ref_alignments: list[dict]) -> lis
     return [a for a in ref_alignments if a["word"] not in ["sil", "sp"]]
 
 
-def get_kw_by_index(string) -> str:
+def get_kw_by_index(string) -> list[str]:
     """
     Return only the words at the keyword indices. Only use when you expect the correct length of 6 words.
     """
@@ -82,8 +82,8 @@ def get_kw_by_index(string) -> str:
 
     keywords_index = [1, 3, 4]
 
-    string = [s for i,s in enumerate(string) if i in keywords_index]
-    return " ".join(string)
+    str_list = [s for i,s in enumerate(string) if i in keywords_index]
+    return str_list
 
 def get_kw_using_needle_man_wunsch_alignments(
         reference: list[str],
@@ -612,13 +612,20 @@ def evaluate_varrying_run(config: InferenceConfig,
             return result
         return inner
 
-    grouped_df: DataFrameGroupBy = df_varrying_run.groupby(["audio_paths", "snr", "references_kw", "human_transcripts_kw"])
+    grouped_df = (
+        df_varrying_run
+        .groupby("audio_paths")
+    )
 
     def compute_stats(group: pd.DataFrame):
         return pd.Series({
+            "snr": group["snr"].iloc[0],
+            "references_kw": group["references_kw"].iloc[0],
+            "human_transcripts_kw": group["human_transcripts_kw"].iloc[0],
             "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
             "entropy_kw_var": wrapper(torch.var)(group["entropies_kw_from_time_align"]),
         })
+
     print("Creating the grouped dataframe ...")
     with catch_time() as t:
         grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
@@ -791,23 +798,25 @@ def get_data_whisper(output_path: Path,
         exit()
 
     #post-processing
-    references_kw: list[str] = [get_kw_by_index(o) for o in references]
+    references_kw: list[list[str]] = [get_kw_by_index(o) for o in references]
     machine_transcripts: list[str] = normalize(machine_transcripts)
+
     human_transcripts_kw: list[str] = normalize(human_transcripts_kw)
+    human_transcripts_kw: list[list[str]] = [o.split() for o in human_transcripts_kw]
 
     machine_transcripts_kw: list[list[str]] = cast(
         list[list[str]],
         [get_kw_by_identity(
-            reference_kw=r.split(),
+            reference_kw=r,
             transcript=t.split())
             for r, t in zip(references_kw, machine_transcripts)]
     )
 
     wers_machine: list[float] = wer_needleman_wunsch_per_sample(references=references, transcripts=machine_transcripts)
-    wers_machine_kw: list[float] = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=join_kw_list_if_necessary(machine_transcripts_kw))
+    wers_machine_kw: list[float] = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(machine_transcripts_kw))
 
     if dataset_type != "grid":
-        wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
+        wers_human_kw = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(human_transcripts_kw))
 
     data = {
         "avg_logprobs": avg_logprobs,
@@ -928,7 +937,7 @@ def get_data_whisper(output_path: Path,
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
             estimated_transcript_kw_idx = cast(list[int | None], get_kw_using_mixed_approaches(
-                 reference_kw=row["references_kw"].split(),
+                 reference_kw=row["references_kw"],
                  transcript=decoded_tokens_without_timestamp_tokens,
                  return_idx=True)) #todo does this require logprobs?
             assert len(estimated_transcript_kw_idx) == 3
@@ -970,9 +979,9 @@ def get_data_whisper(output_path: Path,
         if word_timestamps and extract_logprobs:
             # assume word_timestamps and extract_logprobs are True
             # kw_token_idx_from_alignment: list[list[int|None]] idx for logprobs
-            tmp_kw_entropy: list[float|np.nan] = []
+            tmp_kw_entropy: list[float|torch.nan] = []
             for idx in kw_token_idx_from_alignment:
-                tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx].mean()))
+                tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
 
             entropies_kw_from_time_align.append(tmp_kw_entropy)
 
@@ -1052,10 +1061,10 @@ def get_data_parakeet(output_path: Path,
             if extract_logprobs:
                 logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
 
-    references_kw = [get_kw_by_index(o) for o in references]
+    references_kw: list[list[str]] = [get_kw_by_index(o) for o in references]
     machine_transcripts = normalize(machine_transcripts)
     # machine_transcripts_kw = [get_only_keywords_using_alignments(reference=r.split(), transcript=t.split()) for r, t in zip(references, machine_transcripts)]
-    machine_transcripts_kw = [get_kw_by_identity(reference_kw=r.split(), transcript=t.split()) for r, t in
+    machine_transcripts_kw = [get_kw_by_identity(reference_kw=r, transcript=t.split()) for r, t in
                               zip(references_kw, machine_transcripts)] # out of date now
 
     recognize_kw = np.sum([np.sum([1 for _ in keywords]) for keywords in machine_transcripts_kw])
@@ -1160,7 +1169,7 @@ def get_data_parakeet(output_path: Path,
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
             transcript_keywords_indices: list[int | None] = get_kw_using_mixed_approaches(
-                reference_kw=row["references_kw"].split(),
+                reference_kw=row["references_kw"],
                 transcript=decoded_tokens_without_timestamp_tokens,
                 return_idx=True)
             # transcript_keywords_indices = [1,3,4]

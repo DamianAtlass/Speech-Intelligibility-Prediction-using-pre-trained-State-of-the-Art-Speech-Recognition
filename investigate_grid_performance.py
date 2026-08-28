@@ -4,7 +4,7 @@ from pathlib import Path
 from utils.new_config_dataclass import InferenceConfig, load_config
 from utils.evaluate_utils import get_data
 from utils.evaluate_utils import get_kw_using_mixed_approaches
-from utils.evaluate_utils import join_kw_list_if_necessary
+from utils.evaluate_utils import join_kw_list
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 from utils.werpy_utils import normalize
 path = Path("inferences/turbo_default_grid_subwords")
@@ -70,7 +70,7 @@ for pos, label in enumerate(kw_label):
 
 print(f"wer: {wer_needleman_wunsch(
     references=df["references_kw"],
-    transcripts=join_kw_list_if_necessary(df["machine_trans_kw_from_time_align"])
+    transcripts=join_kw_list(df["machine_trans_kw_from_time_align"])
 ):}")
 fig.tight_layout()
 plt.savefig("file.png")

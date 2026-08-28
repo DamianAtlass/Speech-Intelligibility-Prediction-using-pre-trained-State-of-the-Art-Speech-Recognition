@@ -55,14 +55,19 @@ def wrap_text(text: str, max_chars: int = 75) -> str:
 
     return "\n".join(lines)
 
-def join_kw_list_if_necessary(transcript_kw_or_similar: list[str]|list[list[str]]) -> list[str]:
+def join_kw_list(transcript_kw_or_similar: list[list[str]]) -> list[str]:
+    """
+    Args:
+        transcript_kw_or_similar: list of keywords that should be joined to a list of string for calculation of the WER for example.
+        Considers None values.
+
+    Returns:
+        list of joined strings
+    """
     if isinstance(transcript_kw_or_similar[0], str):
-        #assume this is list[str]
-        return cast(list[str] ,transcript_kw_or_similar)
-    elif isinstance(transcript_kw_or_similar[0], list):
-        return [" ".join(w for w in t if w is not None) for t in transcript_kw_or_similar]
-    else:
-        raise RuntimeError
+        raise RuntimeError("Should not be a string!")
+    return [" ".join(w for w in t if w is not None) for t in transcript_kw_or_similar]
+
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
                                     name: str,
@@ -215,8 +220,8 @@ def plot_wer_to_snr(
     human_values = []
     for snr in np.sort(df_human_data["snr"].unique()):
         df_snr = df_human_data[df_human_data["snr"]==snr]
-        wer_snr = wer_needleman_wunsch(references=df_snr["references_kw"].values,
-                                       transcripts=df_snr["human_transcripts_kw"].values)
+        wer_snr = wer_needleman_wunsch(references=join_kw_list(df_snr["references_kw"].values),
+                                       transcripts=join_kw_list(df_snr["human_transcripts_kw"].values))
         human_values.append(wer_snr)
     human_values = torch.Tensor(human_values) * 100
     del df_human_data
@@ -230,8 +235,14 @@ def plot_wer_to_snr(
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
 
-            transcripts = join_kw_list_if_necessary(df_snr[trans_col].values)
-            wer_snr = wer_needleman_wunsch(references=df_snr[ref_col].values,
+            def get_values(col):
+                values = df_snr[col].values
+                return join_kw_list(values) if "kw" in col else values
+
+            references = get_values(ref_col)
+            transcripts = get_values(trans_col)
+
+            wer_snr = wer_needleman_wunsch(references=references,
                                            transcripts=transcripts)
             mv_temp.append(wer_snr)
         machine_values.append(torch.tensor(mv_temp) * 100)
@@ -394,7 +405,7 @@ def boxplot_microscopic_x_to_snr(
             keywords: list[str] = grid_vocab[kw_labels[i_kw]]
             for keyword in keywords:
                 df_snr_keyword = df_snr[
-                    df_snr["references_kw"].str.split().str[i_kw].eq(keyword)
+                    df_snr["references_kw"].str[i_kw].eq(keyword)
                 ]
                 #calculate metric to plot
                 if not special_metric:
@@ -544,7 +555,7 @@ def boxplot_microscopic_special_metric_per_keyword(
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
         col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"],  #kw column, estimated_transcript_kw for calibration
         special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
-        col_title: Literal["entropy", "TAD"] = "entropy",
+        col_title: Literal["entropy", "TAD"]|str = "entropy",
         output_path: Path|None = None):
     """
     3 boxplots for either spearman correlation or mutual information
@@ -572,24 +583,19 @@ def boxplot_microscopic_special_metric_per_keyword(
         p_val_arr_per_kw = []
         for kw in grid_vocab[kw_labels[kw_idx]]:
             df_keyword = df[
-                df["references_kw"].str.split().str[kw_idx].eq(kw)
+                df["references_kw"].str[kw_idx].eq(kw)
             ]
 
-            ref_kw = df_keyword["references_kw"].map(lambda x: x.split()[kw_idx])
+            ref_kw = df_keyword["references_kw"].map(lambda x: x[kw_idx])
 
-            if col_compare_against_ref_kw == "human_transcripts_kw":
-                # calibration
-                keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x.split()[kw_idx])
-            else:
-                #regular case
-                keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
+            keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
 
             x = df_keyword[col_name].map(lambda x: x[kw_idx])
             y = (ref_kw!=keywords).astype(int)  # basically the WER
 
-            filter = y.isna()
+            filter = x.isna()
+            x = torch.from_numpy(np.array(x.astype(float))[~filter])
             y = y[~filter]
-            x = np.array(x)[~filter]
             if special_metric == "spearman_correlation":
 
                 x_ranked = stats.rankdata(x)
@@ -602,7 +608,6 @@ def boxplot_microscopic_special_metric_per_keyword(
                 p_val_arr_per_kw.append(regr.pvalue)
 
             elif special_metric == "mutual_information":
-                x = torch.hstack(x.tolist())
                 mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
                 value_array_per_kw.append(mi[0])
             else:
