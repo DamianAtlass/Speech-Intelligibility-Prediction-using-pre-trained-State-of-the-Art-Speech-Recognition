@@ -616,6 +616,8 @@ def boxplot_microscopic_special_metric_per_keyword(
         value_array.append(torch.tensor(value_array_per_kw))
         p_val_arr.append(torch.tensor(p_val_arr_per_kw))
 
+    all_above_zero = all([all([e >= 0 for e in v]) for v in value_array])
+
     fig, ax = plt.subplots(figsize=(9, 7))
 
     positions = range(1, 3 + 1)
@@ -642,7 +644,7 @@ def boxplot_microscopic_special_metric_per_keyword(
 
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
-    plt.ylim(-1, 1)
+    plt.ylim(0 if all_above_zero else -1, 1)
 
 
     if output_path:
