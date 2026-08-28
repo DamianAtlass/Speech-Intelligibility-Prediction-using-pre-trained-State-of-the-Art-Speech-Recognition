@@ -53,15 +53,15 @@ def foo():
 
     #step 2: plot
     plot_wer_to_snr(
-        df[["human_transcripts_kw", "machine_transcripts", "snr", "references", "references_kw", "name"]],
+        df[["human_transcript_kw", "machine_transcript", "snr", "reference", "reference_kw", "name"]],
         only_kw=False,
         shifting_attribute="name",
         shifting_attribute_label="\ndifferent models",
         output_path=subfolder_name)
 
     boxplot_corr_per_listener(
-        df[["wers_human_kw", "wers_machine_kw", "name", "listener"]],
-        correlate_to="wers_machine_kw",
+        df[["wer_human_kw", "wer_machine_kw", "name", "listener"]],
+        correlate_to="wer_machine_kw",
         model="whisper",
         model_type="",
         shifting_attribute="name",

@@ -262,7 +262,7 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
     # calc person correlation
 
     # name = f"WER of human result and {config.model.name}({config.model.model_type})"
-    # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "wers_machine_kw"]],
+    # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wer_human_kw", "wer_machine_kw"]],
     #                                                                   output_path=config.output_path,
     #                                                                   name=name,
     #                                                                   xlabel=f"WER of human results (only keywords)",
@@ -277,7 +277,7 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
     # })
 
     # name = f"the WER of human results and average log probability score of {config.model.name}({config.model.model_type})"
-    # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wers_human_kw", "avg_logprobs"]],
+    # r_val, p_val, x_normality_p, y_normality_p = calc_pearson_corr(df[["wer_human_kw", "avg_logprob"]],
     #                                                                   output_path=config.output_path,
     #                                                                   name=name,
     #                                                                   xlabel=f"WER of human results (only keywords)",
@@ -293,7 +293,7 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
 
     # calc spearman correlation
     name = f"the WER of human transcripts and {config.model.name}({config.model.model_type}) whisper transcripts (kw only)"
-    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "wers_machine_kw"]],
+    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wer_human_kw", "wer_machine_kw"]],
                                                     output_path=config.output_path,
                                                     name=name,
                                                     xlabel=f"WER of human results (only keywords)",
@@ -307,7 +307,7 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
     })
 
     name = f"the WER of human results and average log probability score of {config.model.name}({config.model.model_type})"
-    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wers_human_kw", "avg_logprobs"]],
+    r_val, p_val = plot_regr_line_for_spearman_corr(df[["wer_human_kw", "avg_logprob"]],
                                                     output_path=config.output_path,
                                                     name=name,
                                                     xlabel=f"WER of human results (only keywords)",
@@ -368,7 +368,7 @@ def evaluate_individual_run(config: InferenceConfig,
     del d
     summary = get_summary(df=df_single_run, dataset_type=config.data.val_split.dataset_type)
 
-    metrics = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
+    metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
     corr_summary = None
 
@@ -378,21 +378,21 @@ def evaluate_individual_run(config: InferenceConfig,
                      output_path=config.output_path)
 
     if config.data.val_split.dataset_type != "grid":
-        plot_x_to_snr(df=df_single_run[["machine_transcripts", "snr", "model_type"]],
+        plot_x_to_snr(df=df_single_run[["machine_transcript", "snr", "model_type"]],
                       plotting_attribute="empty transcripts",
                       shifting_attribute_label="whisper",
                       shifting_attribute="model_type",
                       output_path=config.output_path)
 
-        plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts", "snr", "references_kw", "references", "model_type"]],
-                        ref_col="references",
-                        trans_col="machine_transcripts",
+        plot_wer_to_snr(df=df_single_run[["human_transcript_kw", "machine_transcript", "snr", "reference_kw", "reference", "model_type"]],
+                        ref_col="reference",
+                        trans_col="machine_transcript",
                         shifting_attribute="model_type",
                         output_path=config.output_path)
 
-        plot_wer_to_snr(df=df_single_run[["human_transcripts_kw", "machine_transcripts_kw", "snr", "references_kw", "model_type"]],
-                        ref_col="references_kw",
-                        trans_col="machine_transcripts_kw",
+        plot_wer_to_snr(df=df_single_run[["human_transcript_kw", "machine_transcript_kw", "snr", "reference_kw", "model_type"]],
+                        ref_col="reference_kw",
+                        trans_col="machine_transcript_kw",
                         shifting_attribute="model_type",
                         output_path=config.output_path)
 
@@ -400,20 +400,20 @@ def evaluate_individual_run(config: InferenceConfig,
         if False:
             corr_summary = plot_regr_lines(df_single_run, config)
 
-            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine_kw", "model_type", "listener"]],
-                                      correlate_to="wers_machine_kw",
+            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "wer_machine_kw", "model_type", "listener"]],
+                                      correlate_to="wer_machine_kw",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
                                       output_path=config.output_path)
 
-            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "wers_machine", "model_type", "listener"]],
-                                      correlate_to="wers_machine",
+            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "wer_machine", "model_type", "listener"]],
+                                      correlate_to="wer_machine",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
                                       output_path=config.output_path)
 
-            boxplot_corr_per_listener(df_single_run[["wers_human_kw", "avg_logprobs", "model_type", "listener"]],
-                                      correlate_to="avg_logprobs",
+            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "avg_logprob", "model_type", "listener"]],
+                                      correlate_to="avg_logprob",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
                                       output_path=config.output_path)
@@ -421,7 +421,7 @@ def evaluate_individual_run(config: InferenceConfig,
     # should be reordered at some point todo
     if config.extract_logprobs:
         if config.data.val_split.dataset_type == "grid_bc":
-            plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wers_human_kw"]],
+            plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wer_human_kw"]],
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
                           shifting_attribute="model_type",
@@ -429,7 +429,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
         if config.data.val_split.dataset_type == "grid_bc":
             boxplot_corr_per_listener(
-                df_single_run[["average_macroscopic_entropy", "wers_human_kw", "model_type", "listener"]],
+                df_single_run[["average_macroscopic_entropy", "wer_human_kw", "model_type", "listener"]],
                 correlate_to="average_macroscopic_entropy",
                 model=config.model.name,
                 model_type=config.model.model_type,
@@ -444,15 +444,15 @@ def evaluate_individual_run(config: InferenceConfig,
                                       output_path=config.output_path)
 
             boxplot_microscopic_special_metric_per_keyword(
-                df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "human_transcripts_kw"]],
+                df_single_run[["entropies_kw", "listener", "model_type", "reference_kw", "human_transcript_kw"]],
                 special_metric="spearman_correlation",
                 col_name="entropies_kw",
-                col_compare_against_ref_kw="human_transcripts_kw",
+                col_compare_against_ref_kw="human_transcript_kw",
                 output_path=config.output_path)
 
             #calibration
             boxplot_microscopic_special_metric_per_keyword(
-                df_single_run[["entropies_kw", "listener", "model_type", "references_kw", "estimated_transcript_kw"]],
+                df_single_run[["entropies_kw", "listener", "model_type", "reference_kw", "estimated_transcript_kw"]],
                 special_metric="spearman_correlation",
                 col_name="entropies_kw",
                 col_compare_against_ref_kw="estimated_transcript_kw",
@@ -464,8 +464,8 @@ def evaluate_individual_run(config: InferenceConfig,
             time_align_folder.mkdir(parents=True, exist_ok=True)
             plot_wer_to_snr(
                 df=df_single_run[
-                ["human_transcripts_kw", "machine_trans_kw_from_time_align", "snr", "references_kw", "model_type"]],
-                ref_col="references_kw",
+                ["human_transcript_kw", "machine_trans_kw_from_time_align", "snr", "reference_kw", "model_type"]],
+                ref_col="reference_kw",
                 trans_col="machine_trans_kw_from_time_align",
                 shifting_attribute="model_type",
                 output_path=time_align_folder)
@@ -480,22 +480,22 @@ def evaluate_individual_run(config: InferenceConfig,
                                           output_path=time_align_folder)
 
                 boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcripts_kw"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcript_kw"]],
                     special_metric="spearman_correlation",
                     col_name="entropies_kw_from_time_align",
-                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_compare_against_ref_kw="human_transcript_kw",
                     output_path=time_align_folder)
 
                 boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align",
-                                   "human_transcripts_kw"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align",
+                                   "human_transcript_kw"]],
                     special_metric="mutual_information",
                     col_name="entropies_kw_from_time_align",
-                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_compare_against_ref_kw="human_transcript_kw",
                     output_path=time_align_folder)
 
                 boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["references_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
                     special_metric="spearman_correlation",
                     col_name="entropies_kw_from_time_align",
                     col_compare_against_ref_kw="machine_trans_kw_from_time_align",
@@ -510,14 +510,14 @@ def evaluate_individual_run(config: InferenceConfig,
                     output_path=time_align_folder)
 
                 boxplot_microscopic_x_to_snr(
-                    df_single_run[["references_kw", "listener", "model_type", "snr", "tad_kw"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
                     col_name="tad_kw",
                     value_label="time alignment difference (TAD)",
                     y_axis_label="TAD in seconds",
                     output_path=time_align_folder)
 
                 # boxplot_microscopic_x_to_snr(
-                #     df_single_run[["references_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"]],
+                #     df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"]],
                 #     col_name="machine_trans_kw_from_time_align",
                 #     value_label="TODO",
                 #     y_axis_label="something with correlation i guess",
@@ -525,18 +525,18 @@ def evaluate_individual_run(config: InferenceConfig,
                 #     output_path=None)
 
                 boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["references_kw", "listener", "model_type", "tad_kw", "human_transcripts_kw"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
                     col_name="tad_kw",
                     special_metric="spearman_correlation",
-                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_compare_against_ref_kw="human_transcript_kw",
                     col_title="TAD",
                     output_path=time_align_folder)
 
                 boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["references_kw", "listener", "model_type", "tad_kw", "human_transcripts_kw"]],
+                    df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
                     col_name="tad_kw",
                     special_metric="mutual_information",
-                    col_compare_against_ref_kw="human_transcripts_kw",
+                    col_compare_against_ref_kw="human_transcript_kw",
                     col_title="TAD",
                     output_path=time_align_folder)
 
@@ -574,9 +574,9 @@ def evaluate_varrying_run(config: InferenceConfig,
                               shifting_attribute="temperature",
                               output_path=config.output_path)
 
-    plot_wer_to_snr(df=df_varrying_run[["human_transcripts_kw", "machine_trans_kw_from_time_align", "snr", "references_kw",
-                                      "references", "temperature"]],
-                    ref_col="references_kw",
+    plot_wer_to_snr(df=df_varrying_run[["human_transcript_kw", "machine_trans_kw_from_time_align", "snr", "reference_kw",
+                                      "reference", "temperature"]],
+                    ref_col="reference_kw",
                     trans_col="machine_trans_kw_from_time_align",
                     shifting_attribute_label="different temperatures",
                     shifting_attribute="temperature",
@@ -596,9 +596,6 @@ def evaluate_varrying_run(config: InferenceConfig,
                               shifting_attribute="temperature",
                               output_path=config.output_path)
 
-
-    #raise RuntimeError
-
     # GROUPED
     ## create grouped df
     def wrapper(func: Callable) -> Callable:
@@ -612,16 +609,13 @@ def evaluate_varrying_run(config: InferenceConfig,
             return result
         return inner
 
-    grouped_df = (
-        df_varrying_run
-        .groupby("audio_paths")
-    )
+    grouped_df = df_varrying_run.groupby("audio_path")
 
     def compute_stats(group: pd.DataFrame):
         return pd.Series({
             "snr": group["snr"].iloc[0],
-            "references_kw": group["references_kw"].iloc[0],
-            "human_transcripts_kw": group["human_transcripts_kw"].iloc[0],
+            "reference_kw": group["reference_kw"].iloc[0],
+            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
             "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
             "entropy_kw_var": wrapper(torch.var)(group["entropies_kw_from_time_align"]),
         })
@@ -651,18 +645,18 @@ def evaluate_varrying_run(config: InferenceConfig,
             output_path=output_path)
 
         boxplot_microscopic_special_metric_per_keyword(
-            grouped_df[["references_kw", m, "human_transcripts_kw"]],
+            grouped_df[["reference_kw", m, "human_transcript_kw"]],
             col_name=m,
             special_metric="spearman_correlation",
-            col_compare_against_ref_kw="human_transcripts_kw",
+            col_compare_against_ref_kw="human_transcript_kw",
             col_title=f"{l} over different temperatures",
             output_path=output_path)
 
         boxplot_microscopic_special_metric_per_keyword(
-            grouped_df[["references_kw", m, "human_transcripts_kw"]],
+            grouped_df[["reference_kw", m, "human_transcript_kw"]],
             col_name=m,
             special_metric="mutual_information",
-            col_compare_against_ref_kw="human_transcripts_kw",
+            col_compare_against_ref_kw="human_transcript_kw",
             col_title=f"{l} over different temperatures",
             output_path=output_path)
 
@@ -680,9 +674,9 @@ def get_summary(df: pd.DataFrame,
     """
 
     summary = []
-    df["machine_transcripts_len"] = df["machine_transcripts"].map(lambda x: len(x.split()))
+    df["machine_transcripts_len"] = df["machine_transcript"].map(lambda x: len(x.split()))
     metric_names = ["Logprob (per sequence)", "WER (machine)", "WER (machine, kw only)", "transcript length"]
-    metrics_col = ["avg_logprobs", "wers_machine", "wers_machine_kw", "machine_transcripts_len"]
+    metrics_col = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
     for n, m in zip(metric_names, metrics_col):
         values = df[m]
@@ -819,22 +813,22 @@ def get_data_whisper(output_path: Path,
         wers_human_kw = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(human_transcripts_kw))
 
     data = {
-        "avg_logprobs": avg_logprobs,
-        "references": references,
-        "references_alignments": references_alignments,
-        "references_kw": references_kw,
-        "wers_machine": wers_machine,
-        "wers_machine_kw": wers_machine_kw,
-        "machine_transcripts": machine_transcripts,
-        "machine_transcripts_kw": machine_transcripts_kw,
-        "audio_paths": audio_paths,
+        "avg_logprob": avg_logprobs,
+        "reference": references,
+        "reference_alignments": references_alignments,
+        "reference_kw": references_kw,
+        "wer_machine": wers_machine,
+        "wer_machine_kw": wers_machine_kw,
+        "machine_transcript": machine_transcripts,
+        "machine_transcript_kw": machine_transcripts_kw,
+        "audio_path": audio_paths,
         "json_path": json_path
     }
 
     if dataset_type != "grid":
         data.update({
-        "wers_human_kw": wers_human_kw,
-        "human_transcripts_kw": human_transcripts_kw,
+        "wer_human_kw": wers_human_kw,
+        "human_transcript_kw": human_transcripts_kw,
         "listener": listener,
         "snr": snr,
         })
@@ -842,7 +836,7 @@ def get_data_whisper(output_path: Path,
     if extract_logprobs:
         data.update({
             "decoded_tokens_with_timestamps": decoded_tokens_with_timestamps,
-            "logprobs_paths": logprobs_paths,
+            "logprobs_path": logprobs_paths,
         })
     if word_timestamps:
         data.update({
@@ -872,7 +866,7 @@ def get_data_whisper(output_path: Path,
 
     for index, row in tqdm(df.iterrows(), total=len(df)):
 
-        transcript_exists = row["machine_transcripts"] != ""
+        transcript_exists = row["machine_transcript"] != ""
         if not transcript_exists:
             no_transcript_counter += 1
             average_macroscopic_entropy.append(torch.nan)
@@ -892,7 +886,7 @@ def get_data_whisper(output_path: Path,
 
         if extract_logprobs:
             logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
-                row["logprobs_paths"]).name
+                row["logprobs_path"]).name
             logprob_tensor = torch.load(logprob_path)
 
             # calculate entropy
@@ -927,17 +921,17 @@ def get_data_whisper(output_path: Path,
 
 
             # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+            #trans_keywords_indices = get_only_keywords_by_identity(row["reference_kw"].split(),
             #                                                       decoded_tokens_without_timestamp_tokens,
             #                                                       return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["reference_kw"].split(),
             #                                                                      decoded_tokens_without_timestamp_tokens,
             #                                                                      return_idx=True)
-            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["reference_kw"].split(),
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
             estimated_transcript_kw_idx = cast(list[int | None], get_kw_using_mixed_approaches(
-                 reference_kw=row["references_kw"],
+                 reference_kw=row["reference_kw"],
                  transcript=decoded_tokens_without_timestamp_tokens,
                  return_idx=True)) #todo does this require logprobs?
             assert len(estimated_transcript_kw_idx) == 3
@@ -958,7 +952,7 @@ def get_data_whisper(output_path: Path,
                 assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
                     decoded_tokens_without_timestamp_tokens)
 
-            ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["references_alignments"])
+            ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["reference_alignments"])
             trans_alignment = row["transcript_alignments"]
             for o in trans_alignment:
                 o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
@@ -1080,28 +1074,28 @@ def get_data_parakeet(output_path: Path,
         wers_human_kw = wer_needleman_wunsch_per_sample(references=references_kw, transcripts=human_transcripts_kw)
 
     data = {
-        "avg_logprobs": avg_logprobs,
-        "references": references,
-        "references_kw": references_kw,
-        "wers_machine": wers_machine,
-        "wers_machine_kw": wers_machine_kw,
-        "machine_transcripts": machine_transcripts,
+        "avg_logprob": avg_logprobs,
+        "reference": references,
+        "reference_kw": references_kw,
+        "wer_machine": wers_machine,
+        "wer_machine_kw": wers_machine_kw,
+        "machine_transcript": machine_transcripts,
         #"decoded_tokens_with_timestamps": decoded_tokens_with_timestamps,
-        "machine_transcripts_kw": machine_transcripts_kw,
-        "audio_paths": audio_paths,
+        "machine_transcript_kw": machine_transcripts_kw,
+        "audio_path": audio_paths,
     }
 
     if dataset_type != "grid":
         data.update({
-            "wers_human_kw": wers_human_kw,
-            "human_transcripts_kw": human_transcripts_kw,
+            "wer_human_kw": wers_human_kw,
+            "human_transcript_kw": human_transcripts_kw,
             "listener": listener,
             "snr": snr,
         })
 
     if extract_logprobs:
         data.update({
-            "logprobs_paths": logprobs_paths,
+            "logprobs_path": logprobs_paths,
         })
 
     df = pd.DataFrame(data)
@@ -1121,11 +1115,11 @@ def get_data_parakeet(output_path: Path,
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
             # load logprobs
-            if row["logprobs_paths"] == "":
+            if row["logprobs_path"] == "":
                 error_counter += 1
                 continue
             logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
-                row["logprobs_paths"]).name
+                row["logprobs_path"]).name
             logprob_tensor = torch.load(logprob_path)
 
             # calculate entropy
@@ -1159,17 +1153,17 @@ def get_data_parakeet(output_path: Path,
                                                                 apply_werpy_normalize=False)
 
             # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-            # trans_keywords_indices = get_only_keywords_by_identity(row["references_kw"].split(),
+            # trans_keywords_indices = get_only_keywords_by_identity(row["reference_kw"].split(),
             #                                                       decoded_tokens_without_timestamp_tokens,
             #                                                       return_idx=True)
-            # trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["references_kw"].split(),
+            # trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["reference_kw"].split(),
             #                                                                      decoded_tokens_without_timestamp_tokens,
             #                                                                      return_idx=True)
-            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["references_kw"].split(),
+            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["reference_kw"].split(),
             #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
             #                                                                   return_idx=True)
             transcript_keywords_indices: list[int | None] = get_kw_using_mixed_approaches(
-                reference_kw=row["references_kw"],
+                reference_kw=row["reference_kw"],
                 transcript=decoded_tokens_without_timestamp_tokens,
                 return_idx=True)
             # transcript_keywords_indices = [1,3,4]

@@ -32,7 +32,7 @@ sns.set_theme(style="whitegrid")
 # ---------------------------------------------------------------
 
 #df_clean = df[df["snr"] == 40].copy()
-#df_clean = df_clean[df["wers_machine_kw"]==1]
+#df_clean = df_clean[df["wer_machine_kw"]==1]
 
 n_keywords = 3
 kw_label = ["color", "letter", "digit"]
@@ -42,12 +42,12 @@ for pos, label in enumerate(kw_label):
     sub_pairs = Counter()
 
     kw_specific_wer = wer_needleman_wunsch(
-        references=[o.split()[pos] for o in df["references_kw"]],
+        references=[o.split()[pos] for o in df["reference_kw"]],
         transcripts=[o[pos] for o in df["machine_trans_kw_from_time_align"]])
     kw_specific_wer = round(kw_specific_wer*100, 2)
 
     for _, row in df.iterrows():
-        ref = row["references_kw"].split()[pos]
+        ref = row["reference_kw"].split()[pos]
         hyp = normalize([row["machine_trans_kw_from_time_align"][pos]], apply_werpy_normalize=False, apply_separate_numbers_from_letter=False)[0]
 
         ref = str(ref).strip().lower() if ref is not None else None
@@ -69,7 +69,7 @@ for pos, label in enumerate(kw_label):
 
 
 print(f"wer: {wer_needleman_wunsch(
-    references=df["references_kw"],
+    references=df["reference_kw"],
     transcripts=join_kw_list(df["machine_trans_kw_from_time_align"])
 ):}")
 fig.tight_layout()

@@ -22,16 +22,16 @@ kw_colors = ["green", "blue", "red"]
 kw_colors_short = ["g", "b", "r"]
 
 sorting_reverse = {
-    "wers_machine": True,
-    "avg_logprobs": False,
-    "wers_machine_kw": True,
+    "wer_machine": True,
+    "avg_logprob": False,
+    "wer_machine_kw": True,
 }
 
 labels_dict = {
     "average_macroscopic_entropy": "average (macroscopic) entropy",
-    "wers_machine": "WER machine",
-    "wers_machine_kw": "WER machine (keywords only)",
-    'avg_logprobs': "Logprob (per sequence)",
+    "wer_machine": "WER machine",
+    "wer_machine_kw": "WER machine (keywords only)",
+    "avg_logprob": "Logprob (per sequence)",
     "machine_transcripts_len": "length of transcripts",
     "empty transcripts": "Amount of empty transcrips in %"
 }
@@ -199,8 +199,8 @@ def plot_metrics(data: list[pd.Series],
 
 def plot_wer_to_snr(
         df: pd.DataFrame,
-        ref_col: Literal["references", "references_kw"],
-        trans_col: Literal["machine_transcripts", "machine_transcripts_kw", "machine_trans_kw_from_time_align"],
+        ref_col: Literal["reference", "reference_kw"],
+        trans_col: Literal["machine_transcript", "machine_transcript_kw", "machine_trans_kw_from_time_align"],
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         output_path: Path = None, ):
@@ -220,8 +220,8 @@ def plot_wer_to_snr(
     human_values = []
     for snr in np.sort(df_human_data["snr"].unique()):
         df_snr = df_human_data[df_human_data["snr"]==snr]
-        wer_snr = wer_needleman_wunsch(references=join_kw_list(df_snr["references_kw"].values),
-                                       transcripts=join_kw_list(df_snr["human_transcripts_kw"].values))
+        wer_snr = wer_needleman_wunsch(references=join_kw_list(df_snr["reference_kw"].values),
+                                       transcripts=join_kw_list(df_snr["human_transcript_kw"].values))
         human_values.append(wer_snr)
     human_values = torch.Tensor(human_values) * 100
     del df_human_data
@@ -290,7 +290,7 @@ def plot_x_to_snr(df: pd.DataFrame,
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
             if plotting_attribute == "empty transcripts":
-                value = sum(df_snr["machine_transcripts"] == "") / len(df_snr)
+                value = sum(df_snr["machine_transcript"] == "") / len(df_snr)
             else:
                 v = torch.tensor(df_snr[plotting_attribute].values)
                 value = torch.mean(v[~v.isnan()])
@@ -405,7 +405,7 @@ def boxplot_microscopic_x_to_snr(
             keywords: list[str] = grid_vocab[kw_labels[i_kw]]
             for keyword in keywords:
                 df_snr_keyword = df_snr[
-                    df_snr["references_kw"].str[i_kw].eq(keyword)
+                    df_snr["reference_kw"].str[i_kw].eq(keyword)
                 ]
                 #calculate metric to plot
                 if not special_metric:
@@ -419,7 +419,7 @@ def boxplot_microscopic_x_to_snr(
                     x = df_snr_keyword["tad_kw"].apply(lambda x: x[i_kw])
 
                     y1 = df_snr_keyword[col_name].apply(lambda x: x[i_kw])
-                    y2 = df_snr_keyword["human_transcripts_kw"].apply(lambda x: x.split()[i_kw])
+                    y2 = df_snr_keyword["human_transcript_kw"].apply(lambda x: x.split()[i_kw])
                     y = (y1!=y2).astype(int) # wer with human results basically
                     x_ranked = stats.rankdata(x)
                     y_ranked = stats.rankdata(y)
@@ -503,7 +503,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
             x = df_listener[correlate_to]
-            y = df_listener["wers_human_kw"]
+            y = df_listener["wer_human_kw"]
             x_ranked = stats.rankdata(x)
             y_ranked = stats.rankdata(y)
             del y, x
@@ -528,9 +528,9 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
     d = {
-        "wers_machine_kw": "WER for keywords",
-        "wers_machine": "WER for the whole sequence",
-        "avg_logprobs": "average log probability score (per sequence)",
+        "wer_machine_kw": "WER for keywords",
+        "wer_machine": "WER for the whole sequence",
+        "avg_logprob": "average log probability score (per sequence)",
         "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
     }
 
@@ -553,7 +553,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 def boxplot_microscopic_special_metric_per_keyword(
         df: pd.DataFrame,
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-        col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcripts_kw"],  #kw column, estimated_transcript_kw for calibration
+        col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"],  #kw column, estimated_transcript_kw for calibration
         special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
         col_title: Literal["entropy", "TAD"]|str = "entropy",
         output_path: Path|None = None):
@@ -562,7 +562,7 @@ def boxplot_microscopic_special_metric_per_keyword(
     """
 
     tmp_labels_dict = {
-        "human_transcripts_kw": "listener's",
+        "human_transcript_kw": "listener's",
         "estimated_transcript_kw": " machine's", # specifically for calibration
         "machine_trans_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
     }
@@ -583,10 +583,10 @@ def boxplot_microscopic_special_metric_per_keyword(
         p_val_arr_per_kw = []
         for kw in grid_vocab[kw_labels[kw_idx]]:
             df_keyword = df[
-                df["references_kw"].str[kw_idx].eq(kw)
+                df["reference_kw"].str[kw_idx].eq(kw)
             ]
 
-            ref_kw = df_keyword["references_kw"].map(lambda x: x[kw_idx])
+            ref_kw = df_keyword["reference_kw"].map(lambda x: x[kw_idx])
 
             keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
 
