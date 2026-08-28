@@ -396,7 +396,7 @@ def evaluate_individual_run(config: InferenceConfig,
                         shifting_attribute="model_type",
                         output_path=config.output_path)
 
-        print("Generate correlation plots")
+        #print("Generate correlation plots")
         if False:
             corr_summary = plot_regr_lines(df_single_run, config)
 
@@ -427,7 +427,6 @@ def evaluate_individual_run(config: InferenceConfig,
                           shifting_attribute="model_type",
                           output_path=config.output_path)
 
-        if config.data.val_split.dataset_type == "grid_bc":
             boxplot_corr_per_listener(
                 df_single_run[["average_macroscopic_entropy", "wer_human_kw", "model_type", "listener"]],
                 correlate_to="average_macroscopic_entropy",
@@ -435,8 +434,6 @@ def evaluate_individual_run(config: InferenceConfig,
                 model_type=config.model.model_type,
                 output_path=config.output_path)
 
-
-        if config.extract_logprobs and config.data.val_split.dataset_type == "grid_bc":
             plot_microscopic_x_to_snr(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
                                       col_name="entropies_kw",
                                       value_label="entropy",
@@ -458,103 +455,104 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_compare_against_ref_kw="estimated_transcript_kw",
                 output_path=config.output_path)
 
-        # time alignments stuff
-        if config.word_timestamps and config.data.val_split.dataset_type == "grid_bc":
-            time_align_folder = config.output_path /"plots_from_time_alignments"
-            time_align_folder.mkdir(parents=True, exist_ok=True)
-            plot_wer_to_snr(
-                df=df_single_run[
-                ["human_transcript_kw", "machine_trans_kw_from_time_align", "snr", "reference_kw", "model_type"]],
-                ref_col="reference_kw",
-                trans_col="machine_trans_kw_from_time_align",
-                shifting_attribute="model_type",
-                output_path=time_align_folder)
+    # time alignments stuff
+    time_align_folder = config.output_path /"plots_from_time_alignments"
+    if config.word_timestamps and config.data.val_split.dataset_type == "grid_bc":
+        time_align_folder.mkdir(parents=True, exist_ok=True)
+        plot_wer_to_snr(
+            df=df_single_run[
+            ["human_transcript_kw", "machine_trans_kw_from_time_align", "snr", "reference_kw", "model_type"]],
+            ref_col="reference_kw",
+            trans_col="machine_trans_kw_from_time_align",
+            shifting_attribute="model_type",
+            output_path=time_align_folder)
+
+        time_align_tad_folder = time_align_folder / "TAD"
+        time_align_tad_folder.mkdir(exist_ok=True)
+
+        plot_microscopic_x_to_snr(
+            df_single_run[["listener", "model_type", "snr", "tad_kw"]],
+            col_name="tad_kw",
+            value_label="time alignment difference (TAD)",
+            y_axis_label="TAD in seconds",
+            shifting_attribute="model_type",
+            output_path=time_align_tad_folder)
+
+        boxplot_microscopic_x_to_snr(
+            df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
+            col_name="tad_kw",
+            value_label="time alignment difference (TAD)",
+            y_axis_label="TAD in seconds",
+            output_path=time_align_tad_folder)
+
+        boxplot_microscopic_special_metric_per_keyword(
+            df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
+            col_name="tad_kw",
+            special_metric="spearman_correlation",
+            col_compare_against_ref_kw="human_transcript_kw",
+            col_title="TAD",
+            output_path=time_align_tad_folder)
+
+        boxplot_microscopic_special_metric_per_keyword(
+            df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
+            col_name="tad_kw",
+            special_metric="mutual_information",
+            col_compare_against_ref_kw="human_transcript_kw",
+            col_title="TAD",
+            output_path=time_align_tad_folder)
+
+        if config.extract_logprobs:
+            time_align_entropy_folder = time_align_folder/"entropy"
+            time_align_entropy_folder.mkdir(exist_ok=True)
+
+            plot_microscopic_x_to_snr(df_single_run[["entropies_kw_from_time_align", "listener", "model_type", "snr"]],
+                                      col_name="entropies_kw_from_time_align",
+                                      value_label="entropy",
+                                      shifting_attribute="model_type",
+                                      output_path=time_align_entropy_folder)
+
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcript_kw"]],
+                special_metric="spearman_correlation",
+                col_name="entropies_kw_from_time_align",
+                col_compare_against_ref_kw="human_transcript_kw",
+                output_path=time_align_entropy_folder)
+
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align",
+                               "human_transcript_kw"]],
+                special_metric="mutual_information",
+                col_name="entropies_kw_from_time_align",
+                col_compare_against_ref_kw="human_transcript_kw",
+                output_path=time_align_entropy_folder)
+
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
+                special_metric="spearman_correlation",
+                col_name="entropies_kw_from_time_align",
+                col_compare_against_ref_kw="machine_trans_kw_from_time_align",
+                output_path=time_align_entropy_folder)
 
 
-            if config.extract_logprobs:
+            # boxplot_microscopic_x_to_snr(
+            #     df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"]],
+            #     col_name="machine_trans_kw_from_time_align",
+            #     value_label="TODO",
+            #     y_axis_label="something with correlation i guess",
+            #     special_metric="correlation",
+            #     output_path=None)
 
-                plot_microscopic_x_to_snr(df_single_run[["entropies_kw_from_time_align", "listener", "model_type", "snr"]],
-                                          col_name="entropies_kw_from_time_align",
-                                          value_label="entropy",
-                                          shifting_attribute="model_type",
-                                          output_path=time_align_folder)
+        # average detected kw position
+        idx_list = [[], [], []]
+        foo = []
+        for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
+            indexes = row["machine_trans_kw_idx_from_time_align"]
+            for i, kw_idx in enumerate([1,3,4]):
+                if indexes[i] is not None:
+                    idx_list[i].append(indexes[i])
 
-                boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcript_kw"]],
-                    special_metric="spearman_correlation",
-                    col_name="entropies_kw_from_time_align",
-                    col_compare_against_ref_kw="human_transcript_kw",
-                    output_path=time_align_folder)
-
-                boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align",
-                                   "human_transcript_kw"]],
-                    special_metric="mutual_information",
-                    col_name="entropies_kw_from_time_align",
-                    col_compare_against_ref_kw="human_transcript_kw",
-                    output_path=time_align_folder)
-
-                boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "machine_trans_kw_from_time_align"]],
-                    special_metric="spearman_correlation",
-                    col_name="entropies_kw_from_time_align",
-                    col_compare_against_ref_kw="machine_trans_kw_from_time_align",
-                    output_path=time_align_folder)
-
-                plot_microscopic_x_to_snr(
-                    df_single_run[["listener", "model_type", "snr", "tad_kw"]],
-                    col_name="tad_kw",
-                    value_label="time alignment difference (TAD)",
-                    y_axis_label="TAD in seconds",
-                    shifting_attribute="model_type",
-                    output_path=time_align_folder)
-
-                boxplot_microscopic_x_to_snr(
-                    df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
-                    col_name="tad_kw",
-                    value_label="time alignment difference (TAD)",
-                    y_axis_label="TAD in seconds",
-                    output_path=time_align_folder)
-
-                # boxplot_microscopic_x_to_snr(
-                #     df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"]],
-                #     col_name="machine_trans_kw_from_time_align",
-                #     value_label="TODO",
-                #     y_axis_label="something with correlation i guess",
-                #     special_metric="correlation",
-                #     output_path=None)
-
-                boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
-                    col_name="tad_kw",
-                    special_metric="spearman_correlation",
-                    col_compare_against_ref_kw="human_transcript_kw",
-                    col_title="TAD",
-                    output_path=time_align_folder)
-
-                boxplot_microscopic_special_metric_per_keyword(
-                    df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
-                    col_name="tad_kw",
-                    special_metric="mutual_information",
-                    col_compare_against_ref_kw="human_transcript_kw",
-                    col_title="TAD",
-                    output_path=time_align_folder)
-
-            # average detected kw position
-            idx_list = [[], [], []]
-            foo = []
-            for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
-                indexes = row["trans_kw_idx_from_align"]
-                if len(indexes) > 0:
-                    ts = foo.append(row["transcript_alignments"][0]["start"])
-                    if ts != 0 and ts is not None:
-                        pass
-                for i, kw_idx in enumerate([1,3,4]):
-                    if indexes[i] is not None:
-                        idx_list[i].append(indexes[i])
-
-            idx_list = [np.array(a) for a in idx_list]
-            summary.append({f"kw at index {i}": {"mean idx of word": arr.mean(), "std": arr.std()} for i, arr in zip( [1,3,4], idx_list)})
+        idx_list = [np.array(a) for a in idx_list]
+        summary.append({f"kw at index {i}": {"mean idx of word": arr.mean(), "std": arr.std()} for i, arr in zip( [1,3,4], idx_list)})
 
 
 
@@ -855,7 +853,7 @@ def get_data_whisper(output_path: Path,
     normalized_decoded_tokens_without_timestamps_list: list[list[str|None]] = []
     #for time_alignments
     machine_trans_kw_from_time_align: list[list[str|None]] = []
-    trans_kw_idx_from_align: list[list[int|None]] = []
+    machine_trans_kw_idx_from_time_align: list[list[int|None]] = []
     entropies_kw_from_time_align: list[list[float|np.nan]] = []
     #for tad
     tad_list: list[list[float|np.nan]] = []
@@ -877,7 +875,7 @@ def get_data_whisper(output_path: Path,
 
             if word_timestamps:
                 machine_trans_kw_from_time_align.append([None, None, None])
-                trans_kw_idx_from_align.append([None, None, None])
+                machine_trans_kw_idx_from_time_align.append([None, None, None])
                 tad_list.append([torch.nan, torch.nan, torch.nan])
 
             if word_timestamps and extract_logprobs:
@@ -965,10 +963,10 @@ def get_data_whisper(output_path: Path,
 
 
 
-            trans_kw_idx_from_align.append(kw_word_idx_list)
-            kw_from_alignment: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
-            kw_from_alignment: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_alignment]
-            machine_trans_kw_from_time_align.append(kw_from_alignment)
+            machine_trans_kw_idx_from_time_align.append(kw_word_idx_list)
+            kw_from_time_align: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
+            kw_from_time_align: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_time_align]
+            machine_trans_kw_from_time_align.append(kw_from_time_align)
 
         if word_timestamps and extract_logprobs:
             # assume word_timestamps and extract_logprobs are True
@@ -995,7 +993,7 @@ def get_data_whisper(output_path: Path,
     if word_timestamps:
         df["machine_trans_kw_from_time_align"] = machine_trans_kw_from_time_align
         df["entropies_kw_from_time_align"] = entropies_kw_from_time_align
-        df["trans_kw_idx_from_align"] = trans_kw_idx_from_align
+        df["machine_trans_kw_idx_from_time_align"] = machine_trans_kw_idx_from_time_align
         df["tad_kw"] = tad_list
 
 
