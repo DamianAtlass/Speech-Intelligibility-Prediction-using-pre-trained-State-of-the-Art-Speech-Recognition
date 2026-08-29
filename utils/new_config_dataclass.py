@@ -85,13 +85,12 @@ class InferenceConfig(BaseConfig):
     word_timestamps: bool = True
     beam_size: int = 5
     subword_timestamps: bool = False
-    temperature: float|list[float] = 0
+    temperature: float = 0
+    runs_per_sample: int = 1
 
     def __post_init__(self):
         super().__post_init__()
 
-    def has_varrying_field(self) -> bool:
-        return isinstance(self.temperature, list)
 
 @dataclass(kw_only=True)
 class TrainingConfig(BaseConfig):

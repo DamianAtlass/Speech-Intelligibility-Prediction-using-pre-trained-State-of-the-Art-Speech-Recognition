@@ -362,7 +362,7 @@ def evaluate_individual_run(config: InferenceConfig,
     # check for missing rows
     d = get_dataset(config.data.val_split)
 
-    expected_df_len = len(d)*(len(config.temperature) if isinstance(config.temperature, list) else 1)
+    expected_df_len = len(d) * config.runs_per_sample
     if expected_df_len != len(df_single_run):
         print(f"Dataframe is missing rows! Expected {expected_df_len}, got {len(df_single_run)}.")
     del d
@@ -372,29 +372,32 @@ def evaluate_individual_run(config: InferenceConfig,
 
     corr_summary = None
 
+    dir_plots = config.output_path / "plots"
+    dir_plots.mkdir(parents=False, exist_ok=True)
+
     for m in tqdm(metrics):
         plot_metrics(data=[df_single_run[m]],
                      x_label=[config.model.model_type],
-                     output_path=config.output_path)
+                     output_path=dir_plots)
 
     if config.data.val_split.dataset_type != "grid":
         plot_x_to_snr(df=df_single_run[["machine_transcript", "snr", "model_type"]],
                       plotting_attribute="empty transcripts",
                       shifting_attribute_label="whisper",
                       shifting_attribute="model_type",
-                      output_path=config.output_path)
+                      output_path=dir_plots)
 
         plot_wer_to_snr(df=df_single_run[["human_transcript_kw", "machine_transcript", "snr", "reference_kw", "reference", "model_type"]],
                         ref_col="reference",
                         trans_col="machine_transcript",
                         shifting_attribute="model_type",
-                        output_path=config.output_path)
+                        output_path=dir_plots)
 
         plot_wer_to_snr(df=df_single_run[["human_transcript_kw", "machine_transcript_kw", "snr", "reference_kw", "model_type"]],
                         ref_col="reference_kw",
                         trans_col="machine_transcript_kw",
                         shifting_attribute="model_type",
-                        output_path=config.output_path)
+                        output_path=dir_plots)
 
         #print("Generate correlation plots")
         if False:
@@ -404,19 +407,19 @@ def evaluate_individual_run(config: InferenceConfig,
                                       correlate_to="wer_machine_kw",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
-                                      output_path=config.output_path)
+                                      output_path=dir_plots)
 
             boxplot_corr_per_listener(df_single_run[["wer_human_kw", "wer_machine", "model_type", "listener"]],
                                       correlate_to="wer_machine",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
-                                      output_path=config.output_path)
+                                      output_path=dir_plots)
 
             boxplot_corr_per_listener(df_single_run[["wer_human_kw", "avg_logprob", "model_type", "listener"]],
                                       correlate_to="avg_logprob",
                                       model=config.model.name,
                                       model_type=config.model.model_type,
-                                      output_path=config.output_path)
+                                      output_path=dir_plots)
 
     # should be reordered at some point todo
     if config.extract_logprobs:
@@ -425,27 +428,27 @@ def evaluate_individual_run(config: InferenceConfig,
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
                           shifting_attribute="model_type",
-                          output_path=config.output_path)
+                          output_path=dir_plots)
 
             boxplot_corr_per_listener(
                 df_single_run[["average_macroscopic_entropy", "wer_human_kw", "model_type", "listener"]],
                 correlate_to="average_macroscopic_entropy",
                 model=config.model.name,
                 model_type=config.model.model_type,
-                output_path=config.output_path)
+                output_path=dir_plots)
 
             plot_microscopic_x_to_snr(df_single_run[["entropies_kw", "listener", "model_type", "snr"]],
                                       col_name="entropies_kw",
                                       value_label="entropy",
                                       shifting_attribute="model_type",
-                                      output_path=config.output_path)
+                                      output_path=dir_plots)
 
             boxplot_microscopic_special_metric_per_keyword(
                 df_single_run[["entropies_kw", "listener", "model_type", "reference_kw", "human_transcript_kw"]],
                 special_metric="spearman_correlation",
                 col_name="entropies_kw",
                 col_compare_against_ref_kw="human_transcript_kw",
-                output_path=config.output_path)
+                output_path=dir_plots)
 
             #calibration
             boxplot_microscopic_special_metric_per_keyword(
@@ -453,10 +456,10 @@ def evaluate_individual_run(config: InferenceConfig,
                 special_metric="spearman_correlation",
                 col_name="entropies_kw",
                 col_compare_against_ref_kw="estimated_transcript_kw",
-                output_path=config.output_path)
+                output_path=dir_plots)
 
     # time alignments stuff
-    time_align_folder = config.output_path /"plots_from_time_alignments"
+    time_align_folder = dir_plots / "plots_from_time_alignments"
     if config.word_timestamps and config.data.val_split.dataset_type == "grid_bc":
         time_align_folder.mkdir(parents=True, exist_ok=True)
         plot_wer_to_snr(
@@ -544,7 +547,6 @@ def evaluate_individual_run(config: InferenceConfig,
 
         # average detected kw position
         idx_list = [[], [], []]
-        foo = []
         for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
             indexes = row["machine_trans_kw_idx_from_time_align"]
             for i, kw_idx in enumerate([1,3,4]):
@@ -553,46 +555,6 @@ def evaluate_individual_run(config: InferenceConfig,
 
         idx_list = [np.array(a) for a in idx_list]
         summary.append({f"kw at index {i}": {"mean idx of word": arr.mean(), "std": arr.std()} for i, arr in zip( [1,3,4], idx_list)})
-
-
-
-
-    with open(config.output_path / "summary.json", 'w') as f:
-        json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
-
-def evaluate_varrying_run(config: InferenceConfig,
-                          df_varrying_run: pd.DataFrame) -> None:
-
-    #SPLIT
-
-    plot_microscopic_x_to_snr(df_varrying_run[["entropies_kw_from_time_align", "temperature", "snr"]],
-                              col_name="entropies_kw_from_time_align",
-                              value_label="entropy per keyword",
-                              shifting_attribute_label="different temperatures",
-                              shifting_attribute="temperature",
-                              output_path=config.output_path)
-
-    plot_wer_to_snr(df=df_varrying_run[["human_transcript_kw", "machine_trans_kw_from_time_align", "snr", "reference_kw",
-                                      "reference", "temperature"]],
-                    ref_col="reference_kw",
-                    trans_col="machine_trans_kw_from_time_align",
-                    shifting_attribute_label="different temperatures",
-                    shifting_attribute="temperature",
-                    output_path=config.output_path)
-
-    plot_microscopic_x_to_snr(df_varrying_run[["entropies_kw_from_time_align", "temperature", "snr"]],
-                              col_name="entropies_kw_from_time_align",
-                              value_label="entropy per keyword",
-                              shifting_attribute_label="different temperatures",
-                              shifting_attribute="temperature",
-                              output_path=config.output_path)
-
-    plot_microscopic_x_to_snr(df_varrying_run[["tad_kw", "temperature", "snr"]],
-                              col_name="tad_kw",
-                              value_label="TAD per keyword",
-                              shifting_attribute_label="different temperatures",
-                              shifting_attribute="temperature",
-                              output_path=config.output_path)
 
     # GROUPED
     ## create grouped df
@@ -607,58 +569,62 @@ def evaluate_varrying_run(config: InferenceConfig,
             return result
         return inner
 
-    grouped_df = df_varrying_run.groupby("audio_path")
+    if config.runs_per_sample > 1:
+        if not config.extract_logprobs and config.word_timestamps: raise ValueError("Not supported.")
+        grouped_df = df_single_run.groupby("audio_path")
 
-    def compute_stats(group: pd.DataFrame):
-        return pd.Series({
-            "snr": group["snr"].iloc[0],
-            "reference_kw": group["reference_kw"].iloc[0],
-            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
-            "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
-            "entropy_kw_var": wrapper(torch.var)(group["entropies_kw_from_time_align"]),
-        })
+        def compute_stats(group: pd.DataFrame):
+            return pd.Series({
+                "snr": group["snr"].iloc[0],
+                "reference_kw": group["reference_kw"].iloc[0],
+                "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+                "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
+                "entropy_kw_var": wrapper(torch.var)(group["entropies_kw_from_time_align"]),
+            })
 
-    print("Creating the grouped dataframe ...")
-    with catch_time() as t:
-        grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+        print("Creating the grouped dataframe...", end="")
+        with catch_time() as t:
+            grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
 
-    print(f"...took: {t():.2f} s")
+        print(f"took: {t():.2f} s.")
 
-    ## plot stuff
+        ## plot stuff
 
-    labels = {
-        "tad_kw_var": "varience of the TAD",
-        "entropy_kw_var": "varience of the entropy",
-    }
+        labels = {
+            "tad_kw_var": "varience of the TAD",
+            "entropy_kw_var": "varience of the entropy",
+        }
 
-    for m in ["tad_kw_var", "entropy_kw_var"]:
-        output_path = config.output_path/m
-        if not output_path.exists():
-            os.mkdir(output_path)
-        l = labels[m]
-        boxplot_microscopic_x_to_snr(
-            grouped_df,
-            col_name=m,
-            value_label="varience of the TAD",
-            output_path=output_path)
+        for m in ["tad_kw_var", "entropy_kw_var"]:
+            output_path = dir_plots/ "multiple_runs_plots" / m
+            output_path.mkdir(exist_ok=True, parents=True)
+            l = labels[m]
+            boxplot_microscopic_x_to_snr(
+                grouped_df,
+                col_name=m,
+                value_label="varience of the TAD",
+                output_path=output_path)
 
-        boxplot_microscopic_special_metric_per_keyword(
-            grouped_df[["reference_kw", m, "human_transcript_kw"]],
-            col_name=m,
-            special_metric="spearman_correlation",
-            col_compare_against_ref_kw="human_transcript_kw",
-            col_title=f"{l} over different temperatures",
-            output_path=output_path)
+            boxplot_microscopic_special_metric_per_keyword(
+                grouped_df[["reference_kw", m, "human_transcript_kw"]],
+                col_name=m,
+                special_metric="spearman_correlation",
+                col_compare_against_ref_kw="human_transcript_kw",
+                col_title=f"{l} over different runs",
+                output_path=output_path)
 
-        boxplot_microscopic_special_metric_per_keyword(
-            grouped_df[["reference_kw", m, "human_transcript_kw"]],
-            col_name=m,
-            special_metric="mutual_information",
-            col_compare_against_ref_kw="human_transcript_kw",
-            col_title=f"{l} over different temperatures",
-            output_path=output_path)
+            boxplot_microscopic_special_metric_per_keyword(
+                grouped_df[["reference_kw", m, "human_transcript_kw"]],
+                col_name=m,
+                special_metric="mutual_information",
+                col_compare_against_ref_kw="human_transcript_kw",
+                col_title=f"{l} over different runs",
+                output_path=output_path)
 
-    print()
+    # dumping of summary should be the last action to symbolize that all went well on a short look
+    with open(config.output_path / "summary.json", 'w') as f:
+        json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
+
 
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:

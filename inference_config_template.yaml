@@ -17,4 +17,5 @@ extract_logprobs: true
 word_timestamps: true
 beam_size: 5
 subword_timestamps: true
-temperature: 0.25
+temperature: .5
+runs_per_sample: 5

@@ -45,6 +45,7 @@ config_dict = [
 'word_timestamps': False,
 'subword_timestamps': False,
 'temperature': 0,
+'runs_per_sample': 1,
 'debug': True,
 'model':{
     'name': 'whisper',
@@ -83,6 +84,7 @@ InferenceConfig(
     subword_timestamps=False,
     beam_size=5,
     temperature=0,
+    runs_per_sample=1,
     model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
 )
 ]
@@ -131,9 +133,3 @@ def test_convert_old_config_into_new(path_old_config: Path, expected_class):
     old_config = get_old_config(path_old_config)
     new_config = convert_old_config_into_new(old_config)
     assert isinstance(new_config, expected_class)
-
-def test_lists_of_args():
-    path = CONFIG_TEST_FOLDER/"inference_config_with_list_args.yaml"
-    config = load_config(path)
-    assert isinstance(config.temperature, list)
-    assert config.temperature == [1,2,3,4]

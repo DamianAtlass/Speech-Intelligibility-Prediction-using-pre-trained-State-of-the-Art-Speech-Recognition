@@ -41,17 +41,18 @@ def test_batch_inference_whisper(time_stamps, extract_logprobs):
         assert (TEST_FOLDER/"inference_test/logprobs/s26_pwwizs.pt").exists()
 
 
-def test_inference_with_varrying_parameters():
+def test_inference_with_multiple_runs():
     config = InferenceConfig(
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
             val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=2, noise=False, scaling=1)),
         debug=False,
-        temperature=[0, 0.25, 0.5],
+        temperature=0,
         extract_logprobs=True,
         word_timestamps=False,
         beam_size=1,
+        runs_per_sample=2,
         model=ModelConfig(name="whisper", model_type="tiny", path=None),
     )
     if config.output_path.exists():
@@ -62,8 +63,8 @@ def test_inference_with_varrying_parameters():
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset_dict, device)
 
-    assert sum([1 for f in (config.output_path/"data").iterdir() if f.is_file()]) == 6
-    assert sum([1 for f in (config.output_path/"logprobs").iterdir() if f.is_file()]) == 6
+    assert sum([1 for f in (config.output_path/"data").iterdir() if f.is_file()]) == 4
+    assert sum([1 for f in (config.output_path/"logprobs").iterdir() if f.is_file()]) == 4
 
 def test_inference_expected_exception():
     config = InferenceConfig(
@@ -77,7 +78,7 @@ def test_inference_expected_exception():
         word_timestamps=False,
         beam_size=2,
         model=ModelConfig(name="whisper", model_type="tiny", path=None),
-    )
+    ) #todo add run argument here
     if config.output_path.exists():
         shutil.rmtree(config.output_path)
 

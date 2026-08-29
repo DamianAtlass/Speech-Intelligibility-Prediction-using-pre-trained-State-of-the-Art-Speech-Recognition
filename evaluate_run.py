@@ -8,16 +8,14 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_varrying_run
-from utils.cuda_utils import select_device
-
+from utils.evaluate_utils import get_data, evaluate_individual_run
 
 def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
         device = torch.device("cpu")
 
 
-    config = load_config(path/"config.yaml")
+    config: InferenceConfig = load_config(path/"config.yaml")
 
     with catch_time() as t:
         df_single_run = get_data(
@@ -28,13 +26,9 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             config.word_timestamps,
             device)
     print(f"Reading the generated files took: {t():.4f} s")
-    if config.has_varrying_field():
-        evaluate_varrying_run(config, df_single_run)
-    else:
-        df_single_run["model_type"] = config.model.model_type
-        evaluate_individual_run(config=config, df_single_run=df_single_run)
 
-    #with pd.option_context('display.max_rows', None, 'display.max_columns', None, "display.width", 10000):
-        #print(df_single_run[["references_kw", "machine_transcripts", "machine_transcripts_kw", "wers_machine_kw"]])
+    df_single_run["model_type"] = config.model.model_type
+    evaluate_individual_run(config=config, df_single_run=df_single_run)
+
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

@@ -17,7 +17,7 @@ from utils.parakeet_utils import get_collate_fn
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
-def create_filename(dataset_type: str, sample: dict, temperature: float|None = None) -> str:
+def create_filename(dataset_type: str, sample: dict, run: int|None) -> str:
     audio_path = Path(sample["audio_path"]) if "audio_path" in sample.keys() else None
     l = []
     match dataset_type:
@@ -34,8 +34,8 @@ def create_filename(dataset_type: str, sample: dict, temperature: float|None = N
             tail = sample["id"]
         case _:
             raise RuntimeError("Unknown dataset type")
-    if temperature is not None:
-        l.append(f"temp{temperature}")
+    if run is not None:
+        l.append(f"run{run}")
 
     l.append(tail)
     filename = "_".join(l)
@@ -93,18 +93,18 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
     is_list = {
         "temp": isinstance(config.temperature, list)
     }
-    if (is_list["temp"] or config.temperature!=0) and config.beam_size!=1:
+    if config.temperature!=0 and config.beam_size!=1:
         raise ValueError("Beamsize would be overridden for temperature !=1!")
 
     exception_log: list[int] = []
     with torch.inference_mode():
-        num_total_transciptions = len(dataset) * (len(config.temperature) if is_list["temp"] else 1)
+        num_total_transciptions = len(dataset) * config.runs_per_sample
         with tqdm(total=num_total_transciptions) as pbar:
             counter = 0
-            for temperature in cast(list, config.temperature if is_list["temp"] else [config.temperature]):
-                for idx_sample, sample in enumerate(dataset):
+            for idx_sample, sample in enumerate(dataset):
+                for run in range(config.runs_per_sample):
                     logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} (#{idx_sample}) "
-                                f"{f"with {temperature = }" if is_list["temp"] else ""} ...")
+                                f"{f"(run: {run})" if config.runs_per_sample > 1 else ""} ...")
                     try:
                         audio_array = torch.tensor(sample["audio"]["array"]).to(device)
                         audio_array = sip_whisper.pad_or_trim(audio_array)
@@ -114,7 +114,7 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                             "audio": audio_array,
                             "fp16": False,
                             "beam_size": config.beam_size,
-                            "temperature": temperature,
+                            "temperature": config.temperature,
                             "extract_logprobs": config.extract_logprobs,
                             "word_timestamps": config.word_timestamps,
                             "condition_on_previous_text": False,
@@ -127,7 +127,9 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                         #  https://github.com/openai/whisper/discussions/81
                         result: dict = sip_whisper.transcribe(**options)
 
-                        file_name = create_filename(dataset_type=config.data.val_split.dataset_type, sample=sample, temperature=temperature if is_list["temp"] else None)
+                        file_name = create_filename(
+                            dataset_type=config.data.val_split.dataset_type,
+                            sample=sample, run=run if config.runs_per_sample>1 else None)
 
                         if config.extract_logprobs:
                             extracted_logprobs = result.pop("extracted_logprobs")
@@ -146,10 +148,10 @@ def inference_whisper(config: InferenceConfig, model: Any, dataset: Dataset, dev
                                 logger.info("No logprobs to save.")
 
                         if is_list["temp"]:
-                            sample.update({"varrying_transcription_options": {"temperature": temperature} })
+                            sample.update({"varrying_transcription_options": {"run": run} })
 
                         result_data_file_path = config.output_path / "data" / f"{file_name}.json"
-                        save_result(sample, result, result_data_file_path, counter, True)
+                        save_result(sample.copy(), result, result_data_file_path, counter, True)
                     except Exception as e:
                         logger.critical(e)
                         exception_log.append(counter)
@@ -189,8 +191,8 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                 for sample, result in zip(subset, transcriptions):
                     result = asdict(result)
 
-
-                    result_file_name = create_filename(config.data.val_split.dataset_type, sample)
+                    print("TODO needs for loop for runs")
+                    result_file_name = create_filename(config.data.val_split.dataset_type, sample, None)
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
