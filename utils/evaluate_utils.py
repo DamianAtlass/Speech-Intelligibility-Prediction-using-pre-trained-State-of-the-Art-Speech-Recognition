@@ -18,6 +18,7 @@ from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics,
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
+from utils.variables import *
 
 logger = logging.getLogger(__name__)
 from utils.new_config_dataclass import InferenceConfig
@@ -29,13 +30,6 @@ from phonemizer.backend import EspeakBackend
 backend = EspeakBackend("en-us")
 phonemize = backend.phonemize
 
-grid_vocab = {
-    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
-    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
-    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
-}
-grid_kw_index = [1,3,4]
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -64,7 +58,7 @@ def find_ordered_indices(transcript: list, keywords_to_find: list) -> list[int]:
     assert len(indices) == len(keywords_to_find)
     return indices
 
-def ref_alignments_to_secods_and_rm_non_words(ref_alignments: list[dict]) -> list[dict]:
+def ref_alignments_to_seconds_and_rm_non_words(ref_alignments: list[dict]) -> list[dict]:
     for r in ref_alignments:
         r["start"] = int(r["start"])/16000
         r["end"] = int(r["end"])/16000
@@ -134,7 +128,7 @@ def get_kw_using_mixed_approaches(
     re = lambda x: transcript.index(x) if return_idx else x
 
     keywords_or_indices = []
-    for kw, expected_kw_position, other_options in zip(reference_kw, [1,3,4], grid_vocab.values()):
+    for kw, expected_kw_position, other_options in zip(reference_kw, [1,3,4], grid_kw_vocab.values()):
         if kw in transcript:
             keywords_or_indices.append(re(kw))
         else:
@@ -198,7 +192,7 @@ def get_kw_by_accepting_other_options_from_vocab(
         transcript: list[str],
         return_idx=False) -> list[str] | list[int | None]:
     r = []
-    for kw, other_options in zip(reference_kw, grid_vocab.values()):
+    for kw, other_options in zip(reference_kw, grid_kw_vocab.values()):
         if kw in transcript:
             r.append(transcript.index(kw) if return_idx else kw)
         else:
@@ -237,7 +231,7 @@ def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
 
     kw_token_idx_list: list[list[int]|None] = []
     kw_word_idx_list: list[int|None] = []
-    for i in grid_kw_index:
+    for i in grid_kw_indexes:
         window_start = reference_alignments[i]["start"]
         window_end = reference_alignments[i]["end"]
 
@@ -339,7 +333,7 @@ def calculate_tad(reference_alignments: list[dict],
 
     tad_per_kw: list[float|np.nan] = []
 
-    for ref_kw_idx, trans_idx in zip(grid_kw_index, machine_transcript_kw_idx):
+    for ref_kw_idx, trans_idx in zip(grid_kw_indexes, machine_transcript_kw_idx):
         if trans_idx is None:
             tad_per_kw.append(np.nan)
             continue
@@ -916,7 +910,7 @@ def get_data_whisper(output_path: Path,
                 assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
                     decoded_tokens_without_timestamp_tokens)
 
-            ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["reference_alignments"])
+            ref_alignments: list[dict] = ref_alignments_to_seconds_and_rm_non_words(row["reference_alignments"])
             trans_alignment = row["transcript_alignments"]
             for o in trans_alignment:
                 o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]

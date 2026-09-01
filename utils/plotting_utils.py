@@ -7,17 +7,11 @@ from matplotlib import pyplot as plt
 from scipy import stats as stats
 from tqdm import tqdm
 from typing import Literal, cast
+
+from utils.variables import *
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
-from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from sklearn.feature_selection import mutual_info_classif
 
-grid_vocab = {
-    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
-    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
-    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
-}
-
-kw_labels = ["color", "letter", "digit"]
 kw_colors = ["green", "blue", "red"]
 kw_colors_short = ["g", "b", "r"]
 
@@ -360,7 +354,7 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     line_type = ['-', '--', ':', '-.']
     for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
         for kw, c in zip(range(3), kw_colors_short):
-            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
+            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {grid_kw_labels[kw]}")
 
 
     figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
@@ -402,7 +396,7 @@ def boxplot_microscopic_x_to_snr(
         values_current_snr = []
         for i_kw in range(3):
             values_keyword = []
-            keywords: list[str] = grid_vocab[kw_labels[i_kw]]
+            keywords: list[str] = grid_kw_vocab[grid_kw_labels[i_kw]]
             for keyword in keywords:
                 df_snr_keyword = df_snr[
                     df_snr["reference_kw"].str[i_kw].eq(keyword)
@@ -462,7 +456,7 @@ def boxplot_microscopic_x_to_snr(
     hB, = plot([1, 1], 'b-')
     hR, = plot([1, 1], 'r-')
 
-    legend((hG, hB, hR), (kw_labels[0], kw_labels[1], kw_labels[2]))
+    legend((hG, hB, hR), (grid_kw_labels[0], grid_kw_labels[1], grid_kw_labels[2]))
     hB.set_visible(False)
     hB.set_visible(False)
     hG.set_visible(False)
@@ -581,11 +575,11 @@ def boxplot_microscopic_special_metric_per_keyword(
     for kw_idx in tqdm(range(3)):
         value_array_per_kw = []
         p_val_arr_per_kw = []
-        for kw in grid_vocab[kw_labels[kw_idx]]:
+        for kw in grid_kw_vocab[grid_kw_labels[kw_idx]]:
             df_keyword = df[
                 df["reference_kw"].str[kw_idx].eq(kw)
             ]
-
+            grid_kw_vocab
             ref_kw = df_keyword["reference_kw"].map(lambda x: x[kw_idx])
 
             keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
@@ -637,10 +631,10 @@ def boxplot_microscopic_special_metric_per_keyword(
     ax.grid()
     if special_metric == "spearman_correlation":
         x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
-                   zip(kw_labels, p_val_arr, value_array)]
+                   zip(grid_kw_labels, p_val_arr, value_array)]
     else:
         x_label = [f"{t}\nmean={c.mean():.4f}\n" for t, c in
-                   zip(kw_labels, value_array)]
+                   zip(grid_kw_labels, value_array)]
 
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")

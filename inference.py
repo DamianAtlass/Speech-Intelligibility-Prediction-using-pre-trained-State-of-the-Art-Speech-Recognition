@@ -2,6 +2,8 @@ from tqdm import tqdm
 import torch
 import sip_whisper
 from datasets import Dataset, DatasetDict
+
+from utils.evaluate_utils import get_kw_idx_through_time_alignments, ref_alignments_to_seconds_and_rm_non_words
 from utils.new_config_dataclass import InferenceConfig
 from typing import Any, cast
 import json
@@ -13,13 +15,32 @@ from math import ceil
 from dataclasses import asdict
 import numpy as np
 
+from utils.variables import grid_kw_vocab, grid_kw_labels
+from utils.werpy_utils import normalize
+
 from utils.parakeet_utils import get_collate_fn
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
-def create_filename(dataset_type: str, sample: dict, run: int|None) -> str:
+def create_filename(dataset_type: str, sample: dict, run: int|None, dispersion: bool, forced_alignment_options: dict|None) -> str:
     audio_path = Path(sample["audio_path"]) if "audio_path" in sample.keys() else None
     l = []
+
+    if dispersion:
+        if forced_alignment_options is None:
+            l.append("forced_alignment-None")
+        else:
+            word: str = forced_alignment_options["token_id_or_word"].strip()
+            for idx, values in zip([1,3,4], grid_kw_vocab.values()):
+                if word not in values:
+                    continue
+                kw_idx = idx
+                word_idx = values.index(word)
+
+            assert isinstance(kw_idx, int)
+            assert isinstance(word_idx, int)
+            l.append(f"forced_alignment-{kw_idx}-{word_idx}")
+
     match dataset_type:
         case "grid_bc":
             snr_str = f"{"m" if int(sample["snr_db"]) < 0 else ""}{abs(int(sample["snr_db"]))}"
@@ -58,7 +79,7 @@ def save_result(sample_dict: dict,
                 result_data_file_path: Path,
                 counter: int,
                 seperator: bool = True
-                ) -> None:
+                ) -> dict:
     """
     Args:
         sample_dict: dict of the sample (i.e. item of a dataset (or subset))
@@ -79,6 +100,7 @@ def save_result(sample_dict: dict,
         json.dump(sample_dict, f, indent=4, cls=NpEncoder)
 
     if seperator: logger.info("--------------------")
+    return sample_dict
 
 def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset, device: torch.device) -> None:
     """
@@ -103,7 +125,10 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
                     logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} (#{idx_sample}) "
                                 f"{f"(run: {run})" if config.runs_per_sample > 1 else ""} ...")
                     try:
-                        inference_whisper(model, config, sample, device, run, counter)
+                        if config.dispersion:
+                            inference_whisper_with_forced_alignment(model, config, sample, device, run, counter)
+                        else:
+                            inference_whisper(model, config, sample, device, run, counter)
                     except Exception as e:
                         logger.critical(e)
                         exception_log.append(counter)
@@ -116,13 +141,14 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
         logger.critical(f"{len(exception_log)} exceptions occured! ({round(len(exception_log)/num_total_transciptions, 3)*100}%)")
         logger.critical(f"Bad transcriptions at counter= {exception_log}")
 
-def inference_whisper(
-        model,
-        config: InferenceConfig,
-        sample: dict,
-        device: torch.device,
-        run: int,
-        counter: int,):
+def inference_whisper(model,
+                      config: InferenceConfig,
+                      sample: dict,
+                      device: torch.device,
+                      run: int,
+                      counter: int,
+                      forced_alignment_options: dict|None = None
+                      ) -> dict:
 
     audio_array = torch.tensor(sample["audio"]["array"]).to(device)
     audio_array = sip_whisper.pad_or_trim(audio_array)
@@ -139,6 +165,7 @@ def inference_whisper(
         "language": "en",
         "break_after_first_segment": False if config.model.path is None else True,  # only with trained models
         "subword_timestamps": config.subword_timestamps,
+        "forced_alignment_options": None if forced_alignment_options is None else forced_alignment_options.copy()
     }
 
     # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
@@ -147,7 +174,10 @@ def inference_whisper(
 
     file_name = create_filename(
         dataset_type=config.data.val_split.dataset_type,
-        sample=sample, run=run if config.runs_per_sample > 1 else None)
+        sample=sample,
+        run=run if config.runs_per_sample > 1 else None,
+        dispersion=config.dispersion,
+        forced_alignment_options=forced_alignment_options)
 
     if config.extract_logprobs:
         extracted_logprobs = result.pop("extracted_logprobs")
@@ -166,11 +196,74 @@ def inference_whisper(
             result["logprobs_path"] = ""
             logger.info("No logprobs to save.")
 
+    if config.dispersion:
+        sample.update({"varrying_transcription_options": {"forced_alignment_options": forced_alignment_options}})
+
     if config.runs_per_sample > 1:
         sample.update({"varrying_transcription_options": {"run": run}})
 
     result_data_file_path = config.output_path / "data" / f"{file_name}.json"
-    save_result(sample.copy(), result, result_data_file_path, counter, True)
+    result_data = save_result(sample.copy(), result, result_data_file_path, counter, True)
+
+    return result_data
+
+def inference_whisper_with_forced_alignment(
+        model,
+        config: InferenceConfig,
+        sample: dict,
+        device: torch.device,
+        run: int,
+        counter: int,):
+
+    # regular run:
+    regular_run_data = inference_whisper(model, config, sample, device, run, counter)
+    #############################################
+    #############################################
+    keywords, kw_token_idx = get_kw_dirty(regular_run_data)
+
+    keywords_norm = normalize(keywords)
+
+    for i, kw_label in enumerate(grid_kw_labels):
+        kw_pos = kw_token_idx[i]
+        keywords_at_this_pos = grid_kw_vocab[kw_label].copy()
+        if keywords_norm[i] in keywords_at_this_pos:
+            keywords_at_this_pos.remove(keywords_norm[i])
+        for kw in keywords_at_this_pos:
+            forced_alignment_options = {"position": kw_pos, "token_id_or_word": " " + kw, }
+            inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)
+
+
+
+        break
+
+    print()
+
+def get_kw_dirty(data: dict) -> tuple[list[str], list[list[int] | None]]:
+    """
+    Uses the same workflow as in evaluate_utils.py to get the right kw positions / tokens.
+
+    """
+    decoded_tokens_with_timestamps = data["prediction_result"]["decoded_tokens_with_timestamps"]
+    no_timestamp_idx = ["<|" not in t and "|>" not in t for t in decoded_tokens_with_timestamps]
+    decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
+    del decoded_tokens_with_timestamps, no_timestamp_idx
+
+    ref_alignments = [{"start": a[0], "end": a[1], "word": a[2]} for a in data["alignment"]]
+    ref_alignments: list[dict] = ref_alignments_to_seconds_and_rm_non_words(ref_alignments)
+
+    transcript_alignment = []
+    for s in data["prediction_result"]["segments"]:
+        transcript_alignment.extend(s["words"])
+    for o in transcript_alignment:
+        o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False, )[0]
+
+    kw_token_idx_from_alignment, _ = get_kw_idx_through_time_alignments(
+        reference_alignments=ref_alignments,
+        transcript_alignments=transcript_alignment)
+
+    kw_token_idx = [o[0] for o in kw_token_idx_from_alignment]
+    keywords = [decoded_tokens_without_timestamp_tokens[o] for o in kw_token_idx]
+    return keywords, kw_token_idx
 
 def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, dataset: Dataset, device: torch.device) -> None:
     with torch.inference_mode():
