@@ -47,6 +47,7 @@ config_dict = [
 'temperature': 0,
 'runs_per_sample': 1,
 'debug': True,
+'dispersion': False,
 'model':{
     'name': 'whisper',
     'model_type': 'base',
@@ -85,7 +86,8 @@ InferenceConfig(
     beam_size=5,
     temperature=0,
     runs_per_sample=1,
-    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
+    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo')),
+    dispersion=False
 )
 ]
 

@@ -293,7 +293,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                     result = asdict(result)
 
                     print("TODO needs for loop for runs")
-                    result_file_name = create_filename(config.data.val_split.dataset_type, sample, None)
+                    result_file_name = create_filename(config.data.val_split.dataset_type, sample, None, False, None)
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
