@@ -1,21 +1,24 @@
-output_path: inferences/turbo_default_bc_tmp0.25_delete_me
+output_path: inferences/base_exp_dispersion_delete_me
 task_type: inference
 data:
+    train_split: null
+    test_split: null
     val_split:
         dataset_type: grid_bc
         path: null
         start: 0
-        end: 10_000
+        end: 1000
         noise: false
         scaling: 1.0
 model:
     name: whisper
-    model_type: large-v3-turbo
-    path:
+    model_type: base
+    path: trained_models/base_exp
 debug: true
 extract_logprobs: true
 word_timestamps: true
 beam_size: 5
 subword_timestamps: true
-temperature: .5
-runs_per_sample: 5
+temperature: 0
+runs_per_sample: 1
+dispersion: true

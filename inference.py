@@ -15,7 +15,7 @@ from math import ceil
 from dataclasses import asdict
 import numpy as np
 
-from utils.variables import grid_kw_vocab, grid_kw_labels
+from utils.variables import *
 from utils.werpy_utils import normalize
 
 from utils.parakeet_utils import get_collate_fn
@@ -94,7 +94,7 @@ def save_result(sample_dict: dict,
     sample_dict.pop("audio")
     sample_dict["prediction_result"] = result
 
-    logger.info(f"Save result data [{counter}] to {result_data_file_path.relative_to(Path.cwd())}")
+    logger.info(f"Save result data for sample [{counter}] to {result_data_file_path.relative_to(Path.cwd())}")
 
     with open(result_data_file_path, 'w') as f:
         json.dump(sample_dict, f, indent=4, cls=NpEncoder)
@@ -223,20 +223,21 @@ def inference_whisper_with_forced_alignment(
 
     keywords_norm = normalize(keywords)
 
+    l = len(grid_all_keywords) - sum([1 for i,v in enumerate(grid_kw_vocab.values()) if keywords_norm[i] in v])
+    counter = 1
+
     for i, kw_label in enumerate(grid_kw_labels):
         kw_pos = kw_token_idx[i]
-        keywords_at_this_pos = grid_kw_vocab[kw_label].copy()
-        if keywords_norm[i] in keywords_at_this_pos:
-            keywords_at_this_pos.remove(keywords_norm[i])
-        for kw in keywords_at_this_pos:
+        kw_for_forced_alignment = grid_kw_vocab[kw_label].copy()
+        if keywords_norm[i] in kw_for_forced_alignment:
+            kw_for_forced_alignment.remove(keywords_norm[i])
+
+        for kw in kw_for_forced_alignment:
             forced_alignment_options = {"position": kw_pos, "token_id_or_word": " " + kw, }
+            logger.info(f"{forced_alignment_options = } ({counter}/{l})")
             inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)
+            counter+=1
 
-
-
-        break
-
-    print()
 
 def get_kw_dirty(data: dict) -> tuple[list[str], list[list[int] | None]]:
     """

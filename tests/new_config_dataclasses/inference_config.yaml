@@ -30,3 +30,4 @@ extract_logprobs: False
 word_timestamps: False
 beam_size: 5
 debug: True
+runs_per_sample: 1
