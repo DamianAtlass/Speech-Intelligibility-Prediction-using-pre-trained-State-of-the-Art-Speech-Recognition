@@ -350,6 +350,50 @@ def calculate_tad(reference_alignments: list[dict],
 
     return tad_per_kw
 
+def calculate_dispersion_per_file(rows_single_audio: pd.DataFrame):
+    rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
+    dispersion_values: list[float] = []
+
+    for kw_label in grid_kw_labels:
+        possible_keywords: list[str] = grid_kw_vocab[kw_label]
+
+        # take the original transcription without alignment and all other of the keyword position
+        rows_single_keyword_position = rows_single_audio[
+            rows_single_audio["forced_alignment_options"].apply(
+                lambda x: x.get("token_id_or_word").strip() in possible_keywords if isinstance(x, dict) else True
+            )]
+
+        assert len(rows_single_keyword_position) == len(possible_keywords) or len(rows_single_keyword_position) == len(possible_keywords) + 1
+        # consider case if in which isn't in original transcript
+
+        probs: list[float] = sorted(rows_single_keyword_position["avg_logprob"], reverse=True) # exp applied earlier
+
+        dispersion_values.append(dispersion(probs))
+
+    return dispersion_values
+
+def dispersion(probs: list[float]) -> float:
+    """
+    Args:
+        probs: list[float], descendingly ordered list of probabilities for a specific keyword position
+
+    Returns:
+        the dispersion for that keyword position
+
+
+    from:
+    Karbasi M, Zeiler S, Kolossa D. Microscopic and Blind Prediction of Speech Intelligibility: Theory and Practice.
+    IEEE/ACM Trans Audio Speech Lang Process. 2022;30:2141-2155.
+    doi: 10.1109/taslp.2022.3184888. Epub 2022 Jun 30. PMID: 37007458; PMCID: PMC10065470.
+    """
+    #probs = probs[:4]
+    N = len(probs)
+    sums = 0
+    for k in range(N):
+        for l in range(k + 1, N):
+            sums += np.log(probs[k] / probs[l])
+    return (2 / (N * (N - 1))) * sums
+
 
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame) -> None:
@@ -620,6 +664,32 @@ def evaluate_individual_run(config: InferenceConfig,
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
+def evaluate_dispersion_run(config: InferenceConfig,
+                            df_dispersion_run: pd.DataFrame) -> None:
+    grouped_df = df_dispersion_run.groupby("audio_path")
+
+    def compute_stats(group: pd.DataFrame):
+        return pd.Series({
+            "snr": group["snr"].iloc[0],
+            "reference_kw": group["reference_kw"].iloc[0],
+            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+            "dispersion_kw": calculate_dispersion_per_file(group),
+            "model_type": group["model_type"].iloc[0],
+        })
+
+    print("Creating the grouped dataframe...", end="")
+    with catch_time() as t:
+        grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+
+    print(f"took: {t():.2f} s.")
+
+
+    plot_microscopic_x_to_snr(grouped_df,
+                              col_name="dispersion_kw",
+                              value_label="dispersion",
+    )
+
+
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:
     """
@@ -690,6 +760,7 @@ def get_data_whisper(output_path: Path,
     json_path = []
     references_alignments = []
     transcript_alignments = []
+    forced_alignment_options = []
 
     temperature = []
 
@@ -742,6 +813,8 @@ def get_data_whisper(output_path: Path,
                 varrying_opt = json_file["varrying_transcription_options"]
                 if "temperature" in varrying_opt:
                     temperature.append(varrying_opt["temperature"])
+                if "forced_alignment_options" in varrying_opt:
+                    forced_alignment_options.append(varrying_opt["forced_alignment_options"])
 
     if dataset_type == "libri":
         wer = wer_needleman_wunsch(normalize(references), normalize(machine_transcripts))
@@ -802,6 +875,8 @@ def get_data_whisper(output_path: Path,
         })
     if len(temperature)>0:
         data.update({"temperature": temperature})
+    if len(forced_alignment_options)>0:
+        data.update({"forced_alignment_options": forced_alignment_options})
 
     df = pd.DataFrame(data)
 

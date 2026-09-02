@@ -27,10 +27,11 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             device)
     print(f"Reading the generated files took: {t():.4f} s")
 
-    if config.dispersion:
-        raise NotImplementedError("Expected.")
     df_single_run["model_type"] = config.model.model_type
-    evaluate_individual_run(config=config, df_single_run=df_single_run)
+    if config.dispersion:
+        evaluate_dispersion_run(config, df_single_run)
+    else:
+        evaluate_individual_run(config=config, df_single_run=df_single_run)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

@@ -352,9 +352,9 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     plt.figure(figsize=[10, 5])
     colors = ["b", "g", "c", "r", ]
     line_type = ['-', '--', ':', '-.']
-    for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
+    for v,l,lt in zip(values_means, list_shifting_attribute, line_type):
         for kw, c in zip(range(3), kw_colors_short):
-            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {grid_kw_labels[kw]}")
+            plt.plot(positions, [o[kw] for o in v], marker="x", color=c, ls=lt, label=f"{l} | {grid_kw_labels[kw]}")
 
 
     figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
