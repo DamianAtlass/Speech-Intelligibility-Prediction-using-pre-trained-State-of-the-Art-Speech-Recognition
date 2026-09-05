@@ -14,7 +14,7 @@ import os
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_special_metric_per_keyword, join_kw_list, boxplot_microscopic_x_to_snr
+    boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -463,6 +463,20 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_compare_against_ref_kw="estimated_transcript_kw",
                 output_path=dir_plots)
 
+
+            barplot_x_to_snr(df=df_single_run[["mtd", "snr", "model_type"]],
+                          plotting_attribute="mtd",
+                          shifting_attribute_label="whisper",
+                          shifting_attribute="model_type",
+                          output_path=dir_plots)
+
+            boxplot_corr_per_listener(
+                df_single_run[["mtd", "wer_human_kw", "model_type", "listener"]],
+                correlate_to="mtd",
+                model=config.model.name,
+                model_type=config.model.model_type,
+                output_path=dir_plots)
+
     # time alignments stuff
     time_align_folder = dir_plots / "plots_from_time_alignments"
     if config.word_timestamps and config.data.val_split.dataset_type == "grid_bc":
@@ -486,12 +500,13 @@ def evaluate_individual_run(config: InferenceConfig,
             shifting_attribute="model_type",
             output_path=time_align_tad_folder)
 
-        boxplot_microscopic_x_to_snr(
+        box_or_barplot_microscopic_x_to_snr(
             df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
             col_name="tad_kw",
             value_label="time alignment difference (TAD)",
             y_axis_label="TAD in seconds",
-            output_path=time_align_tad_folder)
+            output_path=time_align_tad_folder,
+            box_or_bar="bar")
 
         boxplot_microscopic_special_metric_per_keyword(
             df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
@@ -513,11 +528,13 @@ def evaluate_individual_run(config: InferenceConfig,
             time_align_entropy_folder = time_align_folder/"entropy"
             time_align_entropy_folder.mkdir(exist_ok=True)
 
-            plot_microscopic_x_to_snr(df_single_run[["entropies_kw_from_time_align", "listener", "model_type", "snr"]],
-                                      col_name="entropies_kw_from_time_align",
-                                      value_label="entropy",
-                                      shifting_attribute="model_type",
-                                      output_path=time_align_entropy_folder)
+            box_or_barplot_microscopic_x_to_snr(
+                df_single_run[["reference_kw", "model_type", "snr", "entropies_kw_from_time_align"]],
+                col_name="entropies_kw_from_time_align",
+                value_label="entropy",
+                y_axis_label="microscopic entropy",
+                output_path=time_align_entropy_folder,
+                box_or_bar="bar")
 
             boxplot_microscopic_special_metric_per_keyword(
                 df_single_run[["reference_kw", "listener", "model_type", "entropies_kw_from_time_align", "human_transcript_kw"]],
@@ -604,7 +621,7 @@ def evaluate_individual_run(config: InferenceConfig,
             output_path = dir_plots/ "multiple_runs_plots" / m
             output_path.mkdir(exist_ok=True, parents=True)
             l = labels[m]
-            boxplot_microscopic_x_to_snr(
+            box_or_barplot_microscopic_x_to_snr(
                 grouped_df,
                 col_name=m,
                 value_label="varience of the TAD",

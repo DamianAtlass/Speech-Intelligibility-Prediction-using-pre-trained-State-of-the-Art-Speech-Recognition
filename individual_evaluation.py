@@ -13,21 +13,17 @@ from utils.logging_utils import catch_time
 def foo():
     indi_eval_folder = Path.cwd() / "individual_evaluations"
 
-    subfolder_name = indi_eval_folder / "compare_parakeet"
+    subfolder_name = indi_eval_folder / "compare_whisper_finetuned_vs_default"
     if not subfolder_name.exists():
         subfolder_name.mkdir(parents=True, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     runs = [
-        {"name": "parakeet (ctc-0.6b) untrained",
-         "path": Path.cwd() / "inferences/ctc-0.6b"},
-        {"name": "parakeet (ctc-1.1b) untrained",
-         "path": Path.cwd() / "inferences/ctc-1.1b"},
-        {"name": "whisper large-v3-turbo untrained",
+        {"name": "large-v3-turbo",
          "path": Path.cwd() / "inferences/turbo_default_bc"},
-        {"name": "tdt_ctc-1.1b untrained",
-         "path": Path.cwd() / "inferences/tdt_ctc-1.1b"},
+        {"name": "large-v3-turbo (fine-tuned)",
+         "path": Path.cwd() / "inferences/turbo_exp2_bc"},
     ]
 
     with open(subfolder_name/"models.json", 'w') as f:
@@ -41,7 +37,7 @@ def foo():
     for run in runs:
         config = load_config(Path(run["path"]) / "config.yaml")
         with catch_time() as t:
-            df_single_run = get_data(config.model.name, config.output_path, config.data.val_split.dataset_type, config.extract_logprobs, device)
+            df_single_run = get_data(config.model.name, config.output_path, config.data.val_split.dataset_type, config.extract_logprobs, config.word_timestamps, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model.model_type
         df_single_run["name"] = run["name"]
@@ -53,10 +49,10 @@ def foo():
 
     #step 2: plot
     plot_wer_to_snr(
-        df[["human_transcript_kw", "machine_transcript", "snr", "reference", "reference_kw", "name"]],
-        only_kw=False,
+        df[["human_transcript_kw", "machine_transcript_kw", "snr", "reference", "reference_kw", "name"]],
+        trans_col="machine_transcript_kw",
+        ref_col="reference_kw",
         shifting_attribute="name",
-        shifting_attribute_label="\ndifferent models",
         output_path=subfolder_name)
 
     boxplot_corr_per_listener(

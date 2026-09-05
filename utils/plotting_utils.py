@@ -33,7 +33,8 @@ labels_dict = {
     "wer_machine_kw": "WER machine (keywords only)",
     "avg_logprob": "Logprob (per sequence)",
     "machine_transcripts_len": "length of transcripts",
-    "empty transcripts": "Amount of empty transcrips in %"
+    "empty transcripts": "Amount of empty transcrips in %",
+    "mtd": "Mean temporal distance",
 }
 
 def wrap_text(text: str, max_chars: int = 75) -> str:
@@ -257,8 +258,8 @@ def plot_wer_to_snr(
         plt.plot(positions, mv, marker="x", label=l)
 
     align_info_str = ", derived from time alignments" if "align" in trans_col else ""
-    kw_info_str = f" (keyword only{align_info_str})" if "kw" in ref_col else ""
-    figure_title = f"WER of human transcription vs machine transcripts{kw_info_str} by {shifting_attribute_label or shifting_attribute}"
+    kw_info_str = f" (keywords only{align_info_str})" if "kw" in ref_col else ""
+    figure_title = f"WER of words recognized by humans vs machine transcripts{kw_info_str}{f"by {shifting_attribute_label}" if shifting_attribute_label else ""}"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -356,7 +357,7 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
 
     positions = range(len(x_labels))
     plt.figure(figsize=[10, 5])
-    colors = ["b", "g", "c", "r", ]
+
     line_type = ['-', '--', ':', '-.']
     for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
         for kw, c in zip(range(3), kw_colors_short):
@@ -378,13 +379,14 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
 
 from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp, axes
 
-def boxplot_microscopic_x_to_snr(
+def box_or_barplot_microscopic_x_to_snr(
         df: pd.DataFrame,
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
         value_label: str,
         special_metric: Literal["correlation"]|None = None,
         y_axis_label: str = None,
-        output_path: Path = None):
+        output_path: Path = None,
+        box_or_bar: Literal["box", "bar"] = "bar",):
     """
     Create 3 boxplots per SNR and group values by the keyword.
     CAN be used to plot correlation to human_transcripts_kw per keyword and SNR, but doesn't have to.
@@ -434,46 +436,148 @@ def boxplot_microscopic_x_to_snr(
             values_current_snr.append(values_keyword)
         values_per_snr.append(values_current_snr)
 
-    space_between_plots = 2
-    a = 3 + space_between_plots
+    if box_or_bar=="box":
+        space_between_plots = 2
+        a = 3 + space_between_plots
 
-    positions = torch.Tensor(range(len(x_labels)))*a+1
-    plt.figure(figsize=[10, 5])
+        positions = torch.Tensor(range(len(x_labels)))*a+1
+        plt.figure(figsize=[10, 5])
 
-    #https://stackoverflow.com/questions/16592222/how-to-create-grouped-boxplots
-    def setBoxColors(bp):
-        for i in range(3):
-            c = kw_colors[i]
-            setp(bp['boxes'][i], color=c)
-            setp(bp['caps'][i*2], color=c)
-            setp(bp['caps'][i*2+1], color=c)
-            setp(bp['whiskers'][i*2], color=c)
-            setp(bp['whiskers'][i*2+1], color=c)
-            setp(bp['fliers'][i], markeredgecolor=c)
-            setp(bp['medians'][i], color=c)
+        #https://stackoverflow.com/questions/16592222/how-to-create-grouped-boxplots
+        def setBoxColors(bp):
+            for i in range(3):
+                c = kw_colors[i]
+                setp(bp['boxes'][i], color=c)
+                setp(bp['caps'][i*2], color=c)
+                setp(bp['caps'][i*2+1], color=c)
+                setp(bp['whiskers'][i*2], color=c)
+                setp(bp['whiskers'][i*2+1], color=c)
+                setp(bp['fliers'][i], markeredgecolor=c)
+                setp(bp['medians'][i], color=c)
 
-    for i, snr_values in enumerate(values_per_snr):
-        pos = list(range(i*a, (i*a)+a))[:-space_between_plots]
-        bp = boxplot(snr_values, positions = pos, widths = 0.6)
-        setBoxColors(bp)
+        for i, snr_values in enumerate(values_per_snr):
+            pos = list(range(i*a, (i*a)+a))[:-space_between_plots]
+            bp = boxplot(snr_values, positions = pos, widths = 0.6)
+            setBoxColors(bp)
 
-    # create lines, use them for the legend and make them invisible afterwards
-    hG, = plot([1, 1], 'g-')
-    hB, = plot([1, 1], 'b-')
-    hR, = plot([1, 1], 'r-')
+        # create lines, use them for the legend and make them invisible afterwards
+        hG, = plot([1, 1], 'g-')
+        hB, = plot([1, 1], 'b-')
+        hR, = plot([1, 1], 'r-')
 
-    legend((hG, hB, hR), (kw_labels[0], kw_labels[1], kw_labels[2]))
-    hB.set_visible(False)
-    hB.set_visible(False)
-    hG.set_visible(False)
+        legend((hG, hB, hR), (kw_labels[0], kw_labels[1], kw_labels[2]))
+        hB.set_visible(False)
+        hB.set_visible(False)
+        hG.set_visible(False)
+    elif box_or_bar=="bar":
+        space_between_plots = 2
+        n_groups = 3
 
-    figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""}grouped by reference keywords"
+        # Increase this to make the bars thicker
+        group_width = 2.4
+        bar_width = group_width / n_groups
+
+        positions = np.arange(len(x_labels)) * (n_groups + space_between_plots)
+
+        plt.figure(figsize=[10, 5])
+        plt.grid(axis="y")
+
+        for i, snr_values  in enumerate(values_per_snr):
+            # Positions of the 3 bars within this group
+            offsets = (np.arange(n_groups) - (n_groups - 1) / 2) * (
+                    bar_width + 0.2
+            )
+            means = [np.mean(o) for o in snr_values]
+            std_dev = [np.std(o) for o in snr_values]
+            for j in range(n_groups):
+                plt.bar(
+                    positions[i] + offsets[j],
+                    means[j],
+                    yerr=std_dev[j],
+                    width=bar_width,
+                    color=kw_colors[j],
+                    capsize=4,
+                    label=kw_labels[j] if i == 0 else None
+                )
+        plt.legend()
+    else:
+        raise NotImplementedError
+
+    figure_title = f"Average {value_label} of keywords {"(derived from time alignments) " if "from_time_align" in col_name else ""}grouped by reference keywords"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel(f"microscopic {y_axis_label or value_label}")
     plt.ylim(0)
-    plt.grid()
+
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.close()
+
+def barplot_x_to_snr(
+        df: pd.DataFrame,
+        plotting_attribute: str,
+        value_label: str|None = None,
+        shifting_attribute: str = "model_type",
+        shifting_attribute_label = None,
+        y_axis_label: str = None,
+        output_path: Path = None):
+    """
+    Create 3 boxplots per SNR and group values by the keyword.
+    CAN be used to plot correlation to human_transcripts_kw per keyword and SNR, but doesn't have to.
+    """
+
+    x_labels = np.sort(df["snr"].unique())
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+
+
+    values_per_snr = []
+    values = {
+        "mean": [],
+        "std": [],
+    }
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        mean_values_per_df = []
+        std_values_per_df = []
+        for snr in np.sort(df_attr["snr"].unique()):
+            df_snr = df_attr[df_attr["snr"] == snr]
+
+            v = torch.tensor(df_snr[plotting_attribute].values)
+            mean_value = torch.mean(v[~v.isnan()]).item()
+            std_value = torch.std(v[~v.isnan()]).item()
+            mean_values_per_df.append(mean_value)
+            std_values_per_df.append(std_value)
+
+        values["mean"].append(torch.tensor(mean_values_per_df))
+        values["std"].append(torch.tensor(std_values_per_df))
+
+    positions = np.arange(len(x_labels))
+    n_groups = len(list_shifting_attribute)
+    width = 0.8 / n_groups
+
+    plt.figure(figsize=[10, 5])
+
+    for i, (means, stds, label) in enumerate(zip(values["mean"], values["std"], list_shifting_attribute)):
+        offset = (i - (n_groups - 1) / 2) * width
+
+        plt.bar(
+            positions + offset,
+            means,
+            width=width,
+            yerr=stds,
+            capsize=4,
+            label=label
+        )
+
+    plt.legend()
+    figure_title = f"Average {value_label if value_label else labels_dict[plotting_attribute]}"
+    plt.suptitle(wrap_text(figure_title))
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    plt.ylabel(f"{y_axis_label or value_label or labels_dict[plotting_attribute]}")
+    plt.ylim(0)
+
 
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
@@ -517,7 +621,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         p_val_arr.append(torch.tensor(p_val_arr_tmp))
 
 
-    fig, ax = plt.subplots(figsize=(8 + len(list_shifting_attribute) * 0.7, 7))
+    fig, ax = plt.subplots(figsize=(5 + len(list_shifting_attribute) * 0.7, 7))
 
     positions = range(1, len(list_shifting_attribute) + 1)
 
@@ -527,23 +631,24 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      # meanline=True,
                      showmeans=True,
                      )
-    d = {
-        "wer_machine_kw": "WER for keywords",
-        "wer_machine": "WER for the whole sequence",
-        "avg_logprob": "average log probability score (per sequence)",
-        "average_macroscopic_entropy": "average (macroscopic) entropy of all words in a sentence"
-    }
 
-    title = f"Spearman Correlation Coefficient of human WER and {model}'s {d[correlate_to]} for each listener"
+    title = f"Spearman Correlation Coefficient of human WER and {model}'s {labels_dict[correlate_to]} for each listener"
     plot_title = title +" and maximum p-value to the rounded 4th digit"
-    plt.title(wrap_text(plot_title, 75))
+    plt.title(wrap_text(plot_title, 55))
 
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
     x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t,p, c in zip(list_shifting_attribute, p_val_arr, corr_arr)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
-    plt.ylim(-1,1)
+
+    y_lim_top = 1
+    y_lim_button = -1
+    if all([all(o>0) for o in corr_arr]):
+        y_lim_button = 0
+    elif all([all(o<0) for o in corr_arr]):
+        y_lim_top = 0
+    plt.ylim(y_lim_button, y_lim_top)
 
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
