@@ -1,5 +1,6 @@
 from utils.evaluate_utils import get_kw_by_index, remove_nan, get_kw_using_needle_man_wunsch_alignments, \
-    find_ordered_indices, get_kw_by_identity, get_kw_using_phonetic_similarity, get_kw_by_accepting_other_options_from_vocab
+    find_ordered_indices, get_kw_by_identity, get_kw_using_phonetic_similarity, get_kw_by_accepting_other_options_from_vocab,\
+    calculate_mtd
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -144,4 +145,8 @@ def test_remove_nan(x, y, x_exp, y_exp):
     torch.equal(x_out, x_exp)
     assert torch.equal(y_out, y_exp)
 
-
+def test_calculate_mtd():
+    t = torch.range(0,14, 1)
+    t = t.view(3, 5).T
+    mtd = calculate_mtd(t)
+    assert round(mtd, 5) == round(3**0.5, 5)

@@ -356,6 +356,11 @@ def calculate_tad(reference_alignments: list[dict],
 
     return tad_per_kw
 
+def calculate_mtd(t: torch.Tensor):
+    # assumes t has its features in the horizontal
+    assert t.shape[0] < 1000
+    return torch.linalg.vector_norm(t[:-1] - t[1:], dim=-1).mean().item()
+
 
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame) -> None:
@@ -817,6 +822,7 @@ def get_data_whisper(output_path: Path,
     estimated_transcript_keywords_indices: list[list[int|None]] = []
     estimated_transcript_keywords: list[list[str|None]] = []
     normalized_decoded_tokens_without_timestamps_list: list[list[str|None]] = []
+    mean_temporal_distance = []
     #for time_alignments
     machine_trans_kw_from_time_align: list[list[str|None]] = []
     machine_trans_kw_idx_from_time_align: list[list[int|None]] = []
@@ -838,6 +844,7 @@ def get_data_whisper(output_path: Path,
             estimated_transcript_keywords.append([None, None, None])
             entropies_kw.append([torch.nan, torch.nan, torch.nan])
             normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
+            mean_temporal_distance.append(torch.nan)
 
             if word_timestamps:
                 machine_trans_kw_from_time_align.append([None, None, None])
@@ -853,9 +860,13 @@ def get_data_whisper(output_path: Path,
                 row["logprobs_path"]).name
             logprob_tensor = torch.load(logprob_path)
 
-            # calculate entropy
             posteriors = logprob_tensor.exp()
             del logprob_tensor
+
+            #calculate mean temporal distance
+            mean_temporal_distance.append(calculate_mtd(posteriors))
+
+            # calculate entropy
             decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
             assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
             assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
@@ -953,6 +964,7 @@ def get_data_whisper(output_path: Path,
     df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
     df["estimated_transcript_kw"] = estimated_transcript_keywords
     df["entropies_kw"] = entropies_kw
+    df["mtd"] = mean_temporal_distance
     df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
     del (average_macroscopic_entropy, estimated_transcript_keywords_indices, estimated_transcript_keywords, entropies_kw)
 
