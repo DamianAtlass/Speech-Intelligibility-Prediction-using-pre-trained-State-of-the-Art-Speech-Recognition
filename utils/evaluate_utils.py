@@ -327,7 +327,6 @@ def calculate_tad(reference_alignments: list[dict],
     """
     Calculate the TAD (time alignment difference as in: Karbasi, Mahdie; Kolossa, Dorothea (2017): ASR-based
     Measures for Microscopic Speech Intelligibility Prediction).
-    Note 1) the variables in the TAD are in frame length and whisper's is 25ms (although its timestamps resolution is 20sm)
     Note 2) the formula of TAD contains a divisor, the "word length in frames". It is not absolutely clear from the paper,
     if it's referring to the reference or the transcript.
     Returns:
