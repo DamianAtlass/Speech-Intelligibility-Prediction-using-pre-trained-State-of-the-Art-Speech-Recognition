@@ -387,10 +387,15 @@ def dispersion(probs: list[float]) -> float:
     doi: 10.1109/taslp.2022.3184888. Epub 2022 Jun 30. PMID: 37007458; PMCID: PMC10065470.
     """
     #probs = probs[:4]
-    N = len(probs)
+    for i in range(len(probs)):
+        if probs[i]==0:
+            probs[i]=0.0000000000000000001
+    N = 4
     sums = 0
     for k in range(N):
         for l in range(k + 1, N):
+            if probs[k]==0 or probs[l]==0:
+                pass
             sums += np.log(probs[k] / probs[l])
     return (2 / (N * (N - 1))) * sums
 
@@ -683,11 +688,12 @@ def evaluate_dispersion_run(config: InferenceConfig,
 
     print(f"took: {t():.2f} s.")
 
-
+    out = config.output_path/"dispersion_plot" #todo wip
+    out.mkdir(parents=True, exist_ok=False)
     plot_microscopic_x_to_snr(grouped_df,
                               col_name="dispersion_kw",
                               value_label="dispersion",
-    )
+                              output_path=out)
 
 
 def get_summary(df: pd.DataFrame,

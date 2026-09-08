@@ -365,9 +365,9 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     plt.ylim(0)
     plt.grid()
     plt.legend()
+
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
-    #plt.show()
     plt.close()
 
 from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp, axes
