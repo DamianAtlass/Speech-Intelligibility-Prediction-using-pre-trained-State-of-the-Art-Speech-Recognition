@@ -259,7 +259,7 @@ def plot_wer_to_snr(
 
     align_info_str = ", derived from time alignments" if "align" in trans_col else ""
     kw_info_str = f" (keywords only{align_info_str})" if "kw" in ref_col else ""
-    figure_title = f"WER of words recognized by humans vs machine transcripts{kw_info_str}{f"by {shifting_attribute_label}" if shifting_attribute_label else ""}"
+    figure_title = f"WER of humans vs WER of machine transcripts{kw_info_str}{f"by {shifting_attribute_label}" if shifting_attribute_label else ""}"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
@@ -593,38 +593,40 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     Boxplots grouped by listeners. May need an update.
     """
 
+    def corr(df)-> dict:
+        x = df[correlate_to]
+        y = df["wer_human_kw"]
+        x_ranked = stats.rankdata(x)
+        y_ranked = stats.rankdata(y)
+        del y, x
+
+        # spearman corr == pearson corr of ranks
+        regr = stats.pearsonr(x_ranked, y_ranked)
+        return {"value": regr.statistic, "p-value": regr.pvalue}
+
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
-    corr_arr = []
-    p_val_arr = []
+    values = []
+    values_per_listener = []
     for attr in list_shifting_attribute:
         df_model_type = df[df[shifting_attribute]==attr]
         df_model_type = df_model_type.dropna()
 
-        corr_arr_tmp = []
-        p_val_arr_tmp = []
+        values.append(corr(df_model_type))
+
+        value_arr_tmp = []
 
         listeners = df_model_type["listener"].unique()
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
-            x = df_listener[correlate_to]
-            y = df_listener["wer_human_kw"]
-            x_ranked = stats.rankdata(x)
-            y_ranked = stats.rankdata(y)
-            del y, x
+            value_arr_tmp.append(corr(df_listener))
 
-            # spearman corr == pearson corr of ranks
-            regr = stats.pearsonr(x_ranked, y_ranked)
-            corr_arr_tmp.append(regr.statistic)
-            p_val_arr_tmp.append(regr.pvalue)
-
-        corr_arr.append(torch.tensor(corr_arr_tmp))
-        p_val_arr.append(torch.tensor(p_val_arr_tmp))
-
+        values_per_listener.append(value_arr_tmp)
 
     fig, ax = plt.subplots(figsize=(5 + len(list_shifting_attribute) * 0.7, 7))
 
     positions = range(1, len(list_shifting_attribute) + 1)
 
+    corr_arr = [[o["value"] for o in v] for v in values_per_listener]
     tmp = ax.boxplot(corr_arr,
                      # notch=False,
                      positions=positions,
@@ -633,26 +635,24 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      )
 
     title = f"Spearman Correlation Coefficient of human WER and {model}'s {labels_dict[correlate_to]} for each listener"
-    plot_title = title +" and maximum p-value to the rounded 4th digit"
-    plt.title(wrap_text(plot_title, 55))
+    plt.title(wrap_text(title, 55))
 
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
-    x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t,p, c in zip(list_shifting_attribute, p_val_arr, corr_arr)]
+    x_label = [f"{l}\ntotal corr.: {v["value"]:.4f}\np-vaple: {v["p-value"]:.4f}" for l, v in zip(list_shifting_attribute, values)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
     y_lim_top = 1
     y_lim_button = -1
-    if all([all(o>0) for o in corr_arr]):
+    if all([all([k>0 for k in o]) for o in corr_arr]):
         y_lim_button = 0
-    elif all([all(o<0) for o in corr_arr]):
+    elif all([all([k<0 for k in o]) for o in corr_arr]):
         y_lim_top = 0
     plt.ylim(y_lim_button, y_lim_top)
 
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
 def boxplot_microscopic_special_metric_per_keyword(
@@ -681,71 +681,71 @@ def boxplot_microscopic_special_metric_per_keyword(
     # we want to measure a correlation between that, and the entropies. no need for  machine_trans_kw(_from_time_align) here!
     # To check the calibration, we measure correlation between the wer of the machine (ref_kw vs machine_trans_kw).
 
-    value_array = []
-    p_val_arr = []
+    def corr_or_mut(special_metric: str, df, kw_idx) -> dict:
+        ref_kw = df["reference_kw"].map(lambda x: x[kw_idx])
+
+        keywords = df[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
+
+        x = df[col_name].map(lambda x: x[kw_idx])
+        y = (ref_kw != keywords).astype(int)  # basically the WER
+
+        filter = x.isna()
+        x = torch.from_numpy(np.array(x.astype(float))[~filter])
+        y = y[~filter]
+        if special_metric == "spearman_correlation":
+
+            x_ranked = stats.rankdata(x)
+            y_ranked = stats.rankdata(y)
+            del y, x
+
+            # spearman corr == pearson corr of ranks
+            regr = stats.pearsonr(x=x_ranked, y=y_ranked)
+
+            return {"value": regr.statistic, "p-value": regr.pvalue}
+
+        elif special_metric == "mutual_information":
+            mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
+            return {"value": mi[0]}
+        else:
+            raise NotImplementedError
+
+    values_per_group_array = []
+
+    values_per_kw_label = []
+
     for kw_idx in tqdm(range(3)):
         value_array_per_kw = []
-        p_val_arr_per_kw = []
+
+        values_per_kw_label.append(corr_or_mut(special_metric, df, kw_idx))
+
         for kw in grid_vocab[kw_labels[kw_idx]]:
-            df_keyword = df[
-                df["reference_kw"].str[kw_idx].eq(kw)
-            ]
+            df_keyword = df[df["reference_kw"].str[kw_idx].eq(kw)]
+            value_array_per_kw.append(corr_or_mut(special_metric, df_keyword, kw_idx))
 
-            ref_kw = df_keyword["reference_kw"].map(lambda x: x[kw_idx])
+        values_per_group_array.append(value_array_per_kw)
 
-            keywords = df_keyword[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
-
-            x = df_keyword[col_name].map(lambda x: x[kw_idx])
-            y = (ref_kw!=keywords).astype(int)  # basically the WER
-
-            filter = x.isna()
-            x = torch.from_numpy(np.array(x.astype(float))[~filter])
-            y = y[~filter]
-            if special_metric == "spearman_correlation":
-
-                x_ranked = stats.rankdata(x)
-                y_ranked = stats.rankdata(y)
-                del y, x
-
-                # spearman corr == pearson corr of ranks
-                regr = stats.pearsonr(x=x_ranked, y=y_ranked)
-                value_array_per_kw.append(regr.statistic)
-                p_val_arr_per_kw.append(regr.pvalue)
-
-            elif special_metric == "mutual_information":
-                mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
-                value_array_per_kw.append(mi[0])
-            else:
-                raise NotImplementedError
-
-        value_array.append(torch.tensor(value_array_per_kw))
-        p_val_arr.append(torch.tensor(p_val_arr_per_kw))
-
-    all_above_zero = all([all([e >= 0 for e in v]) for v in value_array])
+    all_above_zero = all([all(map(lambda x: x["value"]>=0, v)) for v in values_per_group_array])
 
     fig, ax = plt.subplots(figsize=(9, 7))
 
     positions = range(1, 3 + 1)
 
 
-    tmp = ax.boxplot(value_array,
+    tmp = ax.boxplot([[o["value"] for o in v] for v in values_per_group_array],
                      # notch=False,
                      positions=positions,
                      # meanline=True,
                      showmeans=True,
                      )
 
-    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} for each keyword{cali}"
-    plot_title = title + (" and maximum p-value to the rounded 4th digit" if special_metric == "spearman_correlation" else "")
-    plt.title(wrap_text(plot_title))
+    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} (total and for each keyword{cali})"
+    plt.title(wrap_text(title))
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
     ax.grid()
     if special_metric == "spearman_correlation":
-        x_label = [f"{t}\nmean={c.mean():.4f}\nmax(pvalue)={p.max():.4f}" for t, p, c in
-                   zip(kw_labels, p_val_arr, value_array)]
+        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.4f}\np-value: {v["p-value"]:.4f}" for l, v in zip(kw_labels, values_per_kw_label)]
     else:
-        x_label = [f"{t}\nmean={c.mean():.4f}\n" for t, c in
-                   zip(kw_labels, value_array)]
+        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.4f}" for l, v in zip(kw_labels, values_per_kw_label)]
 
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")

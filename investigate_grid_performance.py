@@ -7,7 +7,7 @@ from utils.evaluate_utils import get_kw_using_mixed_approaches
 from utils.evaluate_utils import join_kw_list
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
 from utils.werpy_utils import normalize
-path = Path("inferences/turbo_default_grid_subwords")
+path = Path("inferences/turbo_default_bc")
 config: InferenceConfig = load_config(path/"config.yaml")
 
 
@@ -42,12 +42,12 @@ for pos, label in enumerate(kw_label):
     sub_pairs = Counter()
 
     kw_specific_wer = wer_needleman_wunsch(
-        references=[o.split()[pos] for o in df["reference_kw"]],
+        references=[o[pos] for o in df["reference_kw"]],
         transcripts=[o[pos] for o in df["machine_trans_kw_from_time_align"]])
     kw_specific_wer = round(kw_specific_wer*100, 2)
 
     for _, row in df.iterrows():
-        ref = row["reference_kw"].split()[pos]
+        ref = row["reference_kw"][pos]
         hyp = normalize([row["machine_trans_kw_from_time_align"][pos]], apply_werpy_normalize=False, apply_separate_numbers_from_letter=False)[0]
 
         ref = str(ref).strip().lower() if ref is not None else None
@@ -69,7 +69,7 @@ for pos, label in enumerate(kw_label):
 
 
 print(f"wer: {wer_needleman_wunsch(
-    references=df["reference_kw"],
+    references=join_kw_list(df["reference_kw"]),
     transcripts=join_kw_list(df["machine_trans_kw_from_time_align"])
 ):}")
 fig.tight_layout()
