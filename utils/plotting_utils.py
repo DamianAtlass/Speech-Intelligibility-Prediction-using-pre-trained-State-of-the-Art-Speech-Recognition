@@ -7,17 +7,11 @@ from matplotlib import pyplot as plt
 from scipy import stats as stats
 from tqdm import tqdm
 from typing import Literal, cast
+
+from utils.variables import *
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
-from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from sklearn.feature_selection import mutual_info_classif
 
-grid_vocab = {
-    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
-    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
-    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
-}
-
-kw_labels = ["color", "letter", "digit"]
 kw_colors = ["green", "blue", "red"]
 kw_colors_short = ["g", "b", "r"]
 
@@ -359,9 +353,9 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     plt.figure(figsize=[10, 5])
 
     line_type = ['-', '--', ':', '-.']
-    for mv,l,lt in zip(values_means, list_shifting_attribute, line_type):
+    for v,l,lt in zip(values_means, list_shifting_attribute, line_type):
         for kw, c in zip(range(3), kw_colors_short):
-            plt.plot(positions, [o[kw] for o in mv], marker="x", color=c, ls=lt, label=f"{l} | {kw_labels[kw]}")
+            plt.plot(positions, [o[kw] for o in v], marker="x", color=c, ls=lt, label=f"{l} | {grid_kw_labels[kw]}")
 
 
     figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
@@ -372,9 +366,9 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     plt.ylim(0)
     plt.grid()
     plt.legend()
+
     if output_path:
         plt.savefig(output_path/f'{figure_title}.png')
-    #plt.show()
     plt.close()
 
 from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp, axes
@@ -404,7 +398,7 @@ def box_or_barplot_microscopic_x_to_snr(
         values_current_snr = []
         for i_kw in range(3):
             values_keyword = []
-            keywords: list[str] = grid_vocab[kw_labels[i_kw]]
+            keywords: list[str] = grid_kw_vocab[grid_kw_labels[i_kw]]
             for keyword in keywords:
                 df_snr_keyword = df_snr[
                     df_snr["reference_kw"].str[i_kw].eq(keyword)
@@ -465,7 +459,7 @@ def box_or_barplot_microscopic_x_to_snr(
         hB, = plot([1, 1], 'b-')
         hR, = plot([1, 1], 'r-')
 
-        legend((hG, hB, hR), (kw_labels[0], kw_labels[1], kw_labels[2]))
+        legend((hG, hB, hR), (grid_kw_labels[0], grid_kw_labels[1], grid_kw_labels[2]))
         hB.set_visible(False)
         hB.set_visible(False)
         hG.set_visible(False)
@@ -718,7 +712,7 @@ def boxplot_microscopic_special_metric_per_keyword(
 
         values_per_kw_label.append(corr_or_mut(special_metric, df, kw_idx))
 
-        for kw in grid_vocab[kw_labels[kw_idx]]:
+        for kw in grid_kw_vocab[grid_kw_labels[kw_idx]]:
             df_keyword = df[df["reference_kw"].str[kw_idx].eq(kw)]
             value_array_per_kw.append(corr_or_mut(special_metric, df_keyword, kw_idx))
 
@@ -743,9 +737,9 @@ def boxplot_microscopic_special_metric_per_keyword(
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
     ax.grid()
     if special_metric == "spearman_correlation":
-        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.4f}\np-value: {v["p-value"]:.4f}" for l, v in zip(kw_labels, values_per_kw_label)]
+        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.4f}\np-value: {v["p-value"]:.4f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
     else:
-        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.4f}" for l, v in zip(kw_labels, values_per_kw_label)]
+        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.4f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
 
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")

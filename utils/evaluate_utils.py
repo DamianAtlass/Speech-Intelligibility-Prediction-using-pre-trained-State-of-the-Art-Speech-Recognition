@@ -18,6 +18,7 @@ from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics,
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
+from utils.variables import *
 
 logger = logging.getLogger(__name__)
 from utils.new_config_dataclass import InferenceConfig
@@ -29,13 +30,6 @@ from phonemizer.backend import EspeakBackend
 backend = EspeakBackend("en-us")
 phonemize = backend.phonemize
 
-grid_vocab = {
-    "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
-    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
-    "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
-}
-grid_kw_index = [1,3,4]
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -64,7 +58,7 @@ def find_ordered_indices(transcript: list, keywords_to_find: list) -> list[int]:
     assert len(indices) == len(keywords_to_find)
     return indices
 
-def ref_alignments_to_secods_and_rm_non_words(ref_alignments: list[dict]) -> list[dict]:
+def ref_alignments_to_seconds_and_rm_non_words(ref_alignments: list[dict]) -> list[dict]:
     for r in ref_alignments:
         r["start"] = int(r["start"])/16000
         r["end"] = int(r["end"])/16000
@@ -134,7 +128,7 @@ def get_kw_using_mixed_approaches(
     re = lambda x: transcript.index(x) if return_idx else x
 
     keywords_or_indices = []
-    for kw, expected_kw_position, other_options in zip(reference_kw, [1,3,4], grid_vocab.values()):
+    for kw, expected_kw_position, other_options in zip(reference_kw, [1,3,4], grid_kw_vocab.values()):
         if kw in transcript:
             keywords_or_indices.append(re(kw))
         else:
@@ -198,7 +192,7 @@ def get_kw_by_accepting_other_options_from_vocab(
         transcript: list[str],
         return_idx=False) -> list[str] | list[int | None]:
     r = []
-    for kw, other_options in zip(reference_kw, grid_vocab.values()):
+    for kw, other_options in zip(reference_kw, grid_kw_vocab.values()):
         if kw in transcript:
             r.append(transcript.index(kw) if return_idx else kw)
         else:
@@ -237,7 +231,7 @@ def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
 
     kw_token_idx_list: list[list[int]|None] = []
     kw_word_idx_list: list[int|None] = []
-    for i in grid_kw_index:
+    for i in grid_kw_indexes:
         window_start = reference_alignments[i]["start"]
         window_end = reference_alignments[i]["end"]
 
@@ -339,7 +333,7 @@ def calculate_tad(reference_alignments: list[dict],
 
     tad_per_kw: list[float|np.nan] = []
 
-    for ref_kw_idx, trans_idx in zip(grid_kw_index, machine_transcript_kw_idx):
+    for ref_kw_idx, trans_idx in zip(grid_kw_indexes, machine_transcript_kw_idx):
         if trans_idx is None:
             tad_per_kw.append(np.nan)
             continue
@@ -360,6 +354,55 @@ def calculate_mtd(t: torch.Tensor):
     # assumes t has its features in the horizontal
     assert t.shape[0] < 1000
     return torch.linalg.vector_norm(t[:-1] - t[1:], dim=-1).mean().item()
+
+def calculate_dispersion_per_file(rows_single_audio: pd.DataFrame):
+    rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
+    dispersion_values: list[float] = []
+
+    for kw_label in grid_kw_labels:
+        possible_keywords: list[str] = grid_kw_vocab[kw_label]
+
+        # take the original transcription without alignment and all other of the keyword position
+        rows_single_keyword_position = rows_single_audio[
+            rows_single_audio["forced_alignment_options"].apply(
+                lambda x: x.get("token_id_or_word").strip() in possible_keywords if isinstance(x, dict) else True
+            )]
+
+        assert len(rows_single_keyword_position) == len(possible_keywords) or len(rows_single_keyword_position) == len(possible_keywords) + 1
+        # consider case if in which isn't in original transcript
+
+        probs: list[float] = sorted(rows_single_keyword_position["avg_logprob"], reverse=True) # exp applied earlier
+
+        dispersion_values.append(dispersion(probs))
+
+    return dispersion_values
+
+def dispersion(probs: list[float]) -> float:
+    """
+    Args:
+        probs: list[float], descendingly ordered list of probabilities for a specific keyword position
+
+    Returns:
+        the dispersion for that keyword position
+
+
+    from:
+    Karbasi M, Zeiler S, Kolossa D. Microscopic and Blind Prediction of Speech Intelligibility: Theory and Practice.
+    IEEE/ACM Trans Audio Speech Lang Process. 2022;30:2141-2155.
+    doi: 10.1109/taslp.2022.3184888. Epub 2022 Jun 30. PMID: 37007458; PMCID: PMC10065470.
+    """
+    #probs = probs[:4]
+    for i in range(len(probs)):
+        if probs[i]==0:
+            probs[i]=0.0000000000000000001
+    N = 4
+    sums = 0
+    for k in range(N):
+        for l in range(k + 1, N):
+            if probs[k]==0 or probs[l]==0:
+                pass
+            sums += np.log(probs[k] / probs[l])
+    return (2 / (N * (N - 1))) * sums
 
 
 def evaluate_individual_run(config: InferenceConfig,
@@ -648,6 +691,33 @@ def evaluate_individual_run(config: InferenceConfig,
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
+def evaluate_dispersion_run(config: InferenceConfig,
+                            df_dispersion_run: pd.DataFrame) -> None:
+    grouped_df = df_dispersion_run.groupby("audio_path")
+
+    def compute_stats(group: pd.DataFrame):
+        return pd.Series({
+            "snr": group["snr"].iloc[0],
+            "reference_kw": group["reference_kw"].iloc[0],
+            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+            "dispersion_kw": calculate_dispersion_per_file(group),
+            "model_type": group["model_type"].iloc[0],
+        })
+
+    print("Creating the grouped dataframe...", end="")
+    with catch_time() as t:
+        grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+
+    print(f"took: {t():.2f} s.")
+
+    out = config.output_path/"dispersion_plot" #todo wip
+    out.mkdir(parents=True, exist_ok=False)
+    plot_microscopic_x_to_snr(grouped_df,
+                              col_name="dispersion_kw",
+                              value_label="dispersion",
+                              output_path=out)
+
+
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:
     """
@@ -718,6 +788,7 @@ def get_data_whisper(output_path: Path,
     json_path = []
     references_alignments = []
     transcript_alignments = []
+    forced_alignment_options = []
 
     temperature = []
 
@@ -770,6 +841,8 @@ def get_data_whisper(output_path: Path,
                 varrying_opt = json_file["varrying_transcription_options"]
                 if "temperature" in varrying_opt:
                     temperature.append(varrying_opt["temperature"])
+                if "forced_alignment_options" in varrying_opt:
+                    forced_alignment_options.append(varrying_opt["forced_alignment_options"])
 
     if dataset_type == "libri":
         wer = wer_needleman_wunsch(normalize(references), normalize(machine_transcripts))
@@ -830,6 +903,8 @@ def get_data_whisper(output_path: Path,
         })
     if len(temperature)>0:
         data.update({"temperature": temperature})
+    if len(forced_alignment_options)>0:
+        data.update({"forced_alignment_options": forced_alignment_options})
 
     df = pd.DataFrame(data)
 
@@ -944,7 +1019,7 @@ def get_data_whisper(output_path: Path,
                 assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
                     decoded_tokens_without_timestamp_tokens)
 
-            ref_alignments: list[dict] = ref_alignments_to_secods_and_rm_non_words(row["reference_alignments"])
+            ref_alignments: list[dict] = ref_alignments_to_seconds_and_rm_non_words(row["reference_alignments"])
             trans_alignment = row["transcript_alignments"]
             for o in trans_alignment:
                 o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
