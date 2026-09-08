@@ -1,6 +1,6 @@
 
 from utils.new_config_dataclass import DataSplitConfig, DatasetConfig
-from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset
+from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset, apply_filter, _get_dataset
 from datasets import Dataset, DatasetDict
 import pytest
 
@@ -60,3 +60,19 @@ def test_get_dataset_dict():
     )
     data_dict = get_dataset_dict(dataset_config)
     assert isinstance(data_dict, DatasetDict)
+
+@pytest.mark.parametrize(("filter", "expected_len"), [
+    ({"listener": ["1", "2"]}, 248),
+    ({"listener": ["1", "2"], "speaker": ["3"]}, 6),
+])
+def test_apply_filter(filter, expected_len):
+    dataset = _get_dataset("grid_bc", None)
+    dataset = dataset.shuffle(seed=0)
+    dataset = apply_split(dataset, 0, 0.1)
+
+    dataset = apply_filter(dataset, filter)
+    allowed_listener = [str(i) for i in range(1,21)] if filter is None else filter["listener"]
+    for sample in dataset:
+        if sample["listener"] not in allowed_listener:
+            assert False
+    assert len(dataset) == expected_len

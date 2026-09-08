@@ -56,6 +56,7 @@ class DatasetConfig:
     train_split: DataSplitConfig = None
     test_split: DataSplitConfig = None
     val_split: DataSplitConfig = None
+    filter_train_test: dict|None = None
 
 @dataclass(kw_only=True)
 class ModelConfig:
