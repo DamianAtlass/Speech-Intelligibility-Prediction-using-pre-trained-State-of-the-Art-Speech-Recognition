@@ -87,6 +87,7 @@ class InferenceConfig(BaseConfig):
     subword_timestamps: bool = False
     temperature: float = 0
     runs_per_sample: int = 1
+    dispersion: bool = False
 
     def __post_init__(self):
         super().__post_init__()
