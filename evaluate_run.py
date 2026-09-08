@@ -8,7 +8,8 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run
+from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_dispersion_run
+
 
 def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
