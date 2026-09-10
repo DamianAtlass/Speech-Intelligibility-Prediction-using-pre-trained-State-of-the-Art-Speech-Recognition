@@ -64,39 +64,25 @@ def get_dataset(split: DataSplitConfig) -> Dataset:
     return dataset
 
 def apply_filter(dataset: Dataset, filter_items: dict) -> Dataset:
-    for column_name, values in filter_items.items():
-        dataset = dataset.filter(lambda x: x[column_name] in values)
+    indices = []
+    for k,v in filter_items.items():
+        for i, sentence in tqdm(enumerate(dataset[k])):
+            if sentence in v:
+                indices.append(i)
+
+        dataset = dataset.select(indices)
+        indices = []
+
     return dataset
 
 def get_dataset_dict(config: DatasetConfig) -> DatasetDict:
-    dataset_dict = {}
+    dataset_dict = DatasetDict({})
+
     for split, label in zip([config.train_split, config.test_split, config.val_split], ["train", "test", "val"]):
         if split is None:
             continue
         dataset = get_dataset(split)
         dataset_dict[label] = dataset
-
-    if config.train_split and config.test_split and config.filter_train_test:
-        dataset_dict = foo(dataset_dict, config.filter_train_test["value"])
-
-    dataset_dict = DatasetDict(dataset_dict)
-    return dataset_dict
-
-def foo(dataset_dict, value: float) -> DatasetDict:
-
-    sentences_in_grid = dataset_dict["train"].unique("sentence")
-
-    l = len(sentences_in_grid)
-    l_new = int(l * value)
-
-    sentences_in_grid = list(sentences_in_grid)
-    sentences_for_train = sentences_in_grid[:l_new]
-    sentences_for_test = sentences_in_grid[l_new:]
-
-    dataset_dict["train"] = apply_filter(dataset_dict["train"], {"sentence": sentences_for_train})
-    print(f"{len(dataset_dict["train"]) = }")
-    dataset_dict["test"] = apply_filter(dataset_dict["test"], {"sentence": sentences_for_test})
-    print(f"{len(dataset_dict["test"]) = }")
 
     return dataset_dict
 

@@ -1,23 +1,16 @@
-from utils.config_dataclasses import old_get_config, old_unfold_config, Old_InferenceConfig
 from utils.new_config_dataclass import InferenceConfig, load_config, convert_old_config_into_new, save_config
 from pathlib import Path
-from utils.logging_utils import catch_time
 
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
-import logging
-logger = logging.getLogger(__name__)
+from tqdm import tqdm
+
 from utils.evaluate_utils import get_data, evaluate_individual_run
-
-import nemo.collections.asr as nemo_asr
-from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
-from dotenv import load_dotenv
-load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
-import torch
 from utils.cuda_utils import select_device
-from utils.dataset_utils import get_dataset, apply_split
+from utils.dataset_utils import get_dataset, apply_split, get_dataset_dict, apply_filter
 from utils.logging_utils import catch_time
+from utils.new_config_dataclass import load_config, DatasetConfig, DataSplitConfig
 
 def inspect_df(path: Path, device: torch.device | None = None):
     if not device:
@@ -45,6 +38,9 @@ def inspect_df(path: Path, device: torch.device | None = None):
         print("samples: ", len(g[1]))
 
 def nemo_sandbox():
+    import nemo.collections.asr as nemo_asr
+    from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
+
     device = select_device()
     model: EncDecCTCModelBPE = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
         model_name="nvidia/parakeet-ctc-0.6b").to(device)
@@ -65,5 +61,43 @@ def nemo_sandbox():
     result = transcriptions[0]
     print()
 
+def create_grid_without_bc_sentences():
+    config = DatasetConfig(
+        train_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1.0, noise=False, scaling=1.0),
+        test_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0),)
+    dataset_dict = get_dataset_dict(config)
+
+    sentences_in_grid = dataset_dict["train"].unique("sentence")
+    sentences_in_grid_bc = dataset_dict["test"].unique("sentence")
+    sentences_in_not_in_bc = set(sentences_in_grid) - set(sentences_in_grid_bc)
+
+    dataset_dict["train"] = apply_filter(dataset_dict["train"], {"sentence": sentences_in_not_in_bc})
+
+    save_at = Path.cwd() / "datasets/grid_without_bc_sentences" / "saved_dataset"
+    save_at.mkdir(parents=True, exist_ok=True)
+    dataset_dict["train"].save_to_disk(save_at)
+
+def create_grid_bc_without_duplicates():
+    split_config = DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0)
+    dataset = get_dataset(split_config)
+
+    seen = set()
+    indices = []
+
+    for i, sentence in tqdm(enumerate(dataset["sentence"])):
+        if sentence not in seen:
+            seen.add(sentence)
+            indices.append(i)
+
+    dataset = dataset.select(indices)
+
+    from collections import Counter
+    print(Counter(dataset["snr_db"]))
+
+    save_at = Path.cwd() / "datasets/grid_bc_without_duplicates" / "saved_dataset"
+    save_at.mkdir(parents=True, exist_ok=True)
+    dataset.save_to_disk(save_at)
+
 if __name__ == '__main__':
-    inspect_df(Path("inferences/turbo_exp2_bc"))
+    create_grid_without_bc_sentences()
+    create_grid_bc_without_duplicates()
