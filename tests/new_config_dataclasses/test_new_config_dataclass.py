@@ -28,7 +28,7 @@ config_dict = [
  'model':{
     'name': 'whisper',
     'model_type': 'base',
-    'path': 'trained_models/foo'}
+    'path': 'finetuned_models/foo'}
  }
     ,
 {'beam_size': 5,
@@ -51,7 +51,7 @@ config_dict = [
 'model':{
     'name': 'whisper',
     'model_type': 'base',
-    'path': 'trained_models/foo'}
+    'path': 'finetuned_models/foo'}
  }
 ]
 
@@ -70,7 +70,7 @@ TrainingConfig(
     batch_size=16,
     save_and_eval_steps=100,
     warmup_steps=500,
-    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
+    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('finetuned_models/foo'))
 ),
 InferenceConfig(
     output_path=PosixPath('output/path'),
@@ -86,7 +86,7 @@ InferenceConfig(
     beam_size=5,
     temperature=0,
     runs_per_sample=1,
-    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo')),
+    model=ModelConfig(name="whisper", model_type="base", path=PosixPath('finetuned_models/foo')),
     dispersion=False
 )
 ]

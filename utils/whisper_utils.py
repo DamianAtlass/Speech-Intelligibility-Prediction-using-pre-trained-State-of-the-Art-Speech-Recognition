@@ -127,7 +127,7 @@ def hf_to_whisper_states(text):
 
 
 def main():
-    hf_model_path = "/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/trained_models/training_output_test_folder"
+    hf_model_path = "/home/damian/Desktop/masterarbeit/code/Speech-Intelligibility-Prediction-using-pre-trained-State-of-the-Art-Speech-Recognition/finetuned_models/training_output_test_folder"
     model = load_whisper_model(Path(hf_model_path), explicit_model_type="tiny")
     #################################################################
     audio = sip_whisper.load_audio("../sample_audio_small.mp3")

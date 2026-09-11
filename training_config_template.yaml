@@ -1,4 +1,4 @@
-output_path: trained_models/delete_me
+output_path: finetuned_models/delete_me
 task_type: training
 data:
     train_split:

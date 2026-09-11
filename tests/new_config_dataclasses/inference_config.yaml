@@ -2,7 +2,7 @@ output_path: output/path
 model:
   name: whisper
   model_type: base
-  model_path: trained_models/foo
+  model_path: finetuned_models/foo
 data:
   train_split:
     noise: True

@@ -13,7 +13,7 @@ data:
 model:
     name: whisper
     model_type: base
-    path: trained_models/base_exp
+    path: finetuned_models/base_exp
 debug: true
 extract_logprobs: true
 word_timestamps: true

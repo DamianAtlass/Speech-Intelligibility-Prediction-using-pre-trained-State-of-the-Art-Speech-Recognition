@@ -1,6 +1,6 @@
 /datasets/
 /.idea/
-/trained_models/
+/finetuned_models/
 /inferences/
 /.env
 /tests/model.safetensors
