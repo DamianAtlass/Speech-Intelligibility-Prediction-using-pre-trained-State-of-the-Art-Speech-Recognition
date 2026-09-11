@@ -18,8 +18,8 @@ class Config:
     dataset_path: Path | None = None
     add_noise: bool = False
     train_split: int | float
-    test_split: int | float
-    val_split: int | float = None
+    val_split: int | float
+    test_split: int | float = None
 
     #for debugging
     dataset_scaling: float = 1
@@ -31,8 +31,8 @@ class Config:
         if isinstance(self.add_noise, str):
             self.add_noise = self.add_noise == "True"
         self.train_split = to_int_or_float(self.train_split)
-        self.test_split = to_int_or_float(self.test_split)
-        self.val_split = to_int_or_float(self.val_split) if (self.val_split is not None) else None
+        self.val_split = to_int_or_float(self.val_split)
+        self.test_split = to_int_or_float(self.test_split) if (self.test_split is not None) else None
         self.dataset_scaling = float(self.dataset_scaling)
         self.output_path = Path.cwd()/self.output_path
         self.model_path = Path.cwd()/self.model_path if self.model_path else None
@@ -53,8 +53,8 @@ class Config:
             'dataset_path',
             'add_noise',
             'train_split',
-            'test_split',
             'val_split',
+            'test_split',
             '',
             '#for debugging',
             'dataset_scaling',

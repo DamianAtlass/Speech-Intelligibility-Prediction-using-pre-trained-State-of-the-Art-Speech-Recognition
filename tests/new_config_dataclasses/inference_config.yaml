@@ -11,14 +11,14 @@ data:
     start: 0.1
     end: 0.3
     scaling: 0.5
-  test_split:
+  val_split:
     noise: True
     dataset_type: grid
     path: grid/path
     start: 100
     end: 4000
     scaling: 0.5
-  val_split:
+  test_split:
     noise: True
     dataset_type: grid_bc
     path: grid_bc/path

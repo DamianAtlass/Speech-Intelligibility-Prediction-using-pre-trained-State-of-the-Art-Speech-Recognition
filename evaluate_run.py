@@ -22,7 +22,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         df_single_run = get_data(
             config.model.name,
             config.output_path,
-            config.data.val_split.dataset_type,
+            config.data.test_split.dataset_type,
             config.extract_logprobs,
             config.word_timestamps,
             device)

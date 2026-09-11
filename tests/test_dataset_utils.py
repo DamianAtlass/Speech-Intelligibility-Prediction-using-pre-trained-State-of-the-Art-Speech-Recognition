@@ -55,8 +55,8 @@ def test_get_dataset():
 def test_get_dataset_dict():
     dataset_config = DatasetConfig(
         train_split= DataSplitConfig(dataset_type="grid", path=None, start=0, end=1., scaling=1, noise=True),
-        test_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=0, end=.2, scaling=1, noise=False),
-        val_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=.2, end=1., scaling=1, noise=False),
+        val_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=0, end=.2, scaling=1, noise=False),
+        test_split=DataSplitConfig(dataset_type="grid_bc", path=None, start=.2, end=1., scaling=1, noise=False),
     )
     data_dict = get_dataset_dict(dataset_config)
     assert isinstance(data_dict, DatasetDict)

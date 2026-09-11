@@ -11,11 +11,11 @@ CONFIG_TEST_FOLDER = TEST_FOLDER/"new_config_dataclasses"
 config_dict = [
 {'batch_size': 16,
  'data': {
-     'test_split': {
+     'val_split': {
          'end': 4000, 'noise': True, 'path': 'grid/path', 'start': 100, 'dataset_type': 'grid', 'scaling': 1},
      'train_split':
          {'end': 0.3, 'noise': True, 'path': 'grid/path', 'start': 0.1, 'dataset_type': 'grid', 'scaling': 1},
-     'val_split':
+     'test_split':
          {'end': 1.0, 'noise': True, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 1}},
  'debug': False,
  'learning_rate':1e-05,
@@ -33,11 +33,11 @@ config_dict = [
     ,
 {'beam_size': 5,
 'data':{
-    'test_split': {
-        'end': 4000, 'noise': True, 'path': 'grid/path', 'start': 100, 'dataset_type': 'grid', 'scaling': 0.5},
     'train_split':
         {'end': 0.3, 'noise': True, 'path': 'grid/path', 'start': 0.1, 'dataset_type': 'grid', 'scaling': 0.5},
-    'val_split':
+    'val_split': {
+        'end': 4000, 'noise': True, 'path': 'grid/path', 'start': 100, 'dataset_type': 'grid', 'scaling': 0.5},
+    'test_split':
         {'end': 1.0, 'noise': True, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 0.5}},
 'extract_logprobs': False,
 'output_path': 'output/path', # supposed to be a str
@@ -61,8 +61,8 @@ TrainingConfig(
     task_type='training',
     data=DatasetConfig(
         train_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'),start=0.1, end=0.3, noise=True, scaling=1),
-        test_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=1),
-        val_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=1)),
+        val_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=1),
+        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=1)),
     debug=False,
     perform_training=True,
     learning_rate=1e-05,
@@ -77,8 +77,8 @@ InferenceConfig(
     task_type='inference',
     data=DatasetConfig(
         train_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'),start=0.1, end=0.3, noise=True, scaling=0.5),
-        test_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=0.5),
-        val_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=0.5)),
+        val_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=0.5),
+        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=0.5)),
     debug=True,
     extract_logprobs=False,
     word_timestamps=False,
@@ -106,8 +106,6 @@ def test_load_config_file(file, expected_class):
 ])
 def test_from_dict(config_dict, config: dict):
     config_from_dict: TrainingConfig|InferenceConfig = from_dict(BaseConfig, config_dict)
-    # correct for shorter paths:
-    #config_from_dict.output_path = _PROJECT_ROOT/config_from_dict.output_path
 
     assert config_from_dict == config
 

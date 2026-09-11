@@ -8,7 +8,7 @@ data:
         end: 1.
         noise: true
         scaling: 1.
-    test_split:
+    val_split:
         dataset_type: grid_bc
         path: datasets/grid_bc_without_duplicates
         start: 0

@@ -407,13 +407,13 @@ def dispersion(probs: list[float]) -> float:
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame) -> None:
     # check for missing rows
-    d = get_dataset(config.data.val_split)
+    d = get_dataset(config.data.test_split)
 
     expected_df_len = len(d) * config.runs_per_sample
     if expected_df_len != len(df_single_run):
         print(f"Dataframe is missing rows! Expected {expected_df_len}, got {len(df_single_run)}.")
     del d
-    summary = get_summary(df=df_single_run, dataset_type=config.data.val_split.dataset_type)
+    summary = get_summary(df=df_single_run, dataset_type=config.data.test_split.dataset_type)
 
     metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
@@ -427,7 +427,7 @@ def evaluate_individual_run(config: InferenceConfig,
                      x_label=[config.model.model_type],
                      output_path=dir_plots)
 
-    if config.data.val_split.dataset_type != "grid":
+    if config.data.test_split.dataset_type != "grid":
         plot_x_to_snr(df=df_single_run[["machine_transcript", "snr", "model_type"]],
                       plotting_attribute="empty transcripts",
                       shifting_attribute_label="whisper",
@@ -470,7 +470,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
     # should be reordered at some point todo
     if config.extract_logprobs:
-        if config.data.val_split.dataset_type == "grid_bc":
+        if config.data.test_split.dataset_type == "grid_bc":
             plot_x_to_snr(df = df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wer_human_kw"]],
                           plotting_attribute="average_macroscopic_entropy",
                           shifting_attribute_label="whisper",
@@ -521,7 +521,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
     # time alignments stuff
     time_align_folder = dir_plots / "plots_from_time_alignments"
-    if config.word_timestamps and config.data.val_split.dataset_type == "grid_bc":
+    if config.word_timestamps and config.data.test_split.dataset_type == "grid_bc":
         time_align_folder.mkdir(parents=True, exist_ok=True)
         plot_wer_to_snr(
             df=df_single_run[

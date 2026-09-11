@@ -23,7 +23,7 @@ def inspect_df(path: Path, device: torch.device | None = None):
         df = get_data(
             config.model.name,
             config.output_path,
-            config.data.val_split.dataset_type,
+            config.data.test_split.dataset_type,
             config.extract_logprobs,
             config.word_timestamps,
             device)
@@ -47,8 +47,8 @@ def nemo_sandbox():
     model.change_decoding_strategy({"decoding_cfg": "greedy_batch}"})
 
     dataset = get_dataset("grid")
-    dataset = apply_split(dataset, val_split=100, train_split=0, test_split=0)
-    dataset = dataset["val"]
+    dataset = apply_split(dataset, test_split=100, train_split=0, val_split=0)
+    dataset = dataset["test"]
 
     with catch_time() as t:
         transcriptions = model.transcribe(
@@ -64,7 +64,7 @@ def nemo_sandbox():
 def create_grid_without_bc_sentences():
     config = DatasetConfig(
         train_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1.0, noise=False, scaling=1.0),
-        test_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0),)
+        val_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0),)
     dataset_dict = get_dataset_dict(config)
 
     sentences_in_grid = dataset_dict["train"].unique("sentence")

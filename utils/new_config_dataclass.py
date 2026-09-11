@@ -54,8 +54,8 @@ class DataSplitConfig:
 @dataclass(kw_only=True)
 class DatasetConfig:
     train_split: DataSplitConfig = None
-    test_split: DataSplitConfig = None
     val_split: DataSplitConfig = None
+    test_split: DataSplitConfig = None
 
 @dataclass(kw_only=True)
 class ModelConfig:
@@ -147,12 +147,12 @@ def convert_old_config_into_new(config: Old_TrainingConfig | Old_InferenceConfig
     if isinstance(config, Old_TrainingConfig):
         config_dict = {
              'data': {
-                 'test_split':
-                     {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
+                 'val_split':
+                     {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
                  'train_split':
                      {'end': config.train_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
-                 'val_split':
-                     {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling}},
+                 'test_split':
+                     {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling}},
             'batch_size': config.batch_size,
              'debug': config.debug,
              'learning_rate': config.learning_rate,
@@ -168,12 +168,12 @@ def convert_old_config_into_new(config: Old_TrainingConfig | Old_InferenceConfig
     elif isinstance(config, Old_InferenceConfig):
         config_dict = {
             'data':{
-                'test_split':
-                    {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
+                'val_split':
+                    {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
                 'train_split':
                     {'end': config.train_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling},
-                'val_split':
-                    {'end': config.val_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling}},
+                'test_split':
+                    {'end': config.test_split, 'noise': config.add_noise, 'path': config.dataset_path, 'start': 0, 'dataset_type': config.dataset_type, "scaling": config.dataset_scaling}},
             'beam_size': config.beam_size,
             'extract_logprobs': config.extract_logprobs,
             'output_path': config.output_path,

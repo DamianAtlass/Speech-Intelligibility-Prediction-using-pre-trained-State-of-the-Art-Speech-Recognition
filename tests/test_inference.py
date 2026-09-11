@@ -20,7 +20,7 @@ def test_batch_inference_whisper(time_stamps, extract_logprobs):
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
-            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
         debug=False,
         extract_logprobs=extract_logprobs,
         word_timestamps=time_stamps,
@@ -46,7 +46,7 @@ def test_inference_with_multiple_runs():
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
-            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=2, noise=False, scaling=1)),
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=2, noise=False, scaling=1)),
         debug=False,
         temperature=0,
         extract_logprobs=True,
@@ -71,7 +71,7 @@ def test_inference_expected_exception():
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
-            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=2, noise=False, scaling=1)),
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=2, noise=False, scaling=1)),
         debug=False,
         temperature=0.25,
         extract_logprobs=True,
@@ -97,7 +97,7 @@ def test_batch_inference_parakeet():
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
-            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
         debug=False,
         extract_logprobs=False,
         word_timestamps=False, # has no effect here

@@ -78,7 +78,7 @@ def apply_filter(dataset: Dataset, filter_items: dict) -> Dataset:
 def get_dataset_dict(config: DatasetConfig) -> DatasetDict:
     dataset_dict = DatasetDict({})
 
-    for split, label in zip([config.train_split, config.test_split, config.val_split], ["train", "test", "val"]):
+    for split, label in zip([config.train_split, config.val_split, config.test_split], ["train", "test", "test"]):
         if split is None:
             continue
         dataset = get_dataset(split)

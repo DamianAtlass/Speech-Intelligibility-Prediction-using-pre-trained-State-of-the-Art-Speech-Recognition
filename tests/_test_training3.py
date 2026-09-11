@@ -17,8 +17,8 @@ def test_whisper_training():
         data=DatasetConfig(
             train_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=10,
                                         noise=True, scaling=1),
-            test_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=5,
-                                       noise=True, scaling=1)),
+            val_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=5,
+                                      noise=True, scaling=1)),
         debug=False,
         perform_training=False,
         learning_rate=1e-05,

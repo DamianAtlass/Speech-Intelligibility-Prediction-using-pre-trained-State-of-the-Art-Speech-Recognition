@@ -2,8 +2,8 @@ output_path: inferences/base_exp_dispersion_delete_me
 task_type: inference
 data:
     train_split: null
-    test_split: null
-    val_split:
+    val_split: null
+    test_split:
         dataset_type: grid_bc
         path: null
         start: 0

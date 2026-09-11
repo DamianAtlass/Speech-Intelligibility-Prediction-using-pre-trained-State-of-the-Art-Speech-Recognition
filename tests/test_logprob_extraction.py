@@ -15,7 +15,7 @@ def test_logprob_extraction():
         output_path=TEST_FOLDER / "inference_test",
         task_type='inference',
         data=DatasetConfig(
-            val_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
         debug=False,
         extract_logprobs=True,
         word_timestamps=False, # has no effect here

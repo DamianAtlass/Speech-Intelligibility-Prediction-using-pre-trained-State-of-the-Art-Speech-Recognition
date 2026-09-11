@@ -14,7 +14,7 @@ config: InferenceConfig = load_config(path/"config.yaml")
 df = get_data(
     config.model.name,
     config.output_path,
-    config.data.val_split.dataset_type,
+    config.data.test_split.dataset_type,
     config.extract_logprobs,
     config.word_timestamps,torch.device("cpu"),)
 

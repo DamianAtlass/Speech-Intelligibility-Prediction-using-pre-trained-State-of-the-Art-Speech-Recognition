@@ -173,7 +173,7 @@ def inference_whisper(model,
     result: dict = sip_whisper.transcribe(**options)
 
     file_name = create_filename(
-        dataset_type=config.data.val_split.dataset_type,
+        dataset_type=config.data.test_split.dataset_type,
         sample=sample,
         run=run if config.runs_per_sample > 1 else None,
         dispersion=config.dispersion,
@@ -293,7 +293,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                     result = asdict(result)
 
                     print("TODO needs for loop for runs")
-                    result_file_name = create_filename(config.data.val_split.dataset_type, sample, None, False, None)
+                    result_file_name = create_filename(config.data.test_split.dataset_type, sample, None, False, None)
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
@@ -323,11 +323,11 @@ def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.devic
 
     model = load_model(config, device)
 
-    #dataset["val"] = dataset["val"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
+    #dataset["test"] = dataset["test"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
     if config.model.name =="whisper":
-        inference_loop_whisper(config, model, dataset["val"], device)
+        inference_loop_whisper(config, model, dataset["test"], device)
     elif config.model.name =="parakeet":
-        inference_parekeet(config, model, dataset["val"], device)
+        inference_parekeet(config, model, dataset["test"], device)
     else:
         raise NotImplementedError
     print()

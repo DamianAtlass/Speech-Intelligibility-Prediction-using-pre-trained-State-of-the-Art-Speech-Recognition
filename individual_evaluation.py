@@ -37,7 +37,7 @@ def foo():
     for run in runs:
         config = load_config(Path(run["path"]) / "config.yaml")
         with catch_time() as t:
-            df_single_run = get_data(config.model.name, config.output_path, config.data.val_split.dataset_type, config.extract_logprobs, config.word_timestamps, device)
+            df_single_run = get_data(config.model.name, config.output_path, config.data.test_split.dataset_type, config.extract_logprobs, config.word_timestamps, device)
         print(f"Reading the generated files took: {t():.4f} s")
         df_single_run["model_type"] = config.model.model_type
         df_single_run["name"] = run["name"]

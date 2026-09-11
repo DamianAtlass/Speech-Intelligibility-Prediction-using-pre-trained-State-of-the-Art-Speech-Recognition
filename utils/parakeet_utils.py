@@ -48,8 +48,8 @@ def main():
 
     dataset = get_dataset("grid")
     num_samples = 110
-    dataset = apply_split(dataset, val_split=num_samples, train_split=0, test_split=0)
-    dataset = dataset["val"]
+    dataset = apply_split(dataset, test_split=num_samples, train_split=0, val_split=0)
+    dataset = dataset["test"]
     batch_size = 20
 
     for i in range(ceil(num_samples / batch_size)):
