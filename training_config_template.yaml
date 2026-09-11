@@ -3,28 +3,26 @@ task_type: training
 data:
     train_split:
         dataset_type: grid
-        path: null
+        path: datasets/grid_without_bc_sentences
         start: 0
         end: 1.
         noise: true
-        scaling: 1.0
+        scaling: 1.
     test_split:
         dataset_type: grid_bc
-        path: null
+        path: datasets/grid_bc_without_duplicates
         start: 0
         end: 0.2
         noise: false
-        scaling: 1.0
-    filter_train_test:
-        value: 0.7
+        scaling: 1.
 model:
     name: whisper
-    model_type: base
+    model_type: large-v3-turbo
     path: null
-debug: true
+debug: false
 perform_training: true
 learning_rate: 1.0e-05
 num_train_epochs: 2
 batch_size: 16
-save_and_eval_per_epoch: 5
+save_and_eval_steps: 200
 warmup_steps: 500

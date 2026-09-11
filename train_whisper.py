@@ -133,8 +133,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     logger.info(f"Training batches per epoch: {num_training_batches}")
     logger.info(f"Test batches: {ceil(len(dataset["test"])/config.batch_size)}")
 
-    save_and_eval_steps = ceil(num_training_batches/config.save_and_eval_per_epoch)
-    logger.info(f"Saves/evaluations per epoch: {config.save_and_eval_per_epoch}")
+    logger.info(f"Saves/evaluations per {config.save_and_eval_steps} batches")
 
 
     logger.info(f"Define training args")
@@ -148,9 +147,9 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         gradient_checkpointing=True, # reduces speed but allows for bigger models
         fp16=True,
         eval_strategy="steps",
-        eval_steps=save_and_eval_steps,
+        eval_steps=config.save_and_eval_steps,
         save_strategy="steps",
-        save_steps=save_and_eval_steps,
+        save_steps=config.save_and_eval_steps,
         per_device_eval_batch_size=config.batch_size,
         predict_with_generate=True,
         generation_max_length=225,
