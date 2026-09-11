@@ -47,7 +47,7 @@ config_dict = [
 'temperature': 0,
 'runs_per_sample': 1,
 'debug': True,
-'dispersion': False,
+'forced_alignment': False,
 'model':{
     'name': 'whisper',
     'model_type': 'base',
@@ -87,7 +87,7 @@ InferenceConfig(
     temperature=0,
     runs_per_sample=1,
     model=ModelConfig(name="whisper", model_type="base", path=PosixPath('finetuned_models/foo')),
-    dispersion=False
+    forced_alignment=False
 )
 ]
 

@@ -8,7 +8,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_dispersion_run
+from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run
 
 
 def evaluate_run(path: Path, device: torch.device | None = None):
@@ -29,8 +29,8 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     print(f"Reading the generated files took: {t():.4f} s")
 
     df_single_run["model_type"] = config.model.model_type
-    if config.dispersion:
-        evaluate_dispersion_run(config, df_single_run)
+    if config.forced_alignment:
+        evaluate_forced_alignment_run(config, df_single_run)
     else:
         evaluate_individual_run(config=config, df_single_run=df_single_run)
 

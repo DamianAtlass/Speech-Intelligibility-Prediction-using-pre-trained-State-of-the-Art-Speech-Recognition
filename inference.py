@@ -22,11 +22,11 @@ from utils.parakeet_utils import get_collate_fn
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 logger = logging.getLogger(__name__)
 
-def create_filename(dataset_type: str, sample: dict, run: int|None, dispersion: bool, forced_alignment_options: dict|None) -> str:
+def create_filename(dataset_type: str, sample: dict, run: int|None, forced_alignment: bool, forced_alignment_options: dict | None) -> str:
     audio_path = Path(sample["audio_path"]) if "audio_path" in sample.keys() else None
     l = []
 
-    if dispersion:
+    if forced_alignment:
         if forced_alignment_options is None:
             l.append("forced_alignment-None")
         else:
@@ -112,6 +112,8 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
 
     Returns: None
     """
+    if config.forced_alignment and not config.word_timestamps:
+        raise RuntimeError("Need timestamps for forced alignment!")
     if config.temperature!=0 and config.beam_size!=1:
         raise ValueError("Beamsize would be overridden for temperature !=1!")
 
@@ -125,7 +127,7 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
                     logger.info(f"Transcribe {sample["audio_path"] if "audio_path" in sample.keys() else sample["id"]} (#{idx_sample}) "
                                 f"{f"(run: {run})" if config.runs_per_sample > 1 else ""} ...")
                     try:
-                        if config.dispersion:
+                        if config.forced_alignment:
                             inference_whisper_with_forced_alignment(model, config, sample, device, run, counter)
                         else:
                             inference_whisper(model, config, sample, device, run, counter)
@@ -176,7 +178,7 @@ def inference_whisper(model,
         dataset_type=config.data.test_split.dataset_type,
         sample=sample,
         run=run if config.runs_per_sample > 1 else None,
-        dispersion=config.dispersion,
+        forced_alignment=config.forced_alignment,
         forced_alignment_options=forced_alignment_options)
 
     if config.extract_logprobs:
@@ -196,7 +198,7 @@ def inference_whisper(model,
             result["logprobs_path"] = ""
             logger.info("No logprobs to save.")
 
-    if config.dispersion:
+    if config.forced_alignment:
         sample.update({"varrying_transcription_options": {"forced_alignment_options": forced_alignment_options}})
 
     if config.runs_per_sample > 1:
@@ -222,9 +224,11 @@ def inference_whisper_with_forced_alignment(
     keywords, kw_token_idx = get_kw_dirty(regular_run_data)
 
     keywords_norm = normalize(keywords)
+    keywords_in_regular_transcript = 0
 
-    l = len(grid_all_keywords) - sum([1 for i,v in enumerate(grid_kw_vocab.values()) if keywords_norm[i] in v])
-    counter = 1
+    keywords_in_regular_transcript = sum(1 for i, v in enumerate(list(grid_kw_vocab.values())) if keywords_norm[i] in v)
+    expected_length = len(grid_all_keywords) - keywords_in_regular_transcript
+    counter = 0
 
     for i, kw_label in enumerate(grid_kw_labels):
         kw_pos = kw_token_idx[i]
@@ -234,9 +238,10 @@ def inference_whisper_with_forced_alignment(
 
         for kw in kw_for_forced_alignment:
             forced_alignment_options = {"position": kw_pos, "token_id_or_word": " " + kw, }
-            logger.info(f"{forced_alignment_options = } ({counter}/{l})")
-            inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)
             counter+=1
+            logger.info(f"{forced_alignment_options = } ({counter}/{expected_length})")
+            inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)
+    assert expected_length == counter
 
 
 def get_kw_dirty(data: dict) -> tuple[list[str], list[list[int] | None]]:

@@ -690,9 +690,9 @@ def evaluate_individual_run(config: InferenceConfig,
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
-def evaluate_dispersion_run(config: InferenceConfig,
-                            df_dispersion_run: pd.DataFrame) -> None:
-    grouped_df = df_dispersion_run.groupby("audio_path")
+def evaluate_forced_alignment_run(config: InferenceConfig,
+                                  df_forced_alignment_run: pd.DataFrame) -> None:
+    grouped_df = df_forced_alignment_run.groupby("audio_path")
 
     def compute_stats(group: pd.DataFrame):
         return pd.Series({

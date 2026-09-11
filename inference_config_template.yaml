@@ -1,4 +1,4 @@
-output_path: inferences/base_exp_dispersion_delete_me
+output_path: inferences/base_exp_forced_alignment_delete_me
 task_type: inference
 data:
     train_split: null
@@ -21,4 +21,4 @@ beam_size: 5
 subword_timestamps: true
 temperature: 0
 runs_per_sample: 1
-dispersion: true
+forced_alignment: true

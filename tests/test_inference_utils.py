@@ -23,7 +23,7 @@ import pytest
     "SNRm8_l3_s15_run2_srba3a"),
 ])
 def test_create_filename(dataset_type, partial_sample_dict: dict, run, expected_result):
-    file_name = create_filename(dataset_type=dataset_type, sample=partial_sample_dict, run=run, dispersion=False, forced_alignment_options=None)
+    file_name = create_filename(dataset_type=dataset_type, sample=partial_sample_dict, run=run, forced_alignment=False, forced_alignment_options=None)
     assert file_name == expected_result
 
 
@@ -32,7 +32,7 @@ def test_create_filename(dataset_type, partial_sample_dict: dict, run, expected_
     ({"position": 1, "token_id_or_word": " blue", }, "forced_alignment-1-0_SNRm8_l3_s15_srba3a"),
 
 ])
-def test_create_filename_with_dispersion(forced_alignment_options, expected_result):
+def test_create_filename_with_forced_alignment(forced_alignment_options, expected_result):
     partial_sample_dict = {
         "audio_path": "datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m8/3/s15_srba3a.wav",
         "speaker": "15",
@@ -41,6 +41,6 @@ def test_create_filename_with_dispersion(forced_alignment_options, expected_resu
     file_name = create_filename(dataset_type="grid_bc",
                                 sample=partial_sample_dict,
                                 run=None,
-                                dispersion=True,
+                                forced_alignment=True,
                                 forced_alignment_options=forced_alignment_options)
     assert file_name == expected_result
