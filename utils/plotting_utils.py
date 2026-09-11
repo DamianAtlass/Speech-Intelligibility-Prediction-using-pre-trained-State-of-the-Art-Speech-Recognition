@@ -28,8 +28,17 @@ labels_dict = {
     "avg_logprob": "Logprob (per sequence)",
     "machine_transcripts_len": "length of transcripts",
     "empty transcripts": "Amount of empty transcrips in %",
-    "mtd": "Mean temporal distance",
+    "mtd": "mean temporal distance",
 }
+
+plt.rcParams.update({
+    "font.size": 14,
+    "axes.titlesize": 16,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+})
 
 def wrap_text(text: str, max_chars: int = 75) -> str:
     """Insert line breaks so each line is at most max_chars characters."""
@@ -92,14 +101,13 @@ def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
     title = wrap_text(f"Regression line and Pearson correlation coefficient of {name}", 75)
     plt.suptitle(title)
 
-    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}, stderr: {regr.stderr:.4f}")
+    plt.title(f"Pearson's r: {regr.rvalue:.2f}, n ={len(x)}, p-value: {regr.pvalue}, Normality p-values: {normality_x.pvalue:.2f}, {normality_y.pvalue:.2f}, stderr: {regr.stderr:.2f}")
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.grid(True)
     plt.legend()
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
     return regr.rvalue, regr.pvalue, normality_x.pvalue, normality_y.pvalue
@@ -125,7 +133,7 @@ def plot_regr_line_for_spearman_corr(df: pd.DataFrame,
     plt.grid(True)
     title = f"Regression line and Spearman correlation coefficient of {name}"
     plt.suptitle(wrap_text(title))
-    plt.title(f"Spearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}, stderr: {regr.stderr:.4f}")
+    plt.title(f"Spearman's rho: {regr.rvalue:.2f}, n ={len(x_ranked)}, p-value: {regr.pvalue}, stderr: {regr.stderr:.2f}")
     plt.xlabel("ranked " + xlabel)
     plt.ylabel("ranked " + ylabel)
     if ("WER" in xlabel) and ("WER" in ylabel):
@@ -139,7 +147,7 @@ def plot_regr_line_for_spearman_corr(df: pd.DataFrame,
 
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
-    #plt.show()
+
     plt.close()
     return regr.rvalue, regr.pvalue
 
@@ -186,10 +194,8 @@ def plot_metrics(data: list[pd.Series],
     plt.tight_layout()
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
-
     if output_path:
         plt.savefig(output_path/f'{plot_title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
 def plot_wer_to_snr(
@@ -244,7 +250,7 @@ def plot_wer_to_snr(
 
 
     positions = range(len(x_labels))
-    plt.figure(figsize=[10, 5])
+    plt.figure(figsize=[12, 6])
 
     plt.plot(positions, human_values, marker="o", label="human")
 
@@ -261,9 +267,9 @@ def plot_wer_to_snr(
     plt.ylim(0, max([100, max([max(l) for l in machine_values])]))
     plt.grid()
     plt.legend()
+
     if output_path:
         plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
 def plot_x_to_snr(df: pd.DataFrame,
@@ -294,7 +300,7 @@ def plot_x_to_snr(df: pd.DataFrame,
 
 
     positions = range(len(x_labels))
-    plt.figure(figsize=[10, 5])
+    plt.figure(figsize=[8, 4])
 
     for mv,l in zip(values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
@@ -306,11 +312,10 @@ def plot_x_to_snr(df: pd.DataFrame,
     plt.ylabel(labels_dict[plotting_attribute])
     plt.grid()
     plt.ylim(0)
-
     plt.legend()
+
     if output_path:
         plt.savefig(output_path/f'{figure_title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
 
@@ -468,12 +473,12 @@ def box_or_barplot_microscopic_x_to_snr(
         n_groups = 3
 
         # Increase this to make the bars thicker
-        group_width = 2.4
+        group_width = 4
         bar_width = group_width / n_groups
 
         positions = np.arange(len(x_labels)) * (n_groups + space_between_plots)
 
-        plt.figure(figsize=[10, 5])
+        plt.figure(figsize=[12, 6])
         plt.grid(axis="y")
 
         for i, snr_values  in enumerate(values_per_snr):
@@ -491,7 +496,7 @@ def box_or_barplot_microscopic_x_to_snr(
                     width=bar_width,
                     color=kw_colors[j],
                     capsize=4,
-                    label=kw_labels[j] if i == 0 else None
+                    label=grid_kw_labels[j] if i == 0 else None
                 )
         plt.legend()
     else:
@@ -550,7 +555,7 @@ def barplot_x_to_snr(
     n_groups = len(list_shifting_attribute)
     width = 0.8 / n_groups
 
-    plt.figure(figsize=[10, 5])
+    plt.figure(figsize=[12, 6])
 
     for i, (means, stds, label) in enumerate(zip(values["mean"], values["std"], list_shifting_attribute)):
         offset = (i - (n_groups - 1) / 2) * width
@@ -616,7 +621,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 
         values_per_listener.append(value_arr_tmp)
 
-    fig, ax = plt.subplots(figsize=(5 + len(list_shifting_attribute) * 0.7, 7))
+    fig, ax = plt.subplots(figsize=(7, 7))
 
     positions = range(1, len(list_shifting_attribute) + 1)
 
@@ -633,7 +638,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
-    x_label = [f"{l}\ntotal corr.: {v["value"]:.4f}\np-vaple: {v["p-value"]:.4f}" for l, v in zip(list_shifting_attribute, values)]
+    x_label = [f"{l}\ntotal corr.: {v["value"]:.2f}\np-vaple: {v["p-value"]:.3f}" for l, v in zip(list_shifting_attribute, values)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
@@ -733,22 +738,21 @@ def boxplot_microscopic_special_metric_per_keyword(
                      )
 
     title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} (total and for each keyword{cali})"
-    plt.title(wrap_text(title))
+    plt.title(wrap_text(title, 65))
+
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
     ax.grid()
     if special_metric == "spearman_correlation":
-        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.4f}\np-value: {v["p-value"]:.4f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
+        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.2f}\np-value: {v["p-value"]:.3f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
     else:
-        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.4f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
+        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.2f}" for l, v in zip(grid_kw_labels, values_per_kw_label)]
 
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
     plt.ylim(0 if all_above_zero else -1, 1)
 
-
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
-    #plt.show()
     plt.close()
 
 

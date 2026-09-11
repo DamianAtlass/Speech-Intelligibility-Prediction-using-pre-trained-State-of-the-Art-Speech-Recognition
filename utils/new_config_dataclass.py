@@ -56,7 +56,6 @@ class DatasetConfig:
     train_split: DataSplitConfig = None
     test_split: DataSplitConfig = None
     val_split: DataSplitConfig = None
-    filter_train_test: dict|None = None
 
 @dataclass(kw_only=True)
 class ModelConfig:
@@ -100,7 +99,7 @@ class TrainingConfig(BaseConfig):
     learning_rate: float
     num_train_epochs: int
     batch_size: int = 16
-    save_and_eval_per_epoch: int = 6
+    save_and_eval_steps: int = 6
     warmup_steps: int
 
     def __post_init__(self):

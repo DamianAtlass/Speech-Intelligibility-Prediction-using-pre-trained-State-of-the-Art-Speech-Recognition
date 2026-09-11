@@ -24,7 +24,7 @@ def test_whisper_training():
         learning_rate=1e-05,
         num_train_epochs=1,
         batch_size=16,
-        save_and_eval_per_epoch=1,
+        save_and_eval_steps=1,
         warmup_steps=500,
         model=ModelConfig(name="whisper", model_type="tiny.en", path=None)
     )

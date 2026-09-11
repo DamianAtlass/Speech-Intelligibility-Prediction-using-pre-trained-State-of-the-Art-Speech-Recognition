@@ -22,7 +22,7 @@ config_dict = [
  'num_train_epochs': 5,
  'output_path': 'output/path', # supposed to be a str
  'perform_training': True,
- 'save_and_eval_per_epoch': 16,
+ 'config.save_and_eval_steps': 100,
  'task_type': 'training',
  'warmup_steps': 500,
  'model':{
@@ -68,7 +68,7 @@ TrainingConfig(
     learning_rate=1e-05,
     num_train_epochs=5,
     batch_size=16,
-    save_and_eval_per_epoch=16,
+    save_and_eval_steps=16,
     warmup_steps=500,
     model=ModelConfig(name="whisper", model_type="base", path=PosixPath('trained_models/foo'))
 ),
