@@ -1,8 +1,16 @@
 grid_kw_vocab = {
     "color": ['blue', 'green', 'red', 'white'], #4 items, index 1
-    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-               'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
+    "letter": ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'], # 25 items, index 3
     "digit": ['eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'] # 10 items, index 4
+}
+
+grid_vocab = {
+    'command': {'bin', 'lay', 'place', 'set'}, #4
+    'color': {'blue', 'green', 'red', 'white'}, #4
+    'preposition': {'at', 'by', 'in', 'with'}, #4
+    'letter': {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'x', 'y', 'z'}, #25
+    'digit': {'eight', 'five', 'four', 'nine', 'one', 'seven', 'six', 'three', 'two', 'zero'}, #10
+    'adverb': {'again', 'now', 'please', 'soon'}, #4
 }
 
 grid_all_keywords = [x for v in grid_kw_vocab.values() for x in v]
