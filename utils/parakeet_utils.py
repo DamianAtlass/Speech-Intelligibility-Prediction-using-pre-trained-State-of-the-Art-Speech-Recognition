@@ -57,7 +57,7 @@ def main():
         end = min((i + 1) * batch_size, len(dataset))
         subset = dataset.select(range(start,end))
 
-        dataloader = DataLoader(subset, batch_size=batch_size, collate_fn=collate)
+        dataloader = DataLoader(subset, batch_size=batch_size, collate_fn=get_collate_fn(device))
         with catch_time() as t:
             transcriptions = model.transcribe(
                 audio=dataloader,

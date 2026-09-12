@@ -86,7 +86,7 @@ def save_result(sample_dict: dict,
         result: Resulting dict of the transcription. Might need to be transformed before.
         result_data_file_path:
         counter:
-        seperator: print/logg a seperating line
+        seperator: print/log a separating line
 
     Returns:
     """
@@ -276,9 +276,6 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
         batch_size = 20
         counter = 0
 
-        alignment_path = config.output_path/"alignments"
-        alignment_path.mkdir()
-
         print("enter parakeet inference")
         with tqdm(total=len(dataset)) as pbar:
             prev = 0
@@ -292,7 +289,8 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                 transcriptions = model.transcribe(
                     audio=dataloader,
                     timestamps=config.word_timestamps,
-                    verbose=False
+                    verbose=False,
+                    return_hypotheses=True
                 )
                 for sample, result in zip(subset, transcriptions):
                     result = asdict(result)
@@ -302,14 +300,14 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
 
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
-                    alignments_data_file_path = alignment_path / f"{result_file_name}.pt"
-                    if alignments_data_file_path.exists(): raise FileExistsError
-                    torch.save(result.pop("alignments"), alignments_data_file_path)
+                    logprobs_file_path = config.output_path / "logprobs" / f"{result_file_name}.pt"
+                    if logprobs_file_path.exists(): raise FileExistsError
+                    torch.save(result.pop("y_sequence"), logprobs_file_path)
+                    result.pop("alignments") # same as y_sequence for ctc-0.6b
 
-                    result["alignments_path"] = str(alignments_data_file_path.relative_to(Path.cwd()))
+                    result["logprobs_path"] = str(logprobs_file_path.relative_to(Path.cwd()))
 
-                    result["y_sequence"] = [int(a) for a in result["y_sequence"]]
-                    result["score"] = result["score"]#.item()
+                    result["score"] = result["score"].item()
 
                     save_result(sample_dict=dict(sample),
                                 result=result,
