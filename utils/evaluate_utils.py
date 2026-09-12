@@ -1,7 +1,7 @@
 import json
+from abc import abstractmethod
 from typing import Tuple, List, Literal, cast, Callable
 import pandas as pd
-from pandas.api.typing import DataFrameGroupBy
 import torch
 from pandas import DataFrame
 from torch.distributions import Categorical
@@ -744,7 +744,7 @@ def get_summary(df: pd.DataFrame,
         })
     return summary
 
-def get_data(model: str,
+def get_data(model_name: str,
              output_path: Path,
              dataset_type: str,
              extract_logprobs: bool,
@@ -760,14 +760,28 @@ def get_data(model: str,
         if (output_path/"summary.json").exists():
             os.remove(output_path/"summary.json")
 
-    if model == "whisper":
-        return get_data_whisper(output_path, dataset_type, extract_logprobs, word_timestamps, device)
-    elif model == "parakeet":
-        return get_data_parakeet(output_path, dataset_type, extract_logprobs, word_timestamps, device)
-    else:
-        raise ValueError(f"Unknown model: {model}")
+    return get_data_whisper(output_path, model_name, dataset_type, extract_logprobs, word_timestamps, device)
+
+
+class DataGetter:
+
+    @abstractmethod
+    def avr_logprob(self, json_file) -> float:
+        pass
+
+class DataGetterWhisper(DataGetter):
+
+    def avr_logprob(self, json_file):
+        return np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]])
+
+class DataGetterParakeet(DataGetter):
+
+    def avr_logprob(self, json_file):
+        return json_file["prediction_result"]["score"]
+
 
 def get_data_whisper(output_path: Path,
+                     model_name: str,
                      dataset_type: str,
                      extract_logprobs: bool,
                      word_timestamps: bool,
@@ -791,6 +805,8 @@ def get_data_whisper(output_path: Path,
 
     temperature = []
 
+    dg = DataGetterWhisper() if model_name == "whisper" else DataGetterParakeet()
+
     logger.info("Read files...")
     counter = 0
     # read files
@@ -810,7 +826,7 @@ def get_data_whisper(output_path: Path,
                 if word_timestamps:
                     transcript_alignments.append([])
             else:
-                avg_logprobs.append(np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]]))
+                avg_logprobs.append(dg.avr_logprob(json_file))
 
                 machine_transcripts.append(json_file["prediction_result"]["text"])
                 if extract_logprobs:
