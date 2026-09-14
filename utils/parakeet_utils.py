@@ -1,5 +1,4 @@
 import nemo.collections.asr as nemo_asr
-import numpy
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader

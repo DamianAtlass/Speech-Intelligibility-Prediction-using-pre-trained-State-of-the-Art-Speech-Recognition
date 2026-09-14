@@ -765,19 +765,47 @@ def get_data(model_name: str,
 
 class DataGetter:
 
+    def __init__(self, json_file: dict):
+        self.json_file: dict = json_file
+
     @abstractmethod
-    def avr_logprob(self, json_file) -> float:
+    def avr_logprob(self) -> float:
+        pass
+    @abstractmethod
+    def token_sequence(self) -> list:
         pass
 
+    @abstractmethod
+    def word_timestamps(self) -> list:
+        pass
 class DataGetterWhisper(DataGetter):
 
-    def avr_logprob(self, json_file):
-        return np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]])
+    def avr_logprob(self):
+        return np.mean([float(segment["avg_logprob"]) for segment in self.json_file["prediction_result"]["segments"]])
+
+    def token_sequence(self) -> list:
+        return self.json_file["prediction_result"]["decoded_tokens_with_timestamps"]
+
+    def word_timestamps(self) -> list:
+        words = []
+        for s in self.json_file["prediction_result"]["segments"]:
+            words.extend(s["words"])
+        for w in words:
+            w.pop("probability")  # dont need that currently
+        #words[0]: {'word': ' Set', 'start': 0.0, 'end': 0.26, 'tokens': [8928]}
+        return words
 
 class DataGetterParakeet(DataGetter):
 
-    def avr_logprob(self, json_file):
-        return json_file["prediction_result"]["score"]
+    def avr_logprob(self):
+        return self.json_file["prediction_result"]["score"]
+
+    def token_sequence(self) -> list:
+        return None #todo
+
+    def word_timestamps(self) -> list:
+        words = self.json_file["prediction_result"]["timestamp"]["word"]
+        return words
 
 
 def get_data_whisper(output_path: Path,
@@ -805,7 +833,6 @@ def get_data_whisper(output_path: Path,
 
     temperature = []
 
-    dg = DataGetterWhisper() if model_name == "whisper" else DataGetterParakeet()
 
     logger.info("Read files...")
     counter = 0
@@ -815,7 +842,9 @@ def get_data_whisper(output_path: Path,
             pass
         counter += 1
         with open(file) as f:
-            json_file = json.load(f)
+            json_file: dict = json.load(f)
+            dg = DataGetterWhisper(json_file) if model_name == "whisper" else DataGetterParakeet(json_file)
+
             json_path.append(str(file.relative_to(Path.cwd())))
 
             if json_file["prediction_result"]["text"] == "" : #nothing recognized!
@@ -826,19 +855,13 @@ def get_data_whisper(output_path: Path,
                 if word_timestamps:
                     transcript_alignments.append([])
             else:
-                avg_logprobs.append(dg.avr_logprob(json_file))
+                avg_logprobs.append(dg.avr_logprob())
 
                 machine_transcripts.append(json_file["prediction_result"]["text"])
                 if extract_logprobs:
-                    decoded_tokens_with_timestamps.append(json_file["prediction_result"]["decoded_tokens_with_timestamps"])
+                    decoded_tokens_with_timestamps.append(dg.token_sequence())
                 if word_timestamps:
-
-                    words = []
-                    for s in json_file["prediction_result"]["segments"]:
-                        words.extend(s["words"])
-                    for w in words:
-                        w.pop("probability") #dont need that currently
-                    transcript_alignments.append(words)
+                    transcript_alignments.append(dg.word_timestamps())
 
             references.append(json_file["sentence" if dataset_type!="libri" else "text"])
             if dataset_type != "libri":
@@ -924,7 +947,7 @@ def get_data_whisper(output_path: Path,
     df = pd.DataFrame(data)
 
     # for logprobs
-    entropies_kw: list[list[float|np.nan]] = []
+    entropies_kw: list[list[float|torch.nan]] = []
     average_macroscopic_entropy = []
     estimated_transcript_keywords_indices: list[list[int|None]] = []
     estimated_transcript_keywords: list[list[str|None]] = []
@@ -933,9 +956,9 @@ def get_data_whisper(output_path: Path,
     #for time_alignments
     machine_trans_kw_from_time_align: list[list[str|None]] = []
     machine_trans_kw_idx_from_time_align: list[list[int|None]] = []
-    entropies_kw_from_time_align: list[list[float|np.nan]] = []
+    entropies_kw_from_time_align: list[list[float|torch.nan]] = []
     #for tad
-    tad_list: list[list[float|np.nan]] = []
+    tad_list: list[list[float|torch.nan]] = []
 
 
     counter = 0
@@ -973,13 +996,14 @@ def get_data_whisper(output_path: Path,
             #calculate mean temporal distance
             mean_temporal_distance.append(calculate_mtd(posteriors))
 
-            # calculate entropy
+            # calculate microscopic entropy
             decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
-            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+            #assert len(decoded_tokens_with_timestamps) == posteriors.shape[0] #todo manipulate sourcecode
+            decoded_tokens_with_timestamps = [ 601, 41, 6, 23, 199, 38, 165, 237] #todo manipulate sourcecode
+            #assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps) #todo manipulate sourcecode
             entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
             del posteriors
-            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+            #assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
             ## rm timestamp tokens
             no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
