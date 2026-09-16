@@ -38,28 +38,17 @@ def inspect_df(path: Path, device: torch.device | None = None):
         print("samples: ", len(g[1]))
 
 def nemo_sandbox():
-    import nemo.collections.asr as nemo_asr
+    import nemo
     from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 
-    device = select_device()
-    model: EncDecCTCModelBPE = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
-        model_name="nvidia/parakeet-ctc-0.6b").to(device)
-    model.change_decoding_strategy({"decoding_cfg": "greedy_batch}"})
+    split_config = DataSplitConfig(dataset_type='grid_bc', path="datasets/grid_bc_without_duplicates", start=0, end=1, noise=False, scaling=1.0)
+    dataset = get_dataset(split_config)
 
-    dataset = get_dataset("grid")
-    dataset = apply_split(dataset, test_split=100, train_split=0, val_split=0)
-    dataset = dataset["test"]
+    model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.from_pretrained(model_name="nvidia/parakeet-ctc-1.1b")
+    audio = dataset[0]["audio"]["array"]
+    result = model.transcribe(audio=audio, timestamps=True)
 
-    with catch_time() as t:
-        transcriptions = model.transcribe(
-            audio=[sample["audio"]["array"] for sample in dataset],
-            timestamps=True,
-            batch_size=20
-        )
-    print(f"Execution time of do_something: {t():.1f} s")
-
-    result = transcriptions[0]
-    print()
+    print(result)
 
 def create_grid_without_bc_sentences():
     config = DatasetConfig(
@@ -99,5 +88,4 @@ def create_grid_bc_without_duplicates():
     dataset.save_to_disk(save_at)
 
 if __name__ == '__main__':
-    create_grid_without_bc_sentences()
-    create_grid_bc_without_duplicates()
+    nemo_sandbox()

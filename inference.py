@@ -221,7 +221,7 @@ def inference_whisper_with_forced_alignment(
     regular_run_data = inference_whisper(model, config, sample, device, run, counter)
     #############################################
     #############################################
-    keywords, kw_token_idx = get_kw_dirty(regular_run_data)
+    keywords, kw_token_idx = get_kw_dirty(regular_run_data, apply_offset=config.model.name=="whisper")
 
     keywords_norm = normalize(keywords)
     keywords_in_regular_transcript = 0
@@ -244,7 +244,7 @@ def inference_whisper_with_forced_alignment(
     assert expected_length == counter
 
 
-def get_kw_dirty(data: dict) -> tuple[list[str], list[list[int] | None]]:
+def get_kw_dirty(data: dict, apply_offset: bool) -> tuple[list[str], list[list[int] | None]]:
     """
     Uses the same workflow as in evaluate_utils.py to get the right kw positions / tokens.
 
@@ -265,7 +265,8 @@ def get_kw_dirty(data: dict) -> tuple[list[str], list[list[int] | None]]:
 
     kw_token_idx_from_alignment, _ = get_kw_idx_through_time_alignments(
         reference_alignments=ref_alignments,
-        transcript_alignments=transcript_alignment)
+        transcript_alignments=transcript_alignment,
+        apply_offset=apply_offset)
 
     kw_token_idx = [o[0] for o in kw_token_idx_from_alignment]
     keywords = [decoded_tokens_without_timestamp_tokens[o] for o in kw_token_idx]

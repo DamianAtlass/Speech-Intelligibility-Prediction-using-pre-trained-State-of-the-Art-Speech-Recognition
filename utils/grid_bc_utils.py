@@ -1,7 +1,6 @@
 import librosa
 from datasets import Dataset, DatasetDict, load_from_disk
 from utils.grid_utils import get_sentence_and_alignments, convert_short_name_to_ref
-SAMPLE_RATE_DOWNLOADED_FILES = 25_000
 WANTED_SAMPLE_RATE = 16_000
 
 from tqdm import tqdm

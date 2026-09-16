@@ -1,4 +1,4 @@
-import nemo.collections.asr as nemo_asr
+import nemo
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader
@@ -14,10 +14,18 @@ from utils.logging_utils import catch_time
 from math import ceil
 from typing import Callable
 
+try:
+    from nemo.constants import IS_SIP_FORK
+except ImportError as e:
+    print(e)
+    print("You're trying to import the default nemo-toolkit package when you should be using the custom "
+          "sip-nemo-toolkit fork!")
+    exit(1)
+
 
 
 def load_parakeet_model(config: InferenceConfig, device: torch.device):
-    model: EncDecCTCModelBPE = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
+    model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.from_pretrained(
         model_name=f"nvidia/{config.model.name}-{config.model.model_type}").to(device)
     return model
 

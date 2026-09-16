@@ -213,7 +213,8 @@ def get_kw_by_accepting_other_options_from_vocab(
     return r
 
 def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
-                                       transcript_alignments: list[dict]
+                                       transcript_alignments: list[dict],
+                                       apply_offset: bool,
                                        ) -> tuple[list[list[int]|None], list[int|None]]:
 
     token_idx_list = []
@@ -226,7 +227,7 @@ def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
             c+=1
         token_idx_list.append(tmp)
 
-    offset = reference_alignments[0]["start"]
+    offset = reference_alignments[0]["start"] if apply_offset else 0
     assert len(reference_alignments) == 6
 
     kw_token_idx_list: list[list[int]|None] = []
@@ -764,48 +765,113 @@ def get_data(model_name: str,
 
 
 class DataGetter:
-
-    def __init__(self, json_file: dict):
-        self.json_file: dict = json_file
+    needs_timestamp_offset: bool
 
     @abstractmethod
     def avr_logprob(self) -> float:
         pass
     @abstractmethod
-    def token_sequence(self) -> list:
+    def token_sequence(self) -> list[str]:
         pass
 
     @abstractmethod
     def word_timestamps(self) -> list:
         pass
+
+    @abstractmethod
+    def get_idx_of_regular_tokens(self, tokens: list[str]) -> list[bool]:
+        pass
+
+    @abstractmethod
+    def merge_tokens(self, tokens) -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
+        pass
+
 class DataGetterWhisper(DataGetter):
+    needs_timestamp_offset = True
 
-    def avr_logprob(self):
-        return np.mean([float(segment["avg_logprob"]) for segment in self.json_file["prediction_result"]["segments"]])
+    def avr_logprob(self, json_file: dict):
+        return np.mean([float(segment["avg_logprob"]) for segment in json_file["prediction_result"]["segments"]])
 
-    def token_sequence(self) -> list:
-        return self.json_file["prediction_result"]["decoded_tokens_with_timestamps"]
+    def token_sequence(self, json_file: dict) -> list[str]:
+        return json_file["prediction_result"]["decoded_tokens_with_timestamps"]
 
-    def word_timestamps(self) -> list:
+    def word_timestamps(self, json_file: dict) -> list:
         words = []
-        for s in self.json_file["prediction_result"]["segments"]:
+        for s in json_file["prediction_result"]["segments"]:
             words.extend(s["words"])
         for w in words:
             w.pop("probability")  # dont need that currently
         #words[0]: {'word': ' Set', 'start': 0.0, 'end': 0.26, 'tokens': [8928]}
         return words
 
+    def get_idx_of_regular_tokens(self, tokens: list[str]) -> list[bool]:
+        return ["<|" not in t and "|>" not in t for t in tokens]
+
+    def merge_tokens(self, tokens) -> list[str]:
+        return tokens
+
+    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
+        return [[i] for i in range(len(tokens))]
+
 class DataGetterParakeet(DataGetter):
+    needs_timestamp_offset = False
 
-    def avr_logprob(self):
-        return self.json_file["prediction_result"]["score"]
+    def avr_logprob(self, json_file: dict):
+        return json_file["prediction_result"]["score"]
 
-    def token_sequence(self) -> list:
-        return None #todo
+    def token_sequence(self, json_file: dict) -> list[str]:
+        return json_file["prediction_result"]["y_sequence_text"]
 
-    def word_timestamps(self) -> list:
-        words = self.json_file["prediction_result"]["timestamp"]["word"]
+    def word_timestamps(self, json_file: dict) -> list:
+        words = json_file["prediction_result"]["timestamp"]["word"]
         return words
+
+    def get_idx_of_regular_tokens(self, tokens: list[str]) -> list[bool]:
+        return [t!="BLANK" for t in tokens]
+
+    def merge_tokens(self, tokens) -> list[str]:
+        words = []
+        word = []
+
+        for i, t in enumerate(tokens):
+            if t == "BLANK":
+                raise ValueError("should not happen!")
+
+            if t[0] == "▁":
+                if word != []:
+                    words.append(word)
+                word = [t[1:]]
+            else:
+                word.append(t)
+
+        if word != []:
+            words.append(word)
+
+        return ["".join(w) for w in words]
+
+    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
+        words_idx = []
+        word = []
+
+        for i, t in enumerate(tokens):
+            if t == "BLANK":
+                raise ValueError("should not happen!")
+
+            if t[0] == "▁":
+                if word != []:
+                    words_idx.append(word)
+                word = [i]
+            else:
+                word.append(i)
+
+        if word != []:
+            words_idx.append(word)
+
+        return words_idx
 
 
 def get_data_whisper(output_path: Path,
@@ -836,14 +902,15 @@ def get_data_whisper(output_path: Path,
 
     logger.info("Read files...")
     counter = 0
+    dg = DataGetterWhisper() if model_name == "whisper" else DataGetterParakeet()
+
     # read files
     for file in tqdm(data_path.iterdir(), total=len(list(data_path.iterdir()))):
-        if counter == 10000:
-            pass
+        if counter == 100:
+            break
         counter += 1
         with open(file) as f:
             json_file: dict = json.load(f)
-            dg = DataGetterWhisper(json_file) if model_name == "whisper" else DataGetterParakeet(json_file)
 
             json_path.append(str(file.relative_to(Path.cwd())))
 
@@ -855,13 +922,13 @@ def get_data_whisper(output_path: Path,
                 if word_timestamps:
                     transcript_alignments.append([])
             else:
-                avg_logprobs.append(dg.avr_logprob())
+                avg_logprobs.append(dg.avr_logprob(json_file))
 
                 machine_transcripts.append(json_file["prediction_result"]["text"])
                 if extract_logprobs:
-                    decoded_tokens_with_timestamps.append(dg.token_sequence())
+                    decoded_tokens_with_timestamps.append(dg.token_sequence(json_file))
                 if word_timestamps:
-                    transcript_alignments.append(dg.word_timestamps())
+                    transcript_alignments.append(dg.word_timestamps(json_file))
 
             references.append(json_file["sentence" if dataset_type!="libri" else "text"])
             if dataset_type != "libri":
@@ -998,16 +1065,15 @@ def get_data_whisper(output_path: Path,
 
             # calculate microscopic entropy
             decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-            #assert len(decoded_tokens_with_timestamps) == posteriors.shape[0] #todo manipulate sourcecode
-            decoded_tokens_with_timestamps = [ 601, 41, 6, 23, 199, 38, 165, 237] #todo manipulate sourcecode
-            #assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps) #todo manipulate sourcecode
+            assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
+            assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
             entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
             del posteriors
-            #assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
+            assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
             ## rm timestamp tokens
-            no_timestamp_idx = ["<|" not in t and "|>" not in t for t in
-                           decoded_tokens_with_timestamps]
+
+            no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
             entropies_per_token = entropies_per_token[no_timestamp_idx]
             decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
 
@@ -1016,45 +1082,40 @@ def get_data_whisper(output_path: Path,
             average_macroscopic_entropy.append(float(entropies_per_token.mean()))
 
             ## 1) get kw idx by: get_only_keywords_with_different_approaches
+
+            ### merge if necessary
+            words: list[str] = dg.merge_tokens(decoded_tokens_without_timestamp_tokens)
+            words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens)
+            assert len(words) == len(words_token_idx)
+
             ### find "correct" kw position
-            decoded_tokens_without_timestamp_tokens: list[str] = [o.lower().strip() for o in
-                                                       decoded_tokens_without_timestamp_tokens]
-            decoded_tokens_without_timestamp_tokens = normalize(decoded_tokens_without_timestamp_tokens,
+            words: list[str] = [o.lower().strip() for o in words]
+            words = normalize(words,
                                                                 apply_separate_numbers_from_letter=False,
                                                                 apply_numbers_to_words=True,
                                                                 apply_werpy_normalize=False)
-            normalized_decoded_tokens_without_timestamps_list.append(decoded_tokens_without_timestamp_tokens)
+            normalized_decoded_tokens_without_timestamps_list.append(words)
 
 
-            # trans_keywords_indices = get_only_keywords_using_alignments(ref.split(), decoded_tokens_without_timestamp_tokens, return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_identity(row["reference_kw"].split(),
-            #                                                       decoded_tokens_without_timestamp_tokens,
-            #                                                       return_idx=True)
-            #trans_keywords_indices = get_only_keywords_by_accepting_other_options(row["reference_kw"].split(),
-            #                                                                      decoded_tokens_without_timestamp_tokens,
-            #                                                                      return_idx=True)
-            # transcript_keywords_indices: list[int|None] = get_only_keywords_by_phonetic_similarity(reference_kw=row["reference_kw"].split(),
-            #                                                                   transcript=decoded_tokens_without_timestamp_tokens,
-            #                                                                   return_idx=True)
-            estimated_transcript_kw_idx = cast(list[int | None], get_kw_using_mixed_approaches(
+            estimated_transcript_kw_idx_per_word = cast(list[int | None], get_kw_using_mixed_approaches(
                  reference_kw=row["reference_kw"],
-                 transcript=decoded_tokens_without_timestamp_tokens,
-                 return_idx=True)) #todo does this require logprobs?
-            assert len(estimated_transcript_kw_idx) == 3
-            #technically, this is not taking into account, words could be split up into subwords, which is however not likely considering the grid vocab
-            estimated_transcript_kw: list[str|None] = [None if idx is None else decoded_tokens_without_timestamp_tokens[idx] for idx in estimated_transcript_kw_idx]
+                 transcript=words,
+                 return_idx=True))
+            assert len(estimated_transcript_kw_idx_per_word) == 3
 
-            estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx)
+            estimated_transcript_kw: list[str|None] = [None if idx is None else words[idx] for idx in estimated_transcript_kw_idx_per_word]
+
+            estimated_transcript_keywords_indices.append(estimated_transcript_kw_idx_per_word)
             estimated_transcript_keywords.append(estimated_transcript_kw)
 
             tmp_kw_entropy: list[float|np.nan] = []
-            for idx in estimated_transcript_kw_idx:
-                tmp_kw_entropy.append(np.nan if idx is None else float(entropies_per_token[idx]))
+            for idx in [words_token_idx[i] for i in estimated_transcript_kw_idx_per_word]:
+                tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
             entropies_kw.append(tmp_kw_entropy)
 
         ## 2) get kw idx by using the time-alignments
         if word_timestamps:
-            if extract_logprobs:
+            if model_name=="whisper" and extract_logprobs:
                 assert sum([len(a["tokens"]) for a in row["transcript_alignments"]]) == len(
                     decoded_tokens_without_timestamp_tokens)
 
@@ -1067,7 +1128,8 @@ def get_data_whisper(output_path: Path,
             kw_word_idx_list: list[int | None]
             kw_token_idx_from_alignment, kw_word_idx_list = get_kw_idx_through_time_alignments(
                 reference_alignments=ref_alignments,
-                transcript_alignments=row["transcript_alignments"])
+                transcript_alignments=row["transcript_alignments"],
+                apply_offset=True)
 
 
 
