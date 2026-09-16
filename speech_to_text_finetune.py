@@ -66,6 +66,9 @@ from nemo.utils.exp_manager import exp_manager
 from nemo.utils.get_rank import is_global_rank_zero
 from nemo.utils.trainer_utils import resolve_trainer_cfg
 
+from utils.new_config_dataclass import load_config
+from utils.dataset_utils import get_dataset_dict
+
 
 def get_base_model(trainer: pl.Trainer, cfg: DictConfig) -> ASRModel:
     """
@@ -89,7 +92,7 @@ def get_base_model(trainer: pl.Trainer, cfg: DictConfig) -> ASRModel:
             "Both `init_from_nemo_model` and `init_from_pretrained_model cannot be None, should pass atleast one of them"
         )
     elif nemo_model_path is not None:
-        asr_model = ASRModel.restore_from(restore_path=nemo_model_path)
+        asr_model = ASRModel.from_pretrained(nemo_model_path)
     elif pretrained_name is not None:
         # Due to potential first time download of the model on the cluster, we need to make sure that only one
         # rank downloads the model and the others wait for the download to finish.
@@ -192,10 +195,44 @@ def setup_dataloaders(asr_model: ASRModel, cfg: DictConfig) -> ASRModel:
 
     return asr_model
 
-
-@hydra_runner(config_path="conf/asr_finetune", config_name="speech_to_text_finetune")
+import soundfile as sf
+import json
+from tqdm import tqdm
+@hydra_runner(config_path="", config_name="speech_to_text_finetune")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
+    my_config = load_config("training_config_template.yaml")
+
+    dataset_dict = get_dataset_dict(my_config.data)
+
+    foo = []
+    for sample in tqdm(dataset_dict["train"]):
+        foo.append(
+            {"audio_filepath": sample["audio_path"], "text": sample["sentence"], "duration": len(sample["audio"]["array"])/16_000},
+        )
+    with open('train_data.jsonl', 'w', encoding='utf-8') as f:
+        for record in foo:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+    foo = []
+    for sample in tqdm(dataset_dict["val"]):
+        foo.append(
+            {"audio_filepath": sample["audio_path"], "text": sample["sentence"],
+             "duration": len(sample["audio"]["array"]) / 16_000},
+        )
+    with open('val_data.jsonl', 'w', encoding='utf-8') as f:
+        for record in foo:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+
+
+    cfg.model.train_ds.manifest_filepath = 'train_data.jsonl'
+    cfg.model.validation_ds.manifest_filepath = 'val_data.jsonl'
+    cfg.trainer.devices=1
+    cfg.trainer.max_epochs=10
+
+    cfg.init_from_nemo_model = "nvidia/parakeet-ctc-0.6b"
+
 
     trainer = pl.Trainer(**resolve_trainer_cfg(cfg.trainer))
     exp_manager(trainer, cfg.get("exp_manager", None))
