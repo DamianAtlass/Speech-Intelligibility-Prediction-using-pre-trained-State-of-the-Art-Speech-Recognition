@@ -25,8 +25,12 @@ except ImportError as e:
 
 
 def load_parakeet_model(config: InferenceConfig, device: torch.device):
-    model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.from_pretrained(
-        model_name=f"nvidia/{config.model.name}-{config.model.model_type}").to(device)
+    if config.model.path:
+        model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.restore_from(
+            restore_path=str(config.model.path/"checkpoint.nemo") )
+    else:
+        model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.from_pretrained(
+            model_name=f"nvidia/{config.model.name}-{config.model.model_type}").to(device)
     return model
 
 def get_collate_fn(device: torch.device) -> Callable:

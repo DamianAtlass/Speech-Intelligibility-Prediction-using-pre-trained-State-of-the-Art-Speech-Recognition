@@ -44,6 +44,7 @@ python3 -m venv .venv
 pip install -r requirements.txt
 #optionally for editable, local package:
 pip install -e /path/to/sip_whipser/
+pip install -e /path/to/sip-nemo-toolkit/
 ```
 
 ## Setup

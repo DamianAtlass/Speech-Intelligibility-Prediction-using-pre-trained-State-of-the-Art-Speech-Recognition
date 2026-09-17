@@ -14,19 +14,19 @@ from shutil import copyfile
 
 from pathlib import Path
 import argparse
-from dotenv import load_dotenv
 from datasets import Dataset, DatasetDict
 
 #logging
 import logging
 import sys
 
+from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
 
 # custom imports
 from utils.new_config_dataclass import InferenceConfig, TrainingConfig, load_config, save_config
-from train_whisper import train_whisper
+from utils.training_utils import training
 from inference import inference
 from utils.cuda_utils import select_device
 from utils.logging_utils import catch_time
@@ -97,7 +97,7 @@ def main():
     with catch_time() as t:
         if isinstance(config, TrainingConfig):
             logger.info(f"Enter training")
-            train_whisper(config, dataset, device)
+            training(config, dataset, device)
         if isinstance(config, InferenceConfig):
             logger.info(f"Enter inference")
             inference(config, dataset, device)

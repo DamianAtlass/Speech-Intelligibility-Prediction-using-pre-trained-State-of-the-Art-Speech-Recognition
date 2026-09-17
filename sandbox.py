@@ -41,14 +41,14 @@ def nemo_sandbox():
     import nemo
     from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 
-    split_config = DataSplitConfig(dataset_type='grid_bc', path="datasets/grid_bc_without_duplicates", start=0, end=1, noise=False, scaling=1.0)
+    split_config = DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1.0)
     dataset = get_dataset(split_config)
 
-    model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.from_pretrained(model_name="nvidia/parakeet-ctc-1.1b")
+    model: EncDecCTCModelBPE = nemo.collections.asr.models.EncDecCTCModelBPE.restore_from(restore_path="nemo_experiments/Speech_To_Text_Finetuning/savefile.nemo")
     audio = dataset[0]["audio"]["array"]
     result = model.transcribe(audio=audio, timestamps=True)
 
-    print(result)
+    print(result[0].text)
 
 def create_grid_without_bc_sentences():
     config = DatasetConfig(

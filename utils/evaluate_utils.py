@@ -907,7 +907,7 @@ def get_data_whisper(output_path: Path,
     # read files
     for file in tqdm(data_path.iterdir(), total=len(list(data_path.iterdir()))):
         if counter == 100:
-            break
+            pass
         counter += 1
         with open(file) as f:
             json_file: dict = json.load(f)

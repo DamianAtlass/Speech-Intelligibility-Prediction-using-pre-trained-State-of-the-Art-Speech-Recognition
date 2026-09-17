@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# file is originally from nemo-toolkit/examples/asr/speech_to_text_finetune.py
+
 """
-This script can used to fine-tune a speech-to-text model of any instance type when users want to
+This script can be used to fine-tune a speech-to-text model of any instance type when users want to
 fine-tune an existing model without changing its core architecture but may change the tokenizer.
 One can mention the pretrained model in two ways:
 1) `init_from_nemo_model` or
@@ -53,6 +55,14 @@ python <NEMO_ROOT>/examples/asr/speech_to_text_finetune.py \
 For documentation on fine-tuning this model, please visit:
 https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/main/asr/configs.html#fine-tuning-configurations
 """
+from dotenv import load_dotenv
+load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
+import torch
+from datasets import DatasetDict
+
+import logging
+logger = logging.getLogger(__name__)
+
 import time
 from typing import Union
 
@@ -60,13 +70,13 @@ import lightning.pytorch as pl
 from omegaconf import DictConfig, OmegaConf
 
 from nemo.collections.asr.models import ASRModel
-from nemo.core.config import hydra_runner
 from nemo.utils import logging, model_utils
 from nemo.utils.exp_manager import exp_manager
 from nemo.utils.get_rank import is_global_rank_zero
 from nemo.utils.trainer_utils import resolve_trainer_cfg
 
-from utils.new_config_dataclass import load_config
+
+from utils.new_config_dataclass import load_config, TrainingConfig
 from utils.dataset_utils import get_dataset_dict
 
 
@@ -198,12 +208,15 @@ def setup_dataloaders(asr_model: ASRModel, cfg: DictConfig) -> ASRModel:
 import soundfile as sf
 import json
 from tqdm import tqdm
-@hydra_runner(config_path="", config_name="speech_to_text_finetune")
-def main(cfg):
-    logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
-    my_config = load_config("training_config_template.yaml")
 
-    dataset_dict = get_dataset_dict(my_config.data)
+#@hydra_runner(config_path="", config_name="speech_to_text_finetune")
+
+def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.device):
+    config_name = "default_configs/speech_to_text_finetune.yaml"
+
+    cfg: DictConfig = OmegaConf.load(config_name)
+
+    dataset_dict = get_dataset_dict(config.data)
 
     foo = []
     for sample in tqdm(dataset_dict["train"]):
@@ -211,28 +224,34 @@ def main(cfg):
             {"audio_filepath": sample["audio_path"], "text": sample["sentence"], "duration": len(sample["audio"]["array"])/16_000},
         )
     with open('train_data.jsonl', 'w', encoding='utf-8') as f:
-        for record in foo:
+        for sample in tqdm(dataset_dict["train"]):
+            record ={
+                "audio_filepath": sample["audio_path"],
+                "text": sample["sentence"],
+                "duration": len(sample["audio"]["array"]) / 16_000
+            }
+
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
-    foo = []
-    for sample in tqdm(dataset_dict["val"]):
-        foo.append(
-            {"audio_filepath": sample["audio_path"], "text": sample["sentence"],
-             "duration": len(sample["audio"]["array"]) / 16_000},
-        )
     with open('val_data.jsonl', 'w', encoding='utf-8') as f:
-        for record in foo:
+        for sample in tqdm(dataset_dict["val"]):
+            record = {
+                "audio_filepath": sample["audio_path"],
+                "text": sample["sentence"],
+                "duration": len(sample["audio"]["array"]) / 16_000
+            }
+
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
-
-
 
     cfg.model.train_ds.manifest_filepath = 'train_data.jsonl'
     cfg.model.validation_ds.manifest_filepath = 'val_data.jsonl'
     cfg.trainer.devices=1
-    cfg.trainer.max_epochs=10
+    cfg.trainer.max_epochs=config.num_train_epochs
+    cfg.model.train_ds.batch_size=config.batch_size
+    cfg.model.validation_ds.batch_size=config.batch_size
+    cfg.init_from_nemo_model = f"nvidia/parakeet-{config.model.model_type}"
 
-    cfg.init_from_nemo_model = "nvidia/parakeet-ctc-0.6b"
-
+    logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
     trainer = pl.Trainer(**resolve_trainer_cfg(cfg.trainer))
     exp_manager(trainer, cfg.get("exp_manager", None))
@@ -259,6 +278,7 @@ def main(cfg):
 
     trainer.fit(asr_model)
 
+    asr_model.save_to(str(config.output_path/"checkpoint.nemo"))
 
 if __name__ == '__main__':
-    main()  # noqa pylint: disable=no-value-for-parameter
+    train_parakeet()  # noqa pylint: disable=no-value-for-parameter
