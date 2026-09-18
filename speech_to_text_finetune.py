@@ -76,8 +76,8 @@ from nemo.utils.get_rank import is_global_rank_zero
 from nemo.utils.trainer_utils import resolve_trainer_cfg
 
 
-from utils.new_config_dataclass import load_config, TrainingConfig
-from utils.dataset_utils import get_dataset_dict
+from utils.new_config_dataclass import TrainingConfig
+from utils.dataset_utils import get_dataset_dict, create_manifest
 
 
 def get_base_model(trainer: pl.Trainer, cfg: DictConfig) -> ASRModel:
@@ -218,33 +218,17 @@ def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.d
 
     dataset_dict = get_dataset_dict(config.data)
 
-    foo = []
-    for sample in tqdm(dataset_dict["train"]):
-        foo.append(
-            {"audio_filepath": sample["audio_path"], "text": sample["sentence"], "duration": len(sample["audio"]["array"])/16_000},
-        )
-    with open('train_data.jsonl', 'w', encoding='utf-8') as f:
-        for sample in tqdm(dataset_dict["train"]):
-            record ={
-                "audio_filepath": sample["audio_path"],
-                "text": sample["sentence"],
-                "duration": len(sample["audio"]["array"]) / 16_000
-            }
+    train_manifest_file_path = create_manifest(
+        manifest_path=config.output_path/"train_manifest.jsonl",
+        dataset=dataset["train"])
 
-            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+    val_manifest_file_path = create_manifest(
+        manifest_path=config.output_path/"val_manifest.jsonl",
+        dataset=dataset["val"])
 
-    with open('val_data.jsonl', 'w', encoding='utf-8') as f:
-        for sample in tqdm(dataset_dict["val"]):
-            record = {
-                "audio_filepath": sample["audio_path"],
-                "text": sample["sentence"],
-                "duration": len(sample["audio"]["array"]) / 16_000
-            }
+    cfg.model.train_ds.manifest_filepath = str(train_manifest_file_path)
+    cfg.model.validation_ds.manifest_filepath = str(val_manifest_file_path)
 
-            f.write(json.dumps(record, ensure_ascii=False) + '\n')
-
-    cfg.model.train_ds.manifest_filepath = 'train_data.jsonl'
-    cfg.model.validation_ds.manifest_filepath = 'val_data.jsonl'
     cfg.trainer.devices=1
     cfg.trainer.max_epochs=config.num_train_epochs
     cfg.model.train_ds.batch_size=config.batch_size

@@ -4,6 +4,7 @@ import scipy
 import logging
 logger = logging.getLogger(__name__)
 from pathlib import Path
+from utils.paths import PROJECT_ROOT
 
 #def get_power(signal: np.ndarray):
 #    return np.mean(signal ** 2)
@@ -39,7 +40,7 @@ def add_gaussian_noise(signal: np.ndarray, target_snr_db: int | float | None) ->
 
 def add_speech_shaped_noise(signal: np.ndarray,
                             target_snr_db: float | None,
-                            filter_path: Path = Path.cwd() / "speechshaped_filter.pkl" # for testing
+                            filter_path: Path = PROJECT_ROOT / "speechshaped_filter.pkl" # for testing
                             ) -> np.float32:
     """
     Add speech-shaped noise to a signal to resulting in a specific SNR of the returned signal. The speech-shaped noise

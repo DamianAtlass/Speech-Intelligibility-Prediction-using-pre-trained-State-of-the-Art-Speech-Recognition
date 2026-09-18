@@ -1,12 +1,10 @@
-
 from utils.new_config_dataclass import DataSplitConfig, DatasetConfig
 from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset, apply_filter, _get_dataset
 from datasets import Dataset, DatasetDict
 import pytest
 
 from utils.grid_utils import get_grid
-
-from utils.paths import TEST_GRID_FOLDER, TEST_BC_FOLDER, GRID_FOLDER, BC_FOLDER
+from utils.paths import TEST_GRID_FOLDER, TEST_BC_FOLDER, GRID_FOLDER, BC_FOLDER, PROJECT_ROOT
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path", "l"), [
     ("grid", TEST_GRID_FOLDER, 2000),

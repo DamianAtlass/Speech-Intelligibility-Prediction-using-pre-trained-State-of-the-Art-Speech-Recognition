@@ -41,6 +41,7 @@ def download_grid(grid_folder: Path = Path.cwd() / "datasets"/"grid",
 
     extract_files = "y"
 
+    logger.info("Download Grid files...")
     for i in range(1, max_speaker + 1):
         logger.info(f"\n\n------------------------- Downloading {i}th speaker -------------------------\n\n")
 
@@ -104,6 +105,7 @@ def parse_and_save_grid(grid_folder: Path = Path.cwd() / "datasets" / "grid",
                         #for debugging
                         max_speaker: int | None = None,
                         max_files_per_speaker: int | None = None) -> Dataset:
+    logger.info("Parse and save Grid...")
     save_at = grid_folder / "saved_dataset"
 
     logger.info("Parse and save GRID.")

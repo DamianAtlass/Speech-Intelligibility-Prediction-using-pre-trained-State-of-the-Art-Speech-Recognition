@@ -23,7 +23,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
                            max_noise_folders: int | None = None,
                            max_listener: int | None = None,
                            max_files_per_listener: int | None = None) -> Dataset:
-
+    logger.info("Read BC files...")
     save_at = grid_bc_folder if save_at is None else save_at
     save_at = save_at / "saved_dataset"
 

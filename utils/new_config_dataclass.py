@@ -5,7 +5,7 @@ import yaml
 from typing import Any
 from utils.config_dataclasses import Old_InferenceConfig, Old_TrainingConfig, old_get_config
 
-from utils.paths import _PROJECT_ROOT
+from utils.paths import PROJECT_ROOT
 
 
 def from_dict(cls, data: dict) -> Any:
@@ -30,7 +30,7 @@ def config_to_dict(obj) -> dict | Any:
     if is_dataclass(obj):
         return {k: config_to_dict(v) for k, v in asdict(obj).items()}
     elif issubclass(type(obj), Path):
-        obj = obj.relative_to(_PROJECT_ROOT)
+        obj = obj.relative_to(PROJECT_ROOT)
         return str(obj)
     elif isinstance(obj, dict):
         return {k: config_to_dict(v) for k, v in obj.items()}
@@ -49,7 +49,23 @@ class DataSplitConfig:
     scaling: float = 1
 
     def __post_init__(self):
-        self.path = _PROJECT_ROOT/self.path if self.path is not None else None
+        self.path = PROJECT_ROOT / self.path if self.path is not None else None
+
+        if self.noise and self.dataset_type=="grid_bc":
+            raise ValueError("You're adding noise to an already noised dataset!")
+
+        if self.path:
+            if "grid_bc" in str(self.path):
+                foo = "grid_bc"
+            elif "grid" in str(self.path):
+                foo = "grid"
+            else:
+                raise NotImplementedError
+            if self.dataset_type != foo:
+                raise ValueError("Dataset type and path mismatch!")
+
+            if "noise" in str(self.path) and self.noise: # comment out when creating a noised dataset with override_noised_dataset_as_files
+                raise ValueError("You're adding noise to an already noised dataset!")
 
 @dataclass(kw_only=True)
 class DatasetConfig:
@@ -64,7 +80,7 @@ class ModelConfig:
     path: Path | None
 
     def __post_init__(self):
-        self.path = _PROJECT_ROOT/self.path if self.path is not None else None
+        self.path = PROJECT_ROOT / self.path if self.path is not None else None
 
 @dataclass(kw_only=True)
 class BaseConfig:
@@ -77,7 +93,7 @@ class BaseConfig:
     debug: bool = False
 
     def __post_init__(self):
-        self.output_path = _PROJECT_ROOT/self.output_path
+        self.output_path = PROJECT_ROOT / self.output_path
 
 @dataclass(kw_only=True)
 class InferenceConfig(BaseConfig):

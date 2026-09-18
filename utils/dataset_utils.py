@@ -1,26 +1,22 @@
-from utils.grid_utils import get_grid
-from utils.grid_bc_utils import get_grid_bc
-
-import subprocess
-import tarfile
-from shutil import rmtree
-import librosa
-from datasets import Dataset, DatasetDict, load_from_disk
-import wave
-from datasets import Audio, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 from typing import cast
 import numpy as np
-from utils.manipulate_audio import add_noise_transformation
-WANTED_SAMPLE_RATE = 16_000
-SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
-from utils.paths import GRID_FOLDER, BC_FOLDER
-from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
 import os
 from tqdm import tqdm
+import json
+import soundfile as sf
+import shutil
 
+from utils.grid_utils import get_grid
+from utils.grid_bc_utils import get_grid_bc
+from utils.manipulate_audio import add_noise_transformation
+from utils.paths import GRID_FOLDER, BC_FOLDER, PROJECT_ROOT
+from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
+WANTED_SAMPLE_RATE = 16_000
+SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 
 
 default_dataset_paths = {
@@ -119,3 +115,123 @@ def apply_split(dataset : Dataset,
 
 
     return dataset
+
+def create_manifest(manifest_path: Path, dataset: Dataset) -> Path:
+    """
+    Create manifest file.
+    Args:
+        dataset:
+        manifest_path: ends with .jsonl
+
+    Returns:
+    """
+    assert str(manifest_path).endswith(".jsonl")
+
+    records = []
+    for sample in tqdm(dataset):
+
+        record = {
+            "audio_filepath": sample["audio_path"],
+            "text": sample["sentence"],
+            "duration": len(sample["audio"]["array"]) / 16_000
+        }
+        records.append(record)
+
+    with open(str(manifest_path), 'w', encoding='utf-8') as f:
+        for record in records:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+    manifest_path.exists()
+
+    return manifest_path
+
+
+def override_noised_dataset_as_files(target_folder="datasets/grid_with_noise") -> None:
+    """
+    Use this function when noise cant be applied using a transformation, bc saved files are needed (in a manifest for example).
+    Returns:
+
+    Steps:
+    # 1: copy the original directory ("datasets/grid")
+    # 2: rm the saved_dataset directory
+    # 3: uncomment the double-noise prevention in DataSplitConfigs !!!!
+    # 4: run this function
+
+    Example:
+    shutil.copytree(src="datasets/grid", dst=grid_with_noise)
+    shutil.rmtree("datasets/grid_with_noise/saved_dataset")
+    override_noised_dataset_as_files(target_folder=grid_with_noise)
+
+    """
+    split_config = DataSplitConfig(dataset_type='grid', path=target_folder, start=0, end=1., noise=True,
+                                   scaling=1.0)
+    if not split_config.noise:
+        raise ValueError("Sure this makes sense?")
+
+    saved_dataset_path = PROJECT_ROOT / target_folder/ "saved_dataset"
+    if saved_dataset_path.exists():
+        raise RuntimeError(f"Did you already delete that: f{saved_dataset_path}")
+
+
+    print("Read the new dataset...") #important bc of the paths
+    dataset: Dataset = get_dataset(split_config)
+
+    def validate_path(audio_path: Path):
+        path_list: list[str] = list(audio_path.parts)
+        assert path_list[0] == "datasets"
+        assert path_list[1] not in ["grid", "GridIntelligibilityDatabase"], "Don't override the original data!"
+
+    print("Apply noise and save individual files...")
+    for sample in tqdm(dataset):
+        audio_path = Path(sample["audio_path"])
+        validate_path(audio_path)
+        audio_array = sample["audio"]["array"] # noise is applied automatically with a transformation, see dataset_utils
+
+        sf.write(str(audio_path), audio_array, 16_000)
+    print("Files copied.")
+    del dataset
+    print("Remove unnoised dataset...")
+    shutil.rmtree(str(saved_dataset_path))
+
+
+def create_grid_without_bc_sentences(source=None, dest="datasets/grid_without_bc_sentences") -> None:
+
+    # for noised: create_grid_without_bc_sentences(source="datasets/grid_with_noise", dest="datasets/grid_with_noise_without_bc_sentences")
+    #       (execute override_noised_dataset_as_files before)
+    # normal: create_grid_without_bc_sentences()
+    grid = get_dataset(split=DataSplitConfig(dataset_type='grid', path=source, start=0, end=1.0, noise=False, scaling=1.0))
+    grid_bc = get_dataset(split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0))
+
+    sentences_in_grid = grid.unique("sentence")
+    sentences_in_grid_bc = grid_bc.unique("sentence")
+    sentences_in_not_in_bc = set(sentences_in_grid) - set(sentences_in_grid_bc)
+    del sentences_in_grid, sentences_in_grid_bc
+
+    grid = apply_filter(grid, {"sentence": sentences_in_not_in_bc})
+
+    save_at = Path.cwd() / dest / "saved_dataset"
+    if save_at.exists(): raise RuntimeError("Dataset already exists!")
+    save_at.mkdir(parents=True, exist_ok=True)
+    grid.save_to_disk(save_at)
+
+
+def create_grid_bc_without_duplicates() -> None:
+    split_config = DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0)
+    dataset = get_dataset(split_config)
+
+    seen = set()
+    indices = []
+
+    for i, sentence in tqdm(enumerate(dataset["sentence"])):
+        if sentence not in seen:
+            seen.add(sentence)
+            indices.append(i)
+
+    dataset = dataset.select(indices)
+
+    from collections import Counter
+    print(Counter(dataset["snr_db"]))
+
+    save_at = Path.cwd() / "datasets" / "grid_bc_without_duplicates" / "saved_dataset"
+    save_at.mkdir(parents=True, exist_ok=True)
+    dataset.save_to_disk(save_at)

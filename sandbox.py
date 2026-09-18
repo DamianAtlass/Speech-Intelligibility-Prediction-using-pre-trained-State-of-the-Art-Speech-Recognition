@@ -1,16 +1,15 @@
-from utils.new_config_dataclass import InferenceConfig, load_config, convert_old_config_into_new, save_config
+from utils.new_config_dataclass import InferenceConfig
 from pathlib import Path
+import shutil
 
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
-from tqdm import tqdm
 
-from utils.evaluate_utils import get_data, evaluate_individual_run
-from utils.cuda_utils import select_device
-from utils.dataset_utils import get_dataset, apply_split, get_dataset_dict, apply_filter
+from utils.evaluate_utils import get_data
+from utils.dataset_utils import get_dataset, create_grid_without_bc_sentences, create_grid_bc_without_duplicates, override_noised_dataset_as_files
 from utils.logging_utils import catch_time
-from utils.new_config_dataclass import load_config, DatasetConfig, DataSplitConfig
+from utils.new_config_dataclass import load_config, DataSplitConfig
 
 def inspect_df(path: Path, device: torch.device | None = None):
     if not device:
@@ -50,42 +49,18 @@ def nemo_sandbox():
 
     print(result[0].text)
 
-def create_grid_without_bc_sentences():
-    config = DatasetConfig(
-        train_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1.0, noise=False, scaling=1.0),
-        val_split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0),)
-    dataset_dict = get_dataset_dict(config)
+def run_once():
+    create_grid_bc_without_duplicates()
+    create_grid_without_bc_sentences()
 
-    sentences_in_grid = dataset_dict["train"].unique("sentence")
-    sentences_in_grid_bc = dataset_dict["test"].unique("sentence")
-    sentences_in_not_in_bc = set(sentences_in_grid) - set(sentences_in_grid_bc)
+    grid_with_noise = "datasets/grid_with_noise"
 
-    dataset_dict["train"] = apply_filter(dataset_dict["train"], {"sentence": sentences_in_not_in_bc})
+    shutil.copytree(src="datasets/grid", dst=grid_with_noise)
+    shutil.rmtree("datasets/grid_with_noise/saved_dataset")
+    override_noised_dataset_as_files(target_folder=grid_with_noise)
 
-    save_at = Path.cwd() / "datasets/grid_without_bc_sentences" / "saved_dataset"
-    save_at.mkdir(parents=True, exist_ok=True)
-    dataset_dict["train"].save_to_disk(save_at)
+    create_grid_without_bc_sentences(source=grid_with_noise, dest="datasets/grid_with_noise_without_bc_sentences")
 
-def create_grid_bc_without_duplicates():
-    split_config = DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0)
-    dataset = get_dataset(split_config)
-
-    seen = set()
-    indices = []
-
-    for i, sentence in tqdm(enumerate(dataset["sentence"])):
-        if sentence not in seen:
-            seen.add(sentence)
-            indices.append(i)
-
-    dataset = dataset.select(indices)
-
-    from collections import Counter
-    print(Counter(dataset["snr_db"]))
-
-    save_at = Path.cwd() / "datasets/grid_bc_without_duplicates" / "saved_dataset"
-    save_at.mkdir(parents=True, exist_ok=True)
-    dataset.save_to_disk(save_at)
 
 if __name__ == '__main__':
-    nemo_sandbox()
+    create_grid_without_bc_sentences()
