@@ -131,7 +131,7 @@ def create_manifest(manifest_path: Path, dataset: Dataset) -> Path:
     for sample in tqdm(dataset):
 
         record = {
-            "audio_filepath": sample["audio_path"],
+            "audio_filepath": str(PROJECT_ROOT/sample["audio_path"]),
             "text": sample["sentence"],
             "duration": len(sample["audio"]["array"]) / 16_000
         }

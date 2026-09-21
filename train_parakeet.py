@@ -78,6 +78,7 @@ from nemo.utils.trainer_utils import resolve_trainer_cfg
 
 from utils.new_config_dataclass import TrainingConfig
 from utils.dataset_utils import get_dataset_dict, create_manifest
+from utils.paths import PROJECT_ROOT
 
 
 def get_base_model(trainer: pl.Trainer, cfg: DictConfig) -> ASRModel:
@@ -214,7 +215,7 @@ from tqdm import tqdm
 def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.device):
     config_name = "default_configs/speech_to_text_finetune.yaml"
 
-    cfg: DictConfig = OmegaConf.load(config_name)
+    cfg: DictConfig = OmegaConf.load(str(PROJECT_ROOT/config_name))
 
     train_manifest_file_path = create_manifest(
         manifest_path=config.output_path/"train_manifest.jsonl",

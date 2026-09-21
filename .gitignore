@@ -19,3 +19,4 @@ __pycache__/
 /tests/logprob_extraction/
 /chained_tasks
 /nemo_experiments/
+/tests/nemo_experiments/

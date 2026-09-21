@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 pytest tests/
-pytest tests/_test_training.py
-pytest tests/_test_training2.py
-pytest tests/_test_training3.py
+pytest tests/_test_training_whisper_1.py
+pytest tests/_test_training_whisper_2.py
+pytest tests/_test_training_whisper_3.py
+pytest tests/_test_training_parakeet_1.py
+pytest tests/_test_training_parakeet_2.py
