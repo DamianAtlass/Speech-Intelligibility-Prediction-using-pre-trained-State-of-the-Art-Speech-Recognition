@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# file is originally from nemo-toolkit/examples/asr/speech_to_text_finetune.py
+# file is originally from nemo-toolkit/examples/asr/train_parakeet.py
 
 """
 This script can be used to fine-tune a speech-to-text model of any instance type when users want to
@@ -40,13 +40,13 @@ To fine-tune the model, use the following commands:
 
 For initialization from a NEMO model:
 ```sh
-python <NEMO_ROOT>/examples/asr/speech_to_text_finetune.py \
+python <NEMO_ROOT>/examples/asr/train_parakeet.py \
     init_from_nemo_model=<path_to_nemo_model>
 ```
 
 For initialization from a pretrained model:
 ```sh
-python <NEMO_ROOT>/examples/asr/speech_to_text_finetune.py \
+python <NEMO_ROOT>/examples/asr/train_parakeet.py \
     init_from_pretrained_model=<pretrained_model_name>
 ```
 

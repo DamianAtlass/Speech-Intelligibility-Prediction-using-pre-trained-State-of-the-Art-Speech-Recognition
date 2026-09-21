@@ -3,7 +3,7 @@ task_type: training
 data:
     train_split:
         dataset_type: grid
-        path:
+        path:   datasets/grid_with_noise_without_bc_sentences
         start: 0
         end: 10
         noise: true

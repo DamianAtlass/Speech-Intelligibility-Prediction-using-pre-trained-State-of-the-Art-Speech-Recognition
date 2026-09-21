@@ -1,6 +1,6 @@
 import torch
 from datasets import DatasetDict
-from speech_to_text_finetune import train_parakeet
+from train_parakeet import train_parakeet
 
 from utils.new_config_dataclass import TrainingConfig
 from train_whisper import train_whisper
