@@ -18,3 +18,4 @@ __pycache__/
 /individual_evaluations/
 /tests/logprob_extraction/
 /chained_tasks
+/nemo_experiments/
