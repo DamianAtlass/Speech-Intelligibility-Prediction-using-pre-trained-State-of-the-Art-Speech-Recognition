@@ -224,6 +224,7 @@ def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.d
         manifest_path=config.output_path/"val_manifest.jsonl",
         dataset=dataset["val"])
 
+    cfg.name = config.output_path.name
     cfg.model.train_ds.manifest_filepath = str(train_manifest_file_path)
     cfg.model.validation_ds.manifest_filepath = str(val_manifest_file_path)
 
@@ -258,7 +259,8 @@ def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.d
     if hasattr(cfg.model, 'spec_augment') and cfg.model.spec_augment is not None:
         asr_model.spec_augment = ASRModel.from_config_dict(cfg.model.spec_augment)
 
-    trainer.fit(asr_model)
+    if config.perform_training:
+        trainer.fit(asr_model)
 
     asr_model.save_to(str(config.output_path/"checkpoint.nemo"))
 
