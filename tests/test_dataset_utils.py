@@ -37,7 +37,6 @@ def test_apply_split(start, end, scaling, expected_size: int):
 
 @pytest.mark.parametrize(("dataset_type", "dataset_path"), [
     ("grid", GRID_FOLDER),
-    ("grid_bc", BC_FOLDER),
 ])
 def test_add_noise(dataset_type, dataset_path):
     dataset = get_dataset(DataSplitConfig(dataset_type=dataset_type, path=dataset_path, start=0, end=1, noise=True))

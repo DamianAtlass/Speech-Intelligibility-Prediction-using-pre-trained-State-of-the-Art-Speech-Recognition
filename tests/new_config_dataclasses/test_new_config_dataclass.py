@@ -16,7 +16,7 @@ config_dict = [
      'train_split':
          {'end': 0.3, 'noise': True, 'path': 'grid/path', 'start': 0.1, 'dataset_type': 'grid', 'scaling': 1},
      'test_split':
-         {'end': 1.0, 'noise': True, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 1}},
+         {'end': 1.0, 'noise': False, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 1}},
  'debug': False,
  'learning_rate':1e-05,
  'num_train_epochs': 5,
@@ -38,7 +38,7 @@ config_dict = [
     'val_split': {
         'end': 4000, 'noise': True, 'path': 'grid/path', 'start': 100, 'dataset_type': 'grid', 'scaling': 0.5},
     'test_split':
-        {'end': 1.0, 'noise': True, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 0.5}},
+        {'end': 1.0, 'noise': False, 'path': 'grid_bc/path', 'start': 0.0, 'dataset_type': 'grid_bc', 'scaling': 0.5}},
 'extract_logprobs': False,
 'output_path': 'output/path', # supposed to be a str
 'task_type': 'inference',
@@ -62,7 +62,7 @@ TrainingConfig(
     data=DatasetConfig(
         train_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'),start=0.1, end=0.3, noise=True, scaling=1),
         val_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=1),
-        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=1)),
+        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=False, scaling=1)),
     debug=False,
     perform_training=True,
     learning_rate=1e-05,
@@ -78,7 +78,7 @@ InferenceConfig(
     data=DatasetConfig(
         train_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'),start=0.1, end=0.3, noise=True, scaling=0.5),
         val_split=DataSplitConfig(dataset_type='grid', path=PosixPath('grid/path'), start=100, end=4000, noise=True, scaling=0.5),
-        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=True, scaling=0.5)),
+        test_split=DataSplitConfig(dataset_type='grid_bc', path=PosixPath('grid_bc/path'), start=0.0, end=1.0, noise=False, scaling=0.5)),
     debug=True,
     extract_logprobs=False,
     word_timestamps=False,

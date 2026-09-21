@@ -19,7 +19,7 @@ data:
     end: 4000
     scaling: 1
   test_split:
-    noise: True
+    noise: False
     dataset_type: grid_bc
     path: grid_bc/path
     start: 0.

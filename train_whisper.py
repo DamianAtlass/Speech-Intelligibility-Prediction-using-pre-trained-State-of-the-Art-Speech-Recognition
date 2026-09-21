@@ -131,7 +131,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
     )
     num_training_batches = ceil(len(dataset["train"])/config.batch_size)
     logger.info(f"Training batches per epoch: {num_training_batches}")
-    logger.info(f"Test batches: {ceil(len(dataset["test"])/config.batch_size)}")
+    logger.info(f"Validation batches: {ceil(len(dataset["val"])/config.batch_size)}")
 
     logger.info(f"Saves/evaluations per {config.save_and_eval_steps} batches")
 
@@ -182,7 +182,7 @@ def train_whisper(config: TrainingConfig, dataset: DatasetDict, device: torch.de
         args=training_args,
         model=model,
         train_dataset=dataset["train"],
-        eval_dataset=dataset["test"],
+        eval_dataset=dataset["val"],
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         processing_class=processor,

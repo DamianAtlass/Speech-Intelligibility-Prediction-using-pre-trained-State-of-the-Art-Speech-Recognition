@@ -1,6 +1,4 @@
-from utils.evaluate_utils import get_kw_by_index, remove_nan, get_kw_using_needle_man_wunsch_alignments, \
-    find_ordered_indices, get_kw_by_identity, get_kw_using_phonetic_similarity, get_kw_by_accepting_other_options_from_vocab,\
-    calculate_mtd
+from utils.evaluate_utils import remove_nan, find_ordered_indices, calculate_mtd, KeywordGetter
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -46,7 +44,7 @@ def test_find_ordered_indices_throw_exception(transcript, keywords_to_find):
 ])
 def test_get_kw_by_index(string, output, exception):
     try:
-        assert get_kw_by_index(string) == output
+        assert KeywordGetter.get_kw_by_index(string) == output
         assert not exception
     except ValueError:
         assert exception
@@ -57,7 +55,7 @@ def test_get_kw_by_index(string, output, exception):
     ("one two three four", "two X four", ["two", None, "four"]),
 ])
 def test_get_kw_by_identity(transcript, reference_kw, result: str):
-     r = get_kw_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split())
+     r = KeywordGetter.get_kw_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split())
      assert result == r
 
 
@@ -69,7 +67,7 @@ def test_get_kw_by_identity(transcript, reference_kw, result: str):
     ("place red with j four again", "red j three", [1, 3, None]),
 ])
 def test_get_kw_by_identity_with_return_idx(transcript, reference_kw, result: str):
-    r = get_kw_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    r = KeywordGetter.get_kw_by_identity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
     assert result == r
 
 
@@ -84,7 +82,7 @@ def test_get_kw_by_identity_with_return_idx(transcript, reference_kw, result: st
     ('bin blue at r seven again', "its been blue its r seven again", ["blue", "r", "seven"]),
 ])
 def test_get_kw_using_needle_man_wunsch_alignments(reference: str, string: str, output: str):
-    keywords = get_kw_using_needle_man_wunsch_alignments(reference.split(), string.split())
+    keywords = KeywordGetter.get_kw_using_needle_man_wunsch_alignments(reference.split(), string.split())
     assert keywords == output
 
 @pytest.mark.parametrize(("reference", "transcript", "output"), [
@@ -100,7 +98,7 @@ def test_get_kw_using_needle_man_wunsch_alignments(reference: str, string: str, 
 def test_get_kw_using_needle_man_wunsch_alignments_with_return_idx(reference: str, transcript: str, output: str):
     transcript: list = transcript.split() if isinstance(transcript, str) else transcript
 
-    keywords = get_kw_using_needle_man_wunsch_alignments(reference=reference.split(), transcript=transcript, return_idx=True)
+    keywords = KeywordGetter.get_kw_using_needle_man_wunsch_alignments(reference=reference.split(), transcript=transcript, return_idx=True)
     assert keywords == output
 
 @pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
@@ -109,14 +107,14 @@ def test_get_kw_using_needle_man_wunsch_alignments_with_return_idx(reference: st
     ("one transformers three for five six", "two four five", ["three", "for", "five"]),
 ])
 def test_get_kw_using_phonetic_similarity(transcript, reference_kw, expected_output):
-    r = get_kw_using_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split())
+    r = KeywordGetter.get_kw_using_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split())
     assert expected_output == r
 
 @pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
     ("one transformers three for five six", "two four five", [2, 3, 4]),
 ])
 def test_get_kw_using_phonetic_similarity_with_return_idx(transcript, reference_kw, expected_output):
-    r = get_kw_using_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    r = KeywordGetter.get_kw_using_phonetic_similarity(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
     assert expected_output == r
 
 @pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
@@ -125,14 +123,14 @@ def test_get_kw_using_phonetic_similarity_with_return_idx(transcript, reference_
     ("bin white at BOX BOX now", "green x eight", ["white", None, None]),
 ])
 def test_get_wk_by_accepting_other_options_from_vocab(transcript, reference_kw, expected_output):
-    r = get_kw_by_accepting_other_options_from_vocab(reference_kw=reference_kw.split(), transcript=transcript.split())
+    r = KeywordGetter.get_kw_by_accepting_other_options_from_vocab(reference_kw=reference_kw.split(), transcript=transcript.split())
     assert expected_output == r
 
 @pytest.mark.parametrize(("transcript", "reference_kw", "expected_output"), [
     ("bin green at c BOX now", "green x eight", [1, 3, None]),
 ])
 def test_get_wk_by_accepting_other_options_from_vocab_with_return_index(transcript, reference_kw, expected_output):
-    r = get_kw_by_accepting_other_options_from_vocab(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
+    r = KeywordGetter.get_kw_by_accepting_other_options_from_vocab(reference_kw=reference_kw.split(), transcript=transcript.split(), return_idx=True)
     assert expected_output == r
 
 @pytest.mark.parametrize(("x", "y", "x_exp", "y_exp"), [
