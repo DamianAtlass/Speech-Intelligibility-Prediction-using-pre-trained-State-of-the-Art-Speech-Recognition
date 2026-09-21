@@ -216,8 +216,6 @@ def train_parakeet(config: TrainingConfig, dataset: DatasetDict, device: torch.d
 
     cfg: DictConfig = OmegaConf.load(config_name)
 
-    dataset_dict = get_dataset_dict(config.data)
-
     train_manifest_file_path = create_manifest(
         manifest_path=config.output_path/"train_manifest.jsonl",
         dataset=dataset["train"])

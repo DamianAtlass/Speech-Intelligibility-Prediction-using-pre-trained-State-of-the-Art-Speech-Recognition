@@ -63,4 +63,4 @@ def run_once():
 
 
 if __name__ == '__main__':
-    create_grid_without_bc_sentences()
+    pass

@@ -3,7 +3,7 @@ import torch
 import sip_whisper
 from datasets import Dataset, DatasetDict
 
-from utils.evaluate_utils import get_kw_idx_through_time_alignments, ref_alignments_to_seconds_and_rm_non_words
+from utils.evaluate_utils import KeywordGetter, ref_alignments_to_seconds_and_rm_non_words
 from utils.new_config_dataclass import InferenceConfig
 from typing import Any, cast
 import json
@@ -263,7 +263,7 @@ def get_kw_dirty(data: dict, apply_offset: bool) -> tuple[list[str], list[list[i
     for o in transcript_alignment:
         o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False, )[0]
 
-    kw_token_idx_from_alignment, _ = get_kw_idx_through_time_alignments(
+    kw_token_idx_from_alignment, _ = KeywordGetter.get_kw_idx_through_time_alignments(
         reference_alignments=ref_alignments,
         transcript_alignments=transcript_alignment,
         apply_offset=apply_offset)

@@ -126,7 +126,7 @@ def create_manifest(manifest_path: Path, dataset: Dataset) -> Path:
     Returns:
     """
     assert str(manifest_path).endswith(".jsonl")
-
+    logger.info(f"Create manifest for {manifest_path.name}...")
     records = []
     for sample in tqdm(dataset):
 
