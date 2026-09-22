@@ -21,8 +21,8 @@ model:
     path: null
 debug: false
 perform_training: true
-learning_rate: 1.0e-05
+learning_rate: 1.0e-05 # parakeet: todo
 num_train_epochs: 2
 batch_size: 16
-save_and_eval_steps: 100
-warmup_steps: 500
+save_and_eval_steps: 100 # parakeet: todo
+warmup_steps: 500 # parakeet: todo
