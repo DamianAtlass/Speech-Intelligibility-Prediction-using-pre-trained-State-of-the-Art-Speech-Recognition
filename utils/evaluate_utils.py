@@ -262,6 +262,13 @@ def evaluate_individual_run(config: InferenceConfig,
                         shifting_attribute="model_type",
                         output_path=dir_plots)
 
+        plot_wer_to_snr(
+            df=df_single_run[["human_transcript_kw", "estimated_transcript_kw", "snr", "reference_kw", "model_type"]],
+            ref_col="reference_kw",
+            trans_col="estimated_transcript_kw",
+            shifting_attribute="model_type",
+            output_path=dir_plots)
+
         #print("Generate correlation plots")
         if False:
             corr_summary = plot_regr_lines(df_single_run, config)
@@ -717,22 +724,11 @@ class KeywordGetter:
     def get_kw_idx_through_time_alignments(reference_alignments: list[dict],
                                            transcript_alignments: list[dict],
                                            apply_offset: bool,
-                                           ) -> tuple[list[list[int]|None], list[int|None]]:
-
-        token_idx_list = []
-        c = 0
-        # for extracting logprobs later, it's needed to remember that words can have multiple tokens
-        for t in transcript_alignments:
-            tmp = []
-            for _ in t["tokens"]:
-                tmp.append(c)
-                c+=1
-            token_idx_list.append(tmp)
+                                           ) -> list[int|None]:
 
         offset = reference_alignments[0]["start"] if apply_offset else 0
         assert len(reference_alignments) == 6
 
-        kw_token_idx_list: list[list[int]|None] = []
         kw_word_idx_list: list[int|None] = []
         for i in grid_kw_indexes:
             window_start = reference_alignments[i]["start"]
@@ -740,17 +736,16 @@ class KeywordGetter:
 
             durations = []
 
-            for word, token_indexes in zip(transcript_alignments, token_idx_list):
+            for word in transcript_alignments:
                 s, e = float(word["start"])+offset, float(word["end"])+offset
                 duration_in_window = max(0, min(window_end, e) - max(window_start, s))
                 durations.append(duration_in_window)
 
-            word_longest_in_window_idx = durations.index(max(durations)) if len(durations) > 0 else None
-            kw_token_idx_list.append(token_idx_list[word_longest_in_window_idx] if word_longest_in_window_idx is not None else None)
-            kw_word_idx_list.append(word_longest_in_window_idx)
-        assert len(kw_token_idx_list) == 3
+            longest_word_in_window_idx = durations.index(max(durations)) if len(durations) > 0 else None
+            kw_word_idx_list.append(longest_word_in_window_idx)
+        assert len(kw_word_idx_list) == 3
 
-        return kw_token_idx_list, kw_word_idx_list
+        return kw_word_idx_list
 
 
 class DataGetter:
@@ -772,11 +767,11 @@ class DataGetter:
         pass
 
     @abstractmethod
-    def merge_tokens(self, tokens) -> list[str]:
+    def get_words(self, tokens, transcript_alignments: list[dict]) -> list[str]:
         pass
 
     @abstractmethod
-    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
+    def get_word_token_idx(self, tokens: list[str], transcript_alignments: list[dict]) -> list[list[int]]:
         pass
 
 class DataGetterWhisper(DataGetter):
@@ -800,10 +795,10 @@ class DataGetterWhisper(DataGetter):
     def get_idx_of_regular_tokens(self, tokens: list[str]) -> list[bool]:
         return ["<|" not in t and "|>" not in t for t in tokens]
 
-    def merge_tokens(self, tokens) -> list[str]:
+    def get_words(self, tokens, transcript_alignments: list[dict]) -> list[str]:
         return tokens
 
-    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
+    def get_word_token_idx(self, tokens: list[str], transcript_alignments: list[dict]) -> list[list[int]]:
         return [[i] for i in range(len(tokens))]
 
 class DataGetterParakeet(DataGetter):
@@ -822,45 +817,19 @@ class DataGetterParakeet(DataGetter):
     def get_idx_of_regular_tokens(self, tokens: list[str]) -> list[bool]:
         return [t!="BLANK" for t in tokens]
 
-    def merge_tokens(self, tokens) -> list[str]:
-        words = []
-        word = []
+    def get_words(self, tokens, transcript_alignments: list[dict]) -> list[str]:
+        return [o["word"] for o in transcript_alignments]
 
-        for i, t in enumerate(tokens):
-            if t == "BLANK":
-                raise ValueError("should not happen!")
+    def get_word_token_idx(self, tokens: list[str], transcript_alignments: list[dict]) -> list[list[int]]:
+        tokens_list: list[list[int]] = []
+        i = 0
+        for word in transcript_alignments:
 
-            if t[0] == "▁":
-                if word != []:
-                    words.append(word)
-                word = [t[1:]]
-            else:
-                word.append(t)
+            tokens = len(word["tokens"])
+            tokens_list.append(list(range(0+i,tokens+i)))
+            i+=tokens
 
-        if word != []:
-            words.append(word)
-
-        return ["".join(w) for w in words]
-
-    def get_word_token_idx(self, tokens: list[str]) -> list[list[int]]:
-        words_idx = []
-        word = []
-
-        for i, t in enumerate(tokens):
-            if t == "BLANK":
-                raise ValueError("should not happen!")
-
-            if t[0] == "▁":
-                if word != []:
-                    words_idx.append(word)
-                word = [i]
-            else:
-                word.append(i)
-
-        if word != []:
-            words_idx.append(word)
-
-        return words_idx
+        return tokens_list
 
 
 def get_data(
@@ -1036,7 +1005,6 @@ def get_data(
         tad_list: list[list[float|torch.nan]] = []
 
 
-        counter = 0
         no_transcript_counter = 0
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
@@ -1092,9 +1060,10 @@ def get_data(
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
 
                 ### merge if necessary
-                words: list[str] = dg.merge_tokens(decoded_tokens_without_timestamp_tokens)
-                words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens)
+                words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
+                words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
                 assert len(words) == len(words_token_idx)
+                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_token_idx])
 
                 ### find "correct" kw position
                 words: list[str] = [o.lower().strip() for o in words]
@@ -1117,7 +1086,7 @@ def get_data(
                 estimated_transcript_keywords.append(estimated_transcript_kw)
 
                 tmp_kw_entropy: list[float|np.nan] = []
-                for idx in [words_token_idx[i] for i in estimated_transcript_kw_idx_per_word]:
+                for idx in [(None if i is None else words_token_idx[i]) for i in estimated_transcript_kw_idx_per_word]:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
                 entropies_kw.append(tmp_kw_entropy)
 
@@ -1132,25 +1101,26 @@ def get_data(
                 for o in trans_alignment:
                     o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False,)[0]
 
-                kw_token_idx_from_alignment: list[list[int]|None]
-                kw_word_idx_list: list[int | None]
-                kw_token_idx_from_alignment, kw_word_idx_list = KeywordGetter.get_kw_idx_through_time_alignments(
+                kw_idx_from_time_align: list[int | None]
+                kw_idx_from_time_align = KeywordGetter.get_kw_idx_through_time_alignments(
                     reference_alignments=ref_alignments,
                     transcript_alignments=row["transcript_alignments"],
                     apply_offset=True)
 
 
 
-                machine_trans_kw_idx_from_time_align.append(kw_word_idx_list)
-                kw_from_time_align: list[str|None] = [(row["transcript_alignments"][idx]["word"] if idx is not None else None) for idx in kw_word_idx_list]
+
+                machine_trans_kw_idx_from_time_align.append(kw_idx_from_time_align)
+                kw_from_time_align: list[str|None] = [(words[idx] if idx is not None else None) for idx in kw_idx_from_time_align]
                 kw_from_time_align: list[str|None] = [(o.lower().strip() if o is not None else None) for o in kw_from_time_align]
                 machine_trans_kw_from_time_align.append(kw_from_time_align)
 
             if word_timestamps and extract_logprobs:
                 # assume word_timestamps and extract_logprobs are True
-                # kw_token_idx_from_alignment: list[list[int|None]] idx for logprobs
+                # kw_token_idx_from_time_align: list[list[int|None]] idx for logprobs
                 tmp_kw_entropy: list[float|torch.nan] = []
-                for idx in kw_token_idx_from_alignment:
+                kw_token_idx_from_time_align: list[list[int]|None] = [(words_token_idx[i] if i is not None else None) for i in kw_idx_from_time_align]
+                for idx in kw_token_idx_from_time_align:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
 
                 entropies_kw_from_time_align.append(tmp_kw_entropy)
@@ -1158,7 +1128,7 @@ def get_data(
                 #tad
                 tad_list.append(calculate_tad(reference_alignments=ref_alignments,
                                               transcript_alignments=row["transcript_alignments"],
-                                              machine_transcript_kw_idx=kw_word_idx_list))
+                                              machine_transcript_kw_idx=kw_idx_from_time_align))
 
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy

@@ -258,6 +258,8 @@ def plot_wer_to_snr(
         plt.plot(positions, mv, marker="x", label=l)
 
     align_info_str = ", derived from time alignments" if "align" in trans_col else ""
+    if trans_col=="estimated_transcript_kw":
+        align_info_str = ", derived from search"
     kw_info_str = f" (keywords only{align_info_str})" if "kw" in ref_col else ""
     figure_title = f"WER of humans vs WER of machine transcripts{kw_info_str}{f"by {shifting_attribute_label}" if shifting_attribute_label else ""}"
     plt.suptitle(wrap_text(figure_title))

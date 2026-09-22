@@ -244,7 +244,7 @@ def inference_whisper_with_forced_alignment(
     assert expected_length == counter
 
 
-def get_kw_dirty(data: dict, apply_offset: bool) -> tuple[list[str], list[list[int] | None]]:
+def get_kw_dirty(data: dict, apply_offset: bool) -> tuple[list[str|None], list[list[int] | None]]:
     """
     Uses the same workflow as in evaluate_utils.py to get the right kw positions / tokens.
 
@@ -263,14 +263,14 @@ def get_kw_dirty(data: dict, apply_offset: bool) -> tuple[list[str], list[list[i
     for o in transcript_alignment:
         o["word"] = normalize([o["word"]], apply_separate_numbers_from_letter=False, apply_werpy_normalize=False, )[0]
 
-    kw_token_idx_from_alignment, _ = KeywordGetter.get_kw_idx_through_time_alignments(
+    kw_word_idx_list = KeywordGetter.get_kw_idx_through_time_alignments(
         reference_alignments=ref_alignments,
         transcript_alignments=transcript_alignment,
         apply_offset=apply_offset)
 
-    kw_token_idx = [o[0] for o in kw_token_idx_from_alignment]
-    keywords = [decoded_tokens_without_timestamp_tokens[o] for o in kw_token_idx]
-    return keywords, kw_token_idx
+    # assume this all works with a finetuned model and dont care about exceptions with default models
+    keywords = [(None if o is None else decoded_tokens_without_timestamp_tokens[o]) for o in kw_word_idx_list]
+    return keywords, kw_word_idx_list
 
 def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, dataset: Dataset, device: torch.device) -> None:
     with torch.inference_mode():
