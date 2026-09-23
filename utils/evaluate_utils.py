@@ -515,30 +515,51 @@ def evaluate_individual_run(config: InferenceConfig,
 
 def evaluate_forced_alignment_run(config: InferenceConfig,
                                   df_forced_alignment_run: pd.DataFrame) -> None:
-    grouped_df = df_forced_alignment_run.groupby("audio_path")
-
-    def compute_stats(group: pd.DataFrame):
-        return pd.Series({
-            "snr": group["snr"].iloc[0],
-            "reference_kw": group["reference_kw"].iloc[0],
-            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
-            "dispersion_kw": calculate_dispersion_per_file(group),
-            "model_type": group["model_type"].iloc[0],
-        })
 
     print("Creating the grouped dataframe...", end="")
     with catch_time() as t:
-        grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+        grouped_df: pd.DataFrame = get_grouped_data(df_forced_alignment_run, config.output_path)
 
     print(f"took: {t():.2f} s.")
 
+    num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
+    print(f"{num_change_words = }")
+
     out = config.output_path/"dispersion_plot" #todo wip
-    out.mkdir(parents=True, exist_ok=False)
+
+    out.mkdir(parents=True, exist_ok=True)
     plot_microscopic_x_to_snr(grouped_df,
                               col_name="dispersion_kw",
                               value_label="dispersion",
                               output_path=out)
 
+
+def calculate_changing_words(group: pd.DataFrame) -> int:
+    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: x["position"] if x is not None else False))
+    keyword_idx.remove(False)
+
+    original_transcript: str = group[group["forced_alignment_options"].apply(lambda x: x is None)]["machine_transcript"].iloc[0]
+    original_transcript: list[str] = original_transcript.split()
+    group = group[group["forced_alignment_options"].apply(lambda x: x is not None)]
+
+    differences = 0
+
+    for i in keyword_idx:
+        or_trans = original_transcript.copy()
+        or_trans.pop(i)
+        df_kw = group[group["forced_alignment_options"].apply(lambda x: x["position"]==i)]
+        transcripts = df_kw["machine_transcript"]
+        for t in transcripts:
+            t: list[str] = t.split()
+
+            if len(original_transcript)!=len(t):
+                differences += 1
+                continue
+            t.pop(i)
+
+            if or_trans!=t:
+                differences +=1
+    return differences
 
 def get_summary(df: pd.DataFrame,
                 dataset_type: str) -> list[dict]:
@@ -848,6 +869,9 @@ def get_data(
     else:
         if (output_path / "summary.json").exists():
             os.remove(output_path / "summary.json")
+        file_name_grouped_df = output_path / "grouped_df.pkl"
+        if file_name_grouped_df.exists():
+            os.remove(file_name_grouped_df)
 
     dg = DataGetterWhisper() if model_name == "whisper" else DataGetterParakeet()
 
@@ -1152,3 +1176,29 @@ def get_data(
 
     df.to_pickle(output_path/"df.pkl")
     return df
+
+def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path):
+    file_name_grouped_df = output_path / "grouped_df.pkl"
+    if file_name_grouped_df.exists():
+        print("Load df from disk.")
+        grouped_df: pd.DataFrame = pd.read_pickle(file_name_grouped_df)
+        return grouped_df
+
+    grouped_df = df_forced_alignment_run.groupby("audio_path")
+    counter = 0
+
+    def compute_stats(group: pd.DataFrame):
+        nonlocal counter
+        counter += 1
+        return pd.Series({
+            "snr": group["snr"].iloc[0],
+            "reference_kw": group["reference_kw"].iloc[0],
+            "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+            "dispersion_kw": calculate_dispersion_per_file(group),
+            "model_type": group["model_type"].iloc[0],
+            "changes_in_words": calculate_changing_words(group)
+        })
+    grouped_df = grouped_df.apply(compute_stats).reset_index()
+
+    grouped_df.to_pickle(file_name_grouped_df)
+    return grouped_df
