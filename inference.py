@@ -229,6 +229,8 @@ def inference_whisper_with_forced_alignment(
     keywords_in_regular_transcript = sum(1 for i, v in enumerate(list(grid_kw_vocab.values())) if keywords_norm[i] in v)
     expected_length = len(grid_all_keywords) - keywords_in_regular_transcript
     counter = 0
+    tokens = regular_run_data["prediction_result"]["tokens_with_timestamps"][1:]
+    default_alignment = {i:t for i,t in enumerate(tokens)}
 
     for i, kw_label in enumerate(grid_kw_labels):
         kw_pos: int = kw_token_idx[i]
@@ -237,12 +239,22 @@ def inference_whisper_with_forced_alignment(
             kw_for_forced_alignment.remove(keywords_norm[i])
 
         for kw in kw_for_forced_alignment:
-            focus = {"position": kw_pos, "token_or_id": " " + kw}
-            forced_alignment_options = {
-                "focus": focus,
-                "stop_after_alignment": False,
-                "alignments": {kw_pos: " " + kw},
-             }
+            kw_token = " " + kw
+            focus = {"position": kw_pos, "token_or_id": kw_token}
+
+            if config.forced_alignment == "only_keywords":
+                forced_alignment_options = {
+                    "stop_after_alignment": False,
+                    "focus": focus,
+                    "alignments": {kw_pos: kw_token},
+                 }
+            else:
+                forced_alignment_options = {
+                    "stop_after_alignment": True,
+                    "focus": focus,
+                    "alignments": default_alignment.copy(),
+                }
+                forced_alignment_options["alignments"][kw_pos] = kw_token
             counter+=1
             logger.info(f"{forced_alignment_options = } ({counter}/{expected_length})")
             inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)

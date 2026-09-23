@@ -91,7 +91,7 @@ def test_inference_expected_exception():
         assert True
     torch.cuda.empty_cache()
 
-def test_forced_alignment_inference_whisper():
+def test_forced_alignment_inference_whisper_only_keyword():
     config = InferenceConfig(
         output_path=TEST_FOLDER / "forced_alignment_test",
         task_type='inference',
@@ -103,6 +103,32 @@ def test_forced_alignment_inference_whisper():
         beam_size=5,
         model=ModelConfig(name="whisper", model_type="large-v3-turbo", path=None),
         forced_alignment="only_keyword",
+    )
+    if config.output_path.exists():
+        shutil.rmtree(config.output_path)
+
+    dataset_dict = get_dataset_dict(config.data)
+    device = select_device()
+    config.output_path.mkdir(exist_ok=config.debug)
+    inference(config, dataset_dict, device)
+    assert sum(1 for _ in (config.output_path/"data").iterdir()) == 37
+    torch.cuda.empty_cache()
+
+    if config.output_path.exists():
+        shutil.rmtree(config.output_path)
+
+def test_forced_alignment_inference_whisper_full_sequence():
+    config = InferenceConfig(
+        output_path=TEST_FOLDER / "forced_alignment_test",
+        task_type='inference',
+        data=DatasetConfig(
+            test_split=DataSplitConfig(dataset_type='grid', path=None, start=0, end=1, noise=False, scaling=1)),
+        debug=False,
+        extract_logprobs=False,
+        word_timestamps=True,
+        beam_size=5,
+        model=ModelConfig(name="whisper", model_type="large-v3-turbo", path=None),
+        forced_alignment="full_sequence",
     )
     if config.output_path.exists():
         shutil.rmtree(config.output_path)

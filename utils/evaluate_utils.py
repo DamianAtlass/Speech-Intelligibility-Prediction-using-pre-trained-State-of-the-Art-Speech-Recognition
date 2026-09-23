@@ -180,7 +180,7 @@ def calculate_dispersion_per_file(rows_single_audio: pd.DataFrame):
         # take the original transcription without alignment and all other of the keyword position
         rows_single_keyword_position = rows_single_audio[
             rows_single_audio["forced_alignment_options"].apply(
-                lambda x: x.get("token_id_or_word").strip() in possible_keywords if isinstance(x, dict) else True
+                lambda x: x["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
             )]
 
         assert len(rows_single_keyword_position) == len(possible_keywords) or len(rows_single_keyword_position) == len(possible_keywords) + 1
@@ -535,7 +535,7 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
 
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
-    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: x["position"] if x is not None else False))
+    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: x["focus"]["position"] if x is not None else False))
     keyword_idx.remove(False)
 
     original_transcript: str = group[group["forced_alignment_options"].apply(lambda x: x is None)]["machine_transcript"].iloc[0]
@@ -547,7 +547,7 @@ def calculate_changing_words(group: pd.DataFrame) -> int:
     for i in keyword_idx:
         or_trans = original_transcript.copy()
         or_trans.pop(i)
-        df_kw = group[group["forced_alignment_options"].apply(lambda x: x["position"]==i)]
+        df_kw = group[group["forced_alignment_options"].apply(lambda x: x["focus"]["position"]==i)]
         transcripts = df_kw["machine_transcript"]
         for t in transcripts:
             t: list[str] = t.split()
