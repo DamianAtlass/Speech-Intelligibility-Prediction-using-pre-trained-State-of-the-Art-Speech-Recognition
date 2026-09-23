@@ -4,6 +4,7 @@ from dataclasses import dataclass, fields, is_dataclass, asdict
 import yaml
 from typing import Any
 from utils.config_dataclasses import Old_InferenceConfig, Old_TrainingConfig, old_get_config
+from typing import Literal
 
 from utils.paths import PROJECT_ROOT
 
@@ -103,7 +104,7 @@ class InferenceConfig(BaseConfig):
     subword_timestamps: bool = False
     temperature: float = 0
     runs_per_sample: int = 1
-    forced_alignment: bool = False
+    forced_alignment: bool|Literal["full_sequence", "only_keyword"] = False
 
     def __post_init__(self):
         super().__post_init__()

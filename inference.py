@@ -30,7 +30,7 @@ def create_filename(dataset_type: str, sample: dict, run: int|None, forced_align
         if forced_alignment_options is None:
             l.append("forced_alignment-None")
         else:
-            word: str = forced_alignment_options["token_id_or_word"].strip()
+            word: str = forced_alignment_options["focus"]["token_or_id"].strip()
             for idx, values in zip([1,3,4], grid_kw_vocab.values()):
                 if word not in values:
                     continue
@@ -231,13 +231,18 @@ def inference_whisper_with_forced_alignment(
     counter = 0
 
     for i, kw_label in enumerate(grid_kw_labels):
-        kw_pos = kw_token_idx[i]
+        kw_pos: int = kw_token_idx[i]
         kw_for_forced_alignment = grid_kw_vocab[kw_label].copy()
         if keywords_norm[i] in kw_for_forced_alignment:
             kw_for_forced_alignment.remove(keywords_norm[i])
 
         for kw in kw_for_forced_alignment:
-            forced_alignment_options = {"position": kw_pos, "token_id_or_word": " " + kw, }
+            focus = {"position": kw_pos, "token_or_id": " " + kw}
+            forced_alignment_options = {
+                "focus": focus,
+                "stop_after_alignment": False,
+                "alignments": {kw_pos: " " + kw},
+             }
             counter+=1
             logger.info(f"{forced_alignment_options = } ({counter}/{expected_length})")
             inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)

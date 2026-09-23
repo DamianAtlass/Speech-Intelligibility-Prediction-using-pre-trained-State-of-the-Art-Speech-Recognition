@@ -102,7 +102,7 @@ def test_forced_alignment_inference_whisper():
         word_timestamps=True,
         beam_size=5,
         model=ModelConfig(name="whisper", model_type="large-v3-turbo", path=None),
-        forced_alignment=True,
+        forced_alignment="only_keyword",
     )
     if config.output_path.exists():
         shutil.rmtree(config.output_path)

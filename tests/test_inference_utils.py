@@ -29,9 +29,13 @@ def test_create_filename(dataset_type, partial_sample_dict: dict, run, expected_
 
 @pytest.mark.parametrize(("forced_alignment_options", "expected_result"), [
     (None, "forced_alignment-None_SNRm8_l3_s15_srba3a"),
-    ({"position": 1, "token_id_or_word": " blue", }, "forced_alignment-1-0_SNRm8_l3_s15_srba3a"),
+    ({"focus": {"position": 1, "token_or_id": "blue"},
+      "alignments": { 1: "blue"},
+      "stop_after_alignment": False},
+    "forced_alignment-1-0_SNRm8_l3_s15_srba3a"),
 
 ])
+
 def test_create_filename_with_forced_alignment(forced_alignment_options, expected_result):
     partial_sample_dict = {
         "audio_path": "datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m8/3/s15_srba3a.wav",
