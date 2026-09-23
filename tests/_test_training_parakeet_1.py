@@ -8,9 +8,13 @@ from utils.cuda_utils import select_device
 from utils.dataset_utils import get_dataset_dict
 from train_parakeet import train_parakeet
 from utils.paths import TEST_FOLDER
+import pytest
+import os
 
 
 def test_parakeet_training():
+    if os.getenv("ENOUGH_RAM_FOR_PARAKEET_TRAINNIG")=="False":
+        pytest.skip()
 
     config = TrainingConfig(
         output_path=TEST_FOLDER / "training_test",
