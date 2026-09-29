@@ -527,13 +527,23 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
     num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
     print(f"{num_change_words = }")
 
-    out = config.output_path/"dispersion_plot" #todo wip
+    output_dir = config.output_path/"dispersion_plots"
 
-    out.mkdir(parents=True, exist_ok=True)
-    plot_microscopic_x_to_snr(grouped_df,
-                              col_name="dispersion_kw",
-                              col_label="dispersion",
-                              output_path=out)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    box_or_barplot_microscopic_x_to_snr(
+        df=grouped_df,
+        col_name="dispersion_kw",
+        col_label="dispersion",
+        box_or_bar="bar",
+        output_path=output_dir)
+
+    boxplot_microscopic_special_metric_per_keyword(
+        df=grouped_df,
+        col_name="dispersion_kw",
+        col_compare_against_ref_kw="human_transcript_kw",
+        special_metric="spearman_correlation",
+        output_path=output_dir)
 
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
