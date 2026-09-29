@@ -323,7 +323,7 @@ def plot_x_to_snr(df: pd.DataFrame,
 
 def plot_microscopic_x_to_snr(df: pd.DataFrame,
                               col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-                              value_label: str,
+                              col_label: str,
                               y_axis_label: str = None,
                               shifting_attribute: str = "model_type",
                               shifting_attribute_label = None,
@@ -365,11 +365,11 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
             plt.plot(positions, [o[kw] for o in v], marker="x", color=c, ls=lt, label=f"{l} | {grid_kw_labels[kw]}")
 
 
-    figure_title = f"Average {value_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"Average {col_label} of keywords {"(derived from time alignments)" if "from_time_align" in col_name else ""} for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel(f"microscopic {y_axis_label or value_label}")
+    plt.ylabel(f"microscopic {y_axis_label or col_label}")
     plt.ylim(0)
     plt.grid()
     plt.legend()
@@ -383,7 +383,7 @@ from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp
 def box_or_barplot_microscopic_x_to_snr(
         df: pd.DataFrame,
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-        value_label: str,
+        col_label: str,
         special_metric: Literal["correlation"]|None = None,
         y_axis_label: str = None,
         output_path: Path = None,
@@ -504,11 +504,11 @@ def box_or_barplot_microscopic_x_to_snr(
     else:
         raise NotImplementedError
 
-    figure_title = f"Average {value_label} of keywords {"(derived from time alignments) " if "from_time_align" in col_name else ""}grouped by reference keywords"
+    figure_title = f"Average {col_label} of keywords {"(derived from time alignments) " if "from_time_align" in col_name else ""}grouped by reference keywords"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel(f"microscopic {y_axis_label or value_label}")
+    plt.ylabel(f"microscopic {y_axis_label or col_label}")
     plt.ylim(0)
 
     if output_path:
@@ -517,8 +517,8 @@ def box_or_barplot_microscopic_x_to_snr(
 
 def barplot_x_to_snr(
         df: pd.DataFrame,
-        plotting_attribute: str,
-        value_label: str|None = None,
+        col_name: str,
+        col_label: str | None = None,
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         y_axis_label: str = None,
@@ -544,7 +544,7 @@ def barplot_x_to_snr(
         for snr in np.sort(df_attr["snr"].unique()):
             df_snr = df_attr[df_attr["snr"] == snr]
 
-            v = torch.tensor(df_snr[plotting_attribute].values)
+            v = torch.tensor(df_snr[col_name].values)
             mean_value = torch.mean(v[~v.isnan()]).item()
             std_value = torch.std(v[~v.isnan()]).item()
             mean_values_per_df.append(mean_value)
@@ -558,6 +558,7 @@ def barplot_x_to_snr(
     width = 0.8 / n_groups
 
     plt.figure(figsize=[12, 6])
+    plt.grid(axis="y")
 
     for i, (means, stds, label) in enumerate(zip(values["mean"], values["std"], list_shifting_attribute)):
         offset = (i - (n_groups - 1) / 2) * width
@@ -572,11 +573,11 @@ def barplot_x_to_snr(
         )
 
     plt.legend()
-    figure_title = f"Average {value_label if value_label else labels_dict[plotting_attribute]}"
+    figure_title = f"Average {col_label if col_label else labels_dict[col_name]}"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel(f"{y_axis_label or value_label or labels_dict[plotting_attribute]}")
+    plt.ylabel(f"{y_axis_label or col_label or labels_dict[col_name]}")
     plt.ylim(0)
 
 

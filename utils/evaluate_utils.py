@@ -273,15 +273,8 @@ def evaluate_individual_run(config: InferenceConfig,
                 entropy_dir = dir_plots / "macro_entropy"
                 entropy_dir.mkdir(exist_ok=False)
 
-
-                # plot_x_to_snr(df=df_single_run[["average_macroscopic_entropy", "snr", "model_type", "wer_human_kw"]],
-                #               plotting_attribute="average_macroscopic_entropy",
-                #               shifting_attribute_label="whisper",
-                #               shifting_attribute="model_type",
-                #               output_path=entropy_dir)
-
                 barplot_x_to_snr(df=df_single_run[["average_macroscopic_entropy", "snr", "model_type"]],
-                                 plotting_attribute="average_macroscopic_entropy",
+                                 col_name="average_macroscopic_entropy",
                                  shifting_attribute_label="whisper",
                                  shifting_attribute="model_type",
                                  output_path=entropy_dir)
@@ -297,7 +290,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 entropy_dir.mkdir(exist_ok=False)
 
                 barplot_x_to_snr(df=df_single_run[["mtd", "snr", "model_type"]],
-                                 plotting_attribute="mtd",
+                                 col_name="mtd",
                                  shifting_attribute_label="whisper",
                                  shifting_attribute="model_type",
                                  output_path=entropy_dir)
@@ -364,7 +357,7 @@ def evaluate_individual_run(config: InferenceConfig,
                     box_or_barplot_microscopic_x_to_snr(
                         df_single_run[["reference_kw", "model_type", "snr", entropies_kw_col]],
                         col_name=entropies_kw_col,
-                        value_label="entropy",
+                        col_label="entropy",
                         y_axis_label="microscopic entropy",
                         output_path=entropy_dir,
                         box_or_bar="bar")
@@ -403,7 +396,7 @@ def evaluate_individual_run(config: InferenceConfig,
             plot_microscopic_x_to_snr(
                 df_single_run[["listener", "model_type", "snr", "tad_kw"]],
                 col_name="tad_kw",
-                value_label="time alignment difference (TAD)",
+                col_label="time alignment difference (TAD)",
                 y_axis_label="TAD in seconds",
                 shifting_attribute="model_type",
                 output_path=time_align_tad_folder)
@@ -411,7 +404,7 @@ def evaluate_individual_run(config: InferenceConfig,
             box_or_barplot_microscopic_x_to_snr(
                 df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
                 col_name="tad_kw",
-                value_label="time alignment difference (TAD)",
+                col_label="time alignment difference (TAD)",
                 y_axis_label="TAD in seconds",
                 output_path=time_align_tad_folder,
                 box_or_bar="bar")
@@ -498,7 +491,7 @@ def evaluate_individual_run(config: InferenceConfig,
             box_or_barplot_microscopic_x_to_snr(
                 grouped_df,
                 col_name=m,
-                value_label="varience of the TAD",
+                col_label="varience of the TAD",
                 output_path=output_path)
 
             boxplot_microscopic_special_metric_per_keyword(
@@ -539,7 +532,7 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
     out.mkdir(parents=True, exist_ok=True)
     plot_microscopic_x_to_snr(grouped_df,
                               col_name="dispersion_kw",
-                              value_label="dispersion",
+                              col_label="dispersion",
                               output_path=out)
 
 
