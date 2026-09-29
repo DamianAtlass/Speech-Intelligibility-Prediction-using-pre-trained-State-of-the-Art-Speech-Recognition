@@ -640,7 +640,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 
     plt.ylabel("Spearman Correlation Coefficient")
     ax.grid()
-    x_label = [f"{l}\ntotal corr.: {v["value"]:.2f}\np-vaple: {v["p-value"]:.3f}" for l, v in zip(list_shifting_attribute, values)]
+    x_label = [f"{l}\ntotal corr.: {v["value"]:.2f}\np-value: {v["p-value"]:.3f}" for l, v in zip(list_shifting_attribute, values)]
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
