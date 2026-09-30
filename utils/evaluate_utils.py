@@ -132,94 +132,6 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
 
     return summary
 
-def calculate_tad(reference_alignments: list[dict],
-                  transcript_alignments: list[dict],
-                  machine_transcript_kw_idx: list[int | None]) -> list[float]:
-    """
-    Calculate the TAD (time alignment difference as in: Karbasi, Mahdie; Kolossa, Dorothea (2017): ASR-based
-    Measures for Microscopic Speech Intelligibility Prediction).
-    Note 2) the formula of TAD contains a divisor, the "word length in frames". It is not absolutely clear from the paper,
-    if it's referring to the reference or the transcript.
-    Returns:
-        list[float|np.nan]: TAD per keyword
-    """
-    assert len(reference_alignments) == 6
-
-    offset = reference_alignments[0]["start"]
-
-    tad_per_kw: list[float|np.nan] = []
-
-    for ref_kw_idx, trans_idx in zip(grid_kw_indexes, machine_transcript_kw_idx):
-        if trans_idx is None:
-            tad_per_kw.append(np.nan)
-            continue
-        ref_start = reference_alignments[ref_kw_idx]["start"] # all in s
-        ref_end = reference_alignments[ref_kw_idx]["end"]
-        trans_start = (transcript_alignments[trans_idx]["start"] + offset)
-        trans_end = (transcript_alignments[trans_idx]["end"] + offset)
-
-        length_of_transcript_in_tokens = len(transcript_alignments[trans_idx]["tokens"])
-        # original formula states frame length, but that's an DNN/HMM based model. Should mostly be 1 with grid/bc
-
-        tad = abs(trans_start - ref_start) + abs(trans_end - ref_end) / length_of_transcript_in_tokens
-        tad_per_kw.append(tad)
-
-    return tad_per_kw
-
-def calculate_mtd(t: torch.Tensor):
-    # assumes t has its features in the horizontal
-    assert t.shape[0] < 1000
-    return torch.linalg.vector_norm(t[:-1] - t[1:], dim=-1).mean().item()
-
-def calculate_dispersion_per_file(rows_single_audio: pd.DataFrame):
-    rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
-    dispersion_values: list[float] = []
-
-    for kw_label in grid_kw_labels:
-        possible_keywords: list[str] = grid_kw_vocab[kw_label]
-
-        # take the original transcription without alignment and all other of the keyword position
-        rows_single_keyword_position = rows_single_audio[
-            rows_single_audio["forced_alignment_options"].apply(
-                lambda x: x["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
-            )]
-
-        assert len(rows_single_keyword_position) == len(possible_keywords) or len(rows_single_keyword_position) == len(possible_keywords) + 1
-        # consider case if in which isn't in original transcript
-
-        probs: list[float] = sorted(rows_single_keyword_position["avg_logprob"], reverse=True) # exp applied earlier
-
-        dispersion_values.append(dispersion(probs))
-
-    return dispersion_values
-
-def dispersion(probs: list[float]) -> float:
-    """
-    Args:
-        probs: list[float], descendingly ordered list of probabilities for a specific keyword position
-
-    Returns:
-        the dispersion for that keyword position
-
-
-    from:
-    Karbasi M, Zeiler S, Kolossa D. Microscopic and Blind Prediction of Speech Intelligibility: Theory and Practice.
-    IEEE/ACM Trans Audio Speech Lang Process. 2022;30:2141-2155.
-    doi: 10.1109/taslp.2022.3184888. Epub 2022 Jun 30. PMID: 37007458; PMCID: PMC10065470.
-    """
-    #probs = probs[:4]
-    for i in range(len(probs)):
-        if probs[i]==0:
-            probs[i]=0.0000000000000000001
-    N = 4
-    sums = 0
-    for k in range(N):
-        for l in range(k + 1, N):
-            if probs[k]==0 or probs[l]==0:
-                pass
-            sums += np.log(probs[k] / probs[l])
-    return (2 / (N * (N - 1))) * sums
-
 
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame) -> None:
@@ -867,6 +779,101 @@ class DataGetterParakeet(DataGetter):
 
         return tokens_list
 
+class MetricWrapper:
+    @classmethod
+    def calculate_dispersion_per_file(cls, rows_single_audio: pd.DataFrame):
+        rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
+        dispersion_values: list[float] = []
+
+        for kw_label in grid_kw_labels:
+            possible_keywords: list[str] = grid_kw_vocab[kw_label]
+
+            # take the original transcription without alignment and all other of the keyword position
+            rows_single_keyword_position = rows_single_audio[
+                rows_single_audio["forced_alignment_options"].apply(
+                    lambda x: x["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
+                )]
+
+            assert len(rows_single_keyword_position) == len(possible_keywords) or len(
+                rows_single_keyword_position) == len(possible_keywords) + 1
+            # consider case if in which isn't in original transcript
+
+            probs: list[float] = sorted(rows_single_keyword_position["avg_logprob"],
+                                        reverse=True)  # exp applied earlier
+
+            dispersion_values.append(cls.dispersion(probs))
+
+        return dispersion_values
+
+    @staticmethod
+    def dispersion(probs: list[float]) -> float:
+        """
+        Args:
+            probs: list[float], descendingly ordered list of probabilities for a specific keyword position
+
+        Returns:
+            the dispersion for that keyword position
+
+
+        from:
+        Karbasi M, Zeiler S, Kolossa D. Microscopic and Blind Prediction of Speech Intelligibility: Theory and Practice.
+        IEEE/ACM Trans Audio Speech Lang Process. 2022;30:2141-2155.
+        doi: 10.1109/taslp.2022.3184888. Epub 2022 Jun 30. PMID: 37007458; PMCID: PMC10065470.
+        """
+        # probs = probs[:4]
+        for i in range(len(probs)):
+            if probs[i] == 0:
+                probs[i] = 0.0000000000000000001
+        N = 4
+        sums = 0
+        for k in range(N):
+            for l in range(k + 1, N):
+                if probs[k] == 0 or probs[l] == 0:
+                    pass
+                sums += np.log(probs[k] / probs[l])
+        return (2 / (N * (N - 1))) * sums
+
+    @staticmethod
+    def calculate_mtd(t: torch.Tensor):
+        # assumes t has its features in the horizontal
+        assert t.shape[0] < 1000
+        return torch.linalg.vector_norm(t[:-1] - t[1:], dim=-1).mean().item()
+
+    @staticmethod
+    def calculate_tad(reference_alignments: list[dict],
+                      transcript_alignments: list[dict],
+                      machine_transcript_kw_idx: list[int | None]) -> list[float]:
+        """
+        Calculate the TAD (time alignment difference as in: Karbasi, Mahdie; Kolossa, Dorothea (2017): ASR-based
+        Measures for Microscopic Speech Intelligibility Prediction).
+        Note 2) the formula of TAD contains a divisor, the "word length in frames". It is not absolutely clear from the paper,
+        if it's referring to the reference or the transcript.
+        Returns:
+            list[float|np.nan]: TAD per keyword
+        """
+        assert len(reference_alignments) == 6
+
+        offset = reference_alignments[0]["start"]
+
+        tad_per_kw: list[float | np.nan] = []
+
+        for ref_kw_idx, trans_idx in zip(grid_kw_indexes, machine_transcript_kw_idx):
+            if trans_idx is None:
+                tad_per_kw.append(np.nan)
+                continue
+            ref_start = reference_alignments[ref_kw_idx]["start"]  # all in s
+            ref_end = reference_alignments[ref_kw_idx]["end"]
+            trans_start = (transcript_alignments[trans_idx]["start"] + offset)
+            trans_end = (transcript_alignments[trans_idx]["end"] + offset)
+
+            length_of_transcript_in_tokens = len(transcript_alignments[trans_idx]["tokens"])
+            # original formula states frame length, but that's an DNN/HMM based model. Should mostly be 1 with grid/bc
+
+            tad = abs(trans_start - ref_start) + abs(trans_end - ref_end) / length_of_transcript_in_tokens
+            tad_per_kw.append(tad)
+
+        return tad_per_kw
+
 
 def get_data(
     model_name: str,
@@ -1076,7 +1083,7 @@ def get_data(
                 del logprob_tensor
 
                 #calculate mean temporal distance
-                mean_temporal_distance.append(calculate_mtd(posteriors))
+                mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors))
 
                 # calculate microscopic entropy
                 decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
@@ -1165,7 +1172,7 @@ def get_data(
                 entropies_kw_from_time_align.append(tmp_kw_entropy)
 
                 #tad
-                tad_list.append(calculate_tad(reference_alignments=ref_alignments,
+                tad_list.append(MetricWrapper.calculate_tad(reference_alignments=ref_alignments,
                                               transcript_alignments=row["transcript_alignments"],
                                               machine_transcript_kw_idx=kw_idx_from_time_align))
 
@@ -1209,7 +1216,7 @@ def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path):
             "snr": group["snr"].iloc[0],
             "reference_kw": group["reference_kw"].iloc[0],
             "human_transcript_kw": group["human_transcript_kw"].iloc[0],
-            "dispersion_kw": calculate_dispersion_per_file(group),
+            "dispersion_kw": MetricWrapper.calculate_dispersion_per_file(group),
             "model_type": group["model_type"].iloc[0],
             "changes_in_words": calculate_changing_words(group)
         })

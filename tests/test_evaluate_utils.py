@@ -1,4 +1,4 @@
-from utils.evaluate_utils import remove_nan, find_ordered_indices, calculate_mtd, KeywordGetter
+from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -146,5 +146,5 @@ def test_remove_nan(x, y, x_exp, y_exp):
 def test_calculate_mtd():
     t = torch.range(0,14, 1)
     t = t.view(3, 5).T
-    mtd = calculate_mtd(t)
+    mtd = MetricWrapper.calculate_mtd(t)
     assert round(mtd, 5) == round(3**0.5, 5)
