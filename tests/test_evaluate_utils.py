@@ -1,4 +1,4 @@
-from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter
+from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -148,3 +148,9 @@ def test_calculate_mtd():
     t = t.view(3, 5).T
     mtd = MetricWrapper.calculate_mtd(t)
     assert round(mtd, 5) == round(3**0.5, 5)
+
+def test_new_entropy():
+    t = torch.Tensor([0.1, 0.2, 0.1, 0.3, 0.1, 0.2])
+    a = LaptevGinsburgConfidence.tsallis_entropy(t) #5.7 for 10
+
+    assert round(a.item(), 5) ==  3.47782

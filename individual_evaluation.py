@@ -57,7 +57,7 @@ def foo():
 
     boxplot_corr_per_listener(
         df[["wer_human_kw", "wer_machine_kw", "name", "listener"]],
-        correlate_to="wer_machine_kw",
+        col_name="wer_machine_kw",
         model="whisper",
         model_type="",
         shifting_attribute="name",

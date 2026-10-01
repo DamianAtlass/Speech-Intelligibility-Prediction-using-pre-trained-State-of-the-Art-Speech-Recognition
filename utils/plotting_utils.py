@@ -10,7 +10,7 @@ from typing import Literal, cast
 
 from utils.variables import *
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
-from sklearn.feature_selection import mutual_info_classif
+from sklearn.feature_selection import mutual_info_classif, mutual_info_regression
 
 kw_colors = ["green", "blue", "red"]
 kw_colors_short = ["g", "b", "r"]
@@ -21,6 +21,7 @@ sorting_reverse = {
     "wer_machine_kw": True,
 }
 
+
 labels_dict = {
     "average_macroscopic_entropy": "average (macroscopic) entropy",
     "wer_machine": "WER machine",
@@ -29,7 +30,27 @@ labels_dict = {
     "machine_transcripts_len": "length of transcripts",
     "empty transcripts": "Amount of empty transcrips in %",
     "mtd": "mean temporal distance",
+    "average_laptev_ginsburg_conf": "average Laptev-Ginsburg-Confidence",
+    "spearman_correlation": "Spearman Correlation Coefficient",
+    "mutual_information": "Mutual Informaiton",
+    "tad_kw": "TAD",
+    "entropies_kw": "entropy",
+    "entropies_kw_from_time_align": "entropy",
+    "laptev_ginsburg_kw": "Laptev Ginsburg Confidence",
+    "laptev_ginsburg_conf_kw_from_time_align": "Laptev Ginsburg Confidence",
 }
+def get_label(s: str) -> str:
+    return labels_dict[s]
+
+y_axis_labels_dict = {
+    "tad_kw": "TAD in seconds",
+    "laptev_ginsburg_kw": "Laptev-Ginsburg-Confidence",
+}
+def get_y_axis_label(s: str) -> str:
+    try:
+        return y_axis_labels_dict[s]
+    except KeyError:
+        return labels_dict[s]
 
 plt.rcParams.update({
     "font.size": 14,
@@ -157,7 +178,7 @@ def plot_metrics(data: list[pd.Series],
                  output_path: Path | None
                  ) -> None:
     column_name: str = data[0].name
-    figure_title = f"Average {labels_dict[column_name]}"
+    figure_title = f"Average {get_label(column_name)}"
     plot_title = figure_title
     data = [a.dropna() for a in data]
 
@@ -188,7 +209,7 @@ def plot_metrics(data: list[pd.Series],
     if len(data) > 1:
         figure_title += ", sorted by means"
     plt.title(wrap_text(figure_title))
-    plt.ylabel(labels_dict[column_name])
+    plt.ylabel(get_label(column_name))
     ax.grid()
     plt.xticks(positions, x_label)
     plt.tight_layout()
@@ -307,11 +328,11 @@ def plot_x_to_snr(df: pd.DataFrame,
     for mv,l in zip(values, list_shifting_attribute):
         plt.plot(positions, mv, marker="x", label=l)
 
-    figure_title = f"{labels_dict[plotting_attribute]} for {shifting_attribute_label or shifting_attribute}"
+    figure_title = f"{get_label(plotting_attribute)} for {shifting_attribute_label or shifting_attribute}"
     plt.suptitle(figure_title)
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel(labels_dict[plotting_attribute])
+    plt.ylabel(get_label(plotting_attribute))
     plt.grid()
     plt.ylim(0)
     plt.legend()
@@ -383,7 +404,7 @@ from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp
 def box_or_barplot_microscopic_x_to_snr(
         df: pd.DataFrame,
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-        col_label: str,
+        col_label: str|None = None,
         special_metric: Literal["correlation"]|None = None,
         y_axis_label: str = None,
         output_path: Path = None,
@@ -392,6 +413,7 @@ def box_or_barplot_microscopic_x_to_snr(
     Create 3 boxplots per SNR and group values by the keyword.
     CAN be used to plot correlation to human_transcripts_kw per keyword and SNR, but doesn't have to.
     """
+    y_axis_label = get_y_axis_label(col_name) if y_axis_label is None else y_axis_label
 
     if not special_metric and "kw" not in col_name:
         raise ValueError("This plot is for microscopic plotting (per kw)!")
@@ -573,11 +595,11 @@ def barplot_x_to_snr(
         )
 
     plt.legend()
-    figure_title = f"Average {col_label if col_label else labels_dict[col_name]}"
+    figure_title = f"Average {col_label if col_label else get_label(col_name)}"
     plt.suptitle(wrap_text(figure_title))
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
-    plt.ylabel(f"{y_axis_label or col_label or labels_dict[col_name]}")
+    plt.ylabel(f"{y_axis_label or col_label or get_label(col_name)}")
     plt.ylim(0)
 
 
@@ -586,25 +608,34 @@ def barplot_x_to_snr(
     plt.close()
 
 def boxplot_corr_per_listener(df: pd.DataFrame,
-                              correlate_to: str,
+                              col_name: str,
                               model: str,
                               model_type: str | list[str],
+                              special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
                               output_path: Path = None,
                               shifting_attribute = "model_type"):
-    """
-    Boxplots grouped by listeners. May need an update.
-    """
 
     def corr(df)-> dict:
-        x = df[correlate_to]
+        x = df[col_name]
         y = df["wer_human_kw"]
-        x_ranked = stats.rankdata(x)
-        y_ranked = stats.rankdata(y)
-        del y, x
 
-        # spearman corr == pearson corr of ranks
-        regr = stats.pearsonr(x_ranked, y_ranked)
-        return {"value": regr.statistic, "p-value": regr.pvalue}
+        filter = x.isna()
+        x = torch.from_numpy(np.array(x.astype(float))[~filter])
+        y = y[~filter]
+
+        if special_metric == "spearman_correlation":
+            x_ranked = stats.rankdata(x)
+            y_ranked = stats.rankdata(y)
+            #del y, x
+
+            # spearman corr == pearson corr of ranks
+            regr = stats.pearsonr(x_ranked, y_ranked)
+            return {"value": regr.statistic, "p-value": regr.pvalue}
+        elif special_metric == "mutual_information":
+            mi = mutual_info_regression(X=torch.Tensor(x).reshape(-1, 1), y=y)
+            return {"value": mi[0]}
+        else:
+            raise Exception(f"Unknown metric: {special_metric}")
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     values = []
@@ -620,7 +651,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         listeners = df_model_type["listener"].unique()
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
-            value_arr_tmp.append(corr(df_listener))
+            value_arr_tmp.append(corr(df_listener.copy()))
 
         values_per_listener.append(value_arr_tmp)
 
@@ -636,12 +667,17 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                      showmeans=True,
                      )
 
-    title = f"Spearman Correlation Coefficient of human WER and {model}'s {labels_dict[correlate_to]} for each listener"
+    title = f"{get_label(special_metric)} of human WER and {model}'s {get_label(col_name)} for each listener"
     plt.title(wrap_text(title, 55))
 
-    plt.ylabel("Spearman Correlation Coefficient")
+    plt.ylabel(get_label(special_metric))
     ax.grid()
-    x_label = [f"{l}\ntotal corr.: {v["value"]:.2f}\np-value: {v["p-value"]:.3f}" for l, v in zip(list_shifting_attribute, values)]
+    if special_metric == "spearman_correlation":
+        x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.2f}\np-value: {v["p-value"]:.3f}" for l, v in
+                   zip(list_shifting_attribute, values)]
+    else:
+        x_label = [f"{l}\ntotal mut. info.: {v["value"]:.2f}" for l, v in zip(list_shifting_attribute, values)]
+
     plt.xticks(positions, x_label)
     ax.legend([tmp["means"][0], tmp["medians"][0]], ["Means", "Medians"], loc="upper right")
 
@@ -662,7 +698,6 @@ def boxplot_microscopic_special_metric_per_keyword(
         col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
         col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"],  #kw column, estimated_transcript_kw for calibration
         special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
-        col_title: Literal["entropy", "TAD"]|str = "entropy",
         output_path: Path|None = None):
     """
     3 boxplots for either spearman correlation or mutual information
@@ -740,7 +775,7 @@ def boxplot_microscopic_special_metric_per_keyword(
                      showmeans=True,
                      )
 
-    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {col_title} (total and for each keyword{cali})"
+    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {get_label(col_name)} (total and for each keyword{cali})"
     plt.title(wrap_text(title, 65))
 
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")

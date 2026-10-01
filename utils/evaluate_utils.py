@@ -182,37 +182,34 @@ def evaluate_individual_run(config: InferenceConfig,
                             #########################
         if config.extract_logprobs:
             if config.data.test_split.dataset_type == "grid_bc":
-                entropy_dir = dir_plots / "macro_entropy"
-                entropy_dir.mkdir(exist_ok=False)
+                metrics = ["average_macroscopic_entropy", "mtd", "average_laptev_ginsburg_conf"]
+                dirs = ["entropy_(macro)", "mtd_(macro)", "laptev_(macro)"]
+                for metric, d in zip(metrics, dirs):
 
-                barplot_x_to_snr(df=df_single_run[["average_macroscopic_entropy", "snr", "model_type"]],
-                                 col_name="average_macroscopic_entropy",
-                                 shifting_attribute_label="whisper",
-                                 shifting_attribute="model_type",
-                                 output_path=entropy_dir)
+                    curr_dir = dir_plots / d
+                    curr_dir.mkdir(exist_ok=False)
 
-                boxplot_corr_per_listener(
-                    df_single_run[["average_macroscopic_entropy", "wer_human_kw", "model_type", "listener"]],
-                    correlate_to="average_macroscopic_entropy",
-                    model=config.model.name,
-                    model_type=config.model.model_type,
-                    output_path=entropy_dir)
+                    barplot_x_to_snr(df=df_single_run[[metric, "snr", "model_type"]],
+                                     col_name=metric,
+                                     shifting_attribute_label="whisper",
+                                     shifting_attribute="model_type",
+                                     output_path=curr_dir)
 
-                entropy_dir = dir_plots / "MTD"
-                entropy_dir.mkdir(exist_ok=False)
+                    boxplot_corr_per_listener(
+                        df_single_run[[metric, "wer_human_kw", "model_type", "listener"]],
+                        col_name=metric,
+                        special_metric="spearman_correlation",
+                        model=config.model.name,
+                        model_type=config.model.model_type,
+                        output_path=curr_dir)
 
-                barplot_x_to_snr(df=df_single_run[["mtd", "snr", "model_type"]],
-                                 col_name="mtd",
-                                 shifting_attribute_label="whisper",
-                                 shifting_attribute="model_type",
-                                 output_path=entropy_dir)
-
-                boxplot_corr_per_listener(
-                    df_single_run[["mtd", "wer_human_kw", "model_type", "listener"]],
-                    correlate_to="mtd",
-                    model=config.model.name,
-                    model_type=config.model.model_type,
-                    output_path=entropy_dir)
+                    boxplot_corr_per_listener(
+                        df_single_run[[metric, "wer_human_kw", "model_type", "listener"]],
+                        col_name=metric,
+                        special_metric="mutual_information",
+                        model=config.model.name,
+                        model_type=config.model.model_type,
+                        output_path=curr_dir)
 
                             #########################
                             #  microscopic metrics  #
@@ -229,6 +226,7 @@ def evaluate_individual_run(config: InferenceConfig,
         kw_col: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align"]
 
         entropies_kw_col = "entropies_kw" if kw_col == "estimated_transcript_kw" else "entropies_kw_from_time_align"
+        laptev_kw_col = "laptev_ginsburg_kw" if kw_col == "estimated_transcript_kw" else "laptev_ginsburg_conf_kw_from_time_align"
 
         plot_wer_to_snr(
             df=df_single_run[["human_transcript_kw", kw_col, "snr", "reference_kw", "model_type"]],
@@ -237,66 +235,53 @@ def evaluate_individual_run(config: InferenceConfig,
             shifting_attribute="model_type",
             output_path=out_dir)
 
-        #print("Generate correlation plots")
-        if False:
-            corr_summary = plot_regr_lines(df_single_run, config)
+        def generate_plots_for_microscopic_metric(kw_col, metric_col, curr_dir):
 
-            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "wer_machine_kw", "model_type", "listener"]],
-                                      correlate_to="wer_machine_kw",
-                                      model=config.model.name,
-                                      model_type=config.model.model_type,
-                                      output_path=dir_plots)
+            box_or_barplot_microscopic_x_to_snr(
+                df_single_run[["reference_kw", "model_type", "snr", metric_col]],
+                col_name=metric_col,
+                col_label="entropy",
+                output_path=curr_dir,
+                box_or_bar="bar")
 
-            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "wer_machine", "model_type", "listener"]],
-                                      correlate_to="wer_machine",
-                                      model=config.model.name,
-                                      model_type=config.model.model_type,
-                                      output_path=dir_plots)
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", metric_col,
+                               "human_transcript_kw"]],
+                special_metric="spearman_correlation",
+                col_name=metric_col,
+                col_compare_against_ref_kw="human_transcript_kw",
+                output_path=curr_dir)
 
-            boxplot_corr_per_listener(df_single_run[["wer_human_kw", "avg_logprob", "model_type", "listener"]],
-                                      correlate_to="avg_logprob",
-                                      model=config.model.name,
-                                      model_type=config.model.model_type,
-                                      output_path=dir_plots)
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", metric_col,
+                               "human_transcript_kw"]],
+                special_metric="mutual_information",
+                col_name=metric_col,
+                col_compare_against_ref_kw="human_transcript_kw",
+                output_path=curr_dir)
+
+            boxplot_microscopic_special_metric_per_keyword(
+                df_single_run[["reference_kw", "listener", "model_type", metric_col, kw_col]],
+                special_metric="spearman_correlation",
+                col_name=metric_col,
+                col_compare_against_ref_kw=kw_col,
+                output_path=curr_dir)
 
         if config.extract_logprobs:
             if config.data.test_split.dataset_type == "grid_bc":
 
                 if config.extract_logprobs:
-                    entropy_dir = out_dir / "entropy"
-                    entropy_dir.mkdir(exist_ok=False)
+                    #entropy
+                    curr_dir = out_dir / "entropy"
+                    curr_dir.mkdir(exist_ok=False)
 
-                    box_or_barplot_microscopic_x_to_snr(
-                        df_single_run[["reference_kw", "model_type", "snr", entropies_kw_col]],
-                        col_name=entropies_kw_col,
-                        col_label="entropy",
-                        y_axis_label="microscopic entropy",
-                        output_path=entropy_dir,
-                        box_or_bar="bar")
+                    generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=entropies_kw_col, curr_dir=curr_dir)
 
-                    boxplot_microscopic_special_metric_per_keyword(
-                        df_single_run[["reference_kw", "listener", "model_type", entropies_kw_col,
-                                       "human_transcript_kw"]],
-                        special_metric="spearman_correlation",
-                        col_name=entropies_kw_col,
-                        col_compare_against_ref_kw="human_transcript_kw",
-                        output_path=entropy_dir)
+                    # latpev
+                    curr_dir = out_dir / "laptev"
+                    curr_dir.mkdir(exist_ok=False)
 
-                    boxplot_microscopic_special_metric_per_keyword(
-                        df_single_run[["reference_kw", "listener", "model_type", entropies_kw_col,
-                                       "human_transcript_kw"]],
-                        special_metric="mutual_information",
-                        col_name=entropies_kw_col,
-                        col_compare_against_ref_kw="human_transcript_kw",
-                        output_path=entropy_dir)
-
-                    boxplot_microscopic_special_metric_per_keyword(
-                        df_single_run[["reference_kw", "listener", "model_type", entropies_kw_col,
-                                       "machine_trans_kw_from_time_align"]],
-                        special_metric="spearman_correlation",
-                        col_name=entropies_kw_col,
-                        col_compare_against_ref_kw="machine_trans_kw_from_time_align",
-                        output_path=entropy_dir)
+                    generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=laptev_kw_col, curr_dir=curr_dir)
 
 
         # time alignments stuff
@@ -305,38 +290,15 @@ def evaluate_individual_run(config: InferenceConfig,
             time_align_tad_folder = out_dir / "TAD"
             time_align_tad_folder.mkdir(exist_ok=False)
 
-            plot_microscopic_x_to_snr(
-                df_single_run[["listener", "model_type", "snr", "tad_kw"]],
-                col_name="tad_kw",
-                col_label="time alignment difference (TAD)",
-                y_axis_label="TAD in seconds",
-                shifting_attribute="model_type",
-                output_path=time_align_tad_folder)
+            # plot_microscopic_x_to_snr(
+            #     df_single_run[["listener", "model_type", "snr", "tad_kw"]],
+            #     col_name="tad_kw",
+            #     col_label="time alignment difference (TAD)",
+            #     y_axis_label="TAD in seconds",
+            #     shifting_attribute="model_type",
+            #     output_path=time_align_tad_folder)
 
-            box_or_barplot_microscopic_x_to_snr(
-                df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw"]],
-                col_name="tad_kw",
-                col_label="time alignment difference (TAD)",
-                y_axis_label="TAD in seconds",
-                output_path=time_align_tad_folder,
-                box_or_bar="bar")
-
-            boxplot_microscopic_special_metric_per_keyword(
-                df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
-                col_name="tad_kw",
-                special_metric="spearman_correlation",
-                col_compare_against_ref_kw="human_transcript_kw",
-                col_title="TAD",
-                output_path=time_align_tad_folder)
-
-            boxplot_microscopic_special_metric_per_keyword(
-                df_single_run[["reference_kw", "listener", "model_type", "tad_kw", "human_transcript_kw"]],
-                col_name="tad_kw",
-                special_metric="mutual_information",
-                col_compare_against_ref_kw="human_transcript_kw",
-                col_title="TAD",
-                output_path=time_align_tad_folder)
-
+            generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col="tad_kw", curr_dir=time_align_tad_folder)
 
                 # boxplot_microscopic_x_to_snr(
                 #     df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"]],
@@ -874,6 +836,42 @@ class MetricWrapper:
 
         return tad_per_kw
 
+    @staticmethod
+    def laptev_ginsbrug_confidence(posteriors: torch.Tensor):
+        result = [LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(p) for p in posteriors]
+        result = torch.hstack(result)
+        return result
+
+class LaptevGinsburgConfidence:
+    # 0.6: -0.72
+    # 0.7: -0.73
+    # 0.8: -0.74
+    # 0.9: -0.74
+    # 0.95:
+    @classmethod
+    def exponentially_normalized_entropy_based_confidence(cls, p: torch.Tensor, alpha: float = 0.99) -> torch.Tensor:
+        l = len(p)
+        tmp = torch.full((l,), 1 / l)
+        max_possible_value = cls.tsallis_entropy(tmp)
+
+        entropy = cls.tsallis_entropy(p, alpha=alpha)
+
+        dividend = torch.exp(-entropy) - torch.exp(-max_possible_value)
+        divisor = 1 - torch.exp(-max_possible_value)
+        result = dividend / divisor
+
+        assert result>=0
+        return result
+
+
+    @staticmethod
+    def tsallis_entropy(p: torch.Tensor, alpha: float = 0.3) -> torch.Tensor:
+        assert len(p.shape) == 1
+        k = 1 #scale parameter
+        result = (k/(alpha-1)) * (1 - p.pow(alpha).sum())
+        assert result >= 0
+        return result
+
 
 def get_data(
     model_name: str,
@@ -1049,6 +1047,10 @@ def get_data(
         entropies_kw_from_time_align: list[list[float|torch.nan]] = []
         #for tad
         tad_list: list[list[float|torch.nan]] = []
+        # for Laptev / Ginsburg confidence
+        average_laptev_ginsburg_conf: list = []
+        laptev_ginsburg_conf_kw_est: list = []
+        laptev_ginsburg_conf_from_time_align: list = []
 
 
         no_transcript_counter = 0
@@ -1090,6 +1092,7 @@ def get_data(
                 assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
                 assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
                 entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+                laptev_ginsburg_conf_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
                 del posteriors
                 assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
@@ -1097,11 +1100,13 @@ def get_data(
 
                 no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
                 entropies_per_token = entropies_per_token[no_timestamp_idx]
+                laptev_ginsburg_conf_per_token = laptev_ginsburg_conf_per_token[no_timestamp_idx]
                 decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
 
                 del decoded_tokens_with_timestamps
 
                 average_macroscopic_entropy.append(float(entropies_per_token.mean()))
+                average_laptev_ginsburg_conf.append(float(laptev_ginsburg_conf_per_token.min()))
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
 
@@ -1132,9 +1137,12 @@ def get_data(
                 estimated_transcript_keywords.append(estimated_transcript_kw)
 
                 tmp_kw_entropy: list[float|np.nan] = []
+                tmp_kw_laptev: list[float|np.nan] = []
                 for idx in [(None if i is None else words_token_idx[i]) for i in estimated_transcript_kw_idx_per_word]:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
+                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_ginsburg_conf_per_token[idx].mean()))
                 entropies_kw.append(tmp_kw_entropy)
+                laptev_ginsburg_conf_kw_est.append(tmp_kw_laptev)
 
             ## 2) get kw idx by using the time-alignments
             if word_timestamps:
@@ -1165,11 +1173,14 @@ def get_data(
                 # assume word_timestamps and extract_logprobs are True
                 # kw_token_idx_from_time_align: list[list[int|None]] idx for logprobs
                 tmp_kw_entropy: list[float|torch.nan] = []
+                tmp_kw_laptev: list[float|np.nan] = []
                 kw_token_idx_from_time_align: list[list[int]|None] = [(words_token_idx[i] if i is not None else None) for i in kw_idx_from_time_align]
                 for idx in kw_token_idx_from_time_align:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
+                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_ginsburg_conf_per_token[idx].mean()))
 
                 entropies_kw_from_time_align.append(tmp_kw_entropy)
+                laptev_ginsburg_conf_from_time_align.append(tmp_kw_laptev)
 
                 #tad
                 tad_list.append(MetricWrapper.calculate_tad(reference_alignments=ref_alignments,
@@ -1178,9 +1189,11 @@ def get_data(
 
 
         df["average_macroscopic_entropy"] = average_macroscopic_entropy
+        df["average_laptev_ginsburg_conf"] = average_laptev_ginsburg_conf
         df["estimated_transcript_kw_idx"] = estimated_transcript_keywords_indices
         df["estimated_transcript_kw"] = estimated_transcript_keywords
         df["entropies_kw"] = entropies_kw
+        df["laptev_ginsburg_kw"] = laptev_ginsburg_conf_kw_est
         df["mtd"] = mean_temporal_distance
         df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
         del (average_macroscopic_entropy, estimated_transcript_keywords_indices, estimated_transcript_keywords, entropies_kw)
@@ -1188,6 +1201,7 @@ def get_data(
         if word_timestamps:
             df["machine_trans_kw_from_time_align"] = machine_trans_kw_from_time_align
             df["entropies_kw_from_time_align"] = entropies_kw_from_time_align
+            df["laptev_ginsburg_conf_kw_from_time_align"] = laptev_ginsburg_conf_from_time_align
             df["machine_trans_kw_idx_from_time_align"] = machine_trans_kw_idx_from_time_align
             df["tad_kw"] = tad_list
 
@@ -1195,8 +1209,8 @@ def get_data(
 
     df = eval_df()
 
-
     df.to_pickle(output_path/"df.pkl")
+
     return df
 
 def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path):
