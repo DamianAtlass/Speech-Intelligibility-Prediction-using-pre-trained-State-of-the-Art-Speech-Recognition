@@ -1092,7 +1092,7 @@ def get_data(
                 assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
                 assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
                 entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
-                laptev_ginsburg_conf_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
+                laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
                 del posteriors
                 assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
@@ -1100,13 +1100,13 @@ def get_data(
 
                 no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
                 entropies_per_token = entropies_per_token[no_timestamp_idx]
-                laptev_ginsburg_conf_per_token = laptev_ginsburg_conf_per_token[no_timestamp_idx]
+                laptev_per_token = laptev_per_token[no_timestamp_idx]
                 decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
 
                 del decoded_tokens_with_timestamps
 
                 macroscopic_entropy.append(float(entropies_per_token.mean()))
-                laptev.append(float(laptev_ginsburg_conf_per_token.min()))
+                laptev.append(float(laptev_per_token.min()))
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
 
@@ -1140,7 +1140,7 @@ def get_data(
                 tmp_kw_laptev: list[float|np.nan] = []
                 for idx in [(None if i is None else words_token_idx[i]) for i in estimated_transcript_kw_idx_per_word]:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
-                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_ginsburg_conf_per_token[idx].mean()))
+                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_per_token[idx].mean()))
                 entropy_kw_est.append(tmp_kw_entropy)
                 laptev_kw_est.append(tmp_kw_laptev)
 
@@ -1177,7 +1177,7 @@ def get_data(
                 kw_token_idx_from_time_align: list[list[int]|None] = [(words_token_idx[i] if i is not None else None) for i in kw_idx_from_time_align]
                 for idx in kw_token_idx_from_time_align:
                     tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
-                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_ginsburg_conf_per_token[idx].mean()))
+                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_per_token[idx].mean()))
 
                 entropy_kw_from_time_align.append(tmp_kw_entropy)
                 laptev_kw_from_time_align.append(tmp_kw_laptev)
