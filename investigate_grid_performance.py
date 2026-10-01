@@ -43,12 +43,12 @@ for pos, label in enumerate(kw_label):
 
     kw_specific_wer = wer_needleman_wunsch(
         references=[o[pos] for o in df["reference_kw"]],
-        transcripts=[o[pos] for o in df["machine_trans_kw_from_time_align"]])
+        transcripts=[o[pos] for o in df["machine_transcript_kw_from_time_align"]])
     kw_specific_wer = round(kw_specific_wer*100, 2)
 
     for _, row in df.iterrows():
         ref = row["reference_kw"][pos]
-        hyp = normalize([row["machine_trans_kw_from_time_align"][pos]], apply_werpy_normalize=False, apply_separate_numbers_from_letter=False)[0]
+        hyp = normalize([row["machine_transcript_kw_from_time_align"][pos]], apply_werpy_normalize=False, apply_separate_numbers_from_letter=False)[0]
 
         ref = str(ref).strip().lower() if ref is not None else None
         hyp = str(hyp).strip().lower() if hyp is not None else None
@@ -70,7 +70,7 @@ for pos, label in enumerate(kw_label):
 
 print(f"wer: {wer_needleman_wunsch(
     references=join_kw_list(df["reference_kw"]),
-    transcripts=join_kw_list(df["machine_trans_kw_from_time_align"])
+    transcripts=join_kw_list(df["machine_transcript_kw_from_time_align"])
 ):}")
 fig.tight_layout()
 plt.savefig("file.png")

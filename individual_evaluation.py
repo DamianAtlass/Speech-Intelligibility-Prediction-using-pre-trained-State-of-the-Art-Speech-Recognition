@@ -65,7 +65,7 @@ def foo():
 
     if False:
         plot_x_to_snr(df=df,
-                      plotting_attribute="average_macroscopic_entropy",
+                      plotting_attribute="macroscopic_entropy",
                       shifting_attribute_label="model",
                       shifting_attribute="name",
                       output_path=subfolder_name

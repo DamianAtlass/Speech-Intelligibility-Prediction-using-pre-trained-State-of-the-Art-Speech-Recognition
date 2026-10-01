@@ -23,28 +23,28 @@ sorting_reverse = {
 
 
 labels_dict = {
-    "average_macroscopic_entropy": "average (macroscopic) entropy",
+    "macroscopic_entropy": "average (macroscopic) entropy",
     "wer_machine": "WER machine",
     "wer_machine_kw": "WER machine (keywords only)",
     "avg_logprob": "Logprob (per sequence)",
     "machine_transcripts_len": "length of transcripts",
     "empty transcripts": "Amount of empty transcrips in %",
     "mtd": "mean temporal distance",
-    "average_laptev_ginsburg_conf": "average Laptev-Ginsburg-Confidence",
+    "laptev": "average Laptev-Ginsburg-Confidence",
     "spearman_correlation": "Spearman Correlation Coefficient",
     "mutual_information": "Mutual Informaiton",
     "tad_kw": "TAD",
-    "entropies_kw": "entropy",
-    "entropies_kw_from_time_align": "entropy",
-    "laptev_ginsburg_kw": "Laptev Ginsburg Confidence",
-    "laptev_ginsburg_conf_kw_from_time_align": "Laptev Ginsburg Confidence",
+    "entropy_kw_est": "entropy",
+    "entropy_kw_from_time_align": "entropy",
+    "laptev_kw_est": "Laptev Ginsburg Confidence",
+    "laptev_kw_from_time_align": "Laptev Ginsburg Confidence",
 }
 def get_label(s: str) -> str:
     return labels_dict[s]
 
 y_axis_labels_dict = {
     "tad_kw": "TAD in seconds",
-    "laptev_ginsburg_kw": "Laptev-Ginsburg-Confidence",
+    "laptev_kw_est": "Laptev-Ginsburg-Confidence",
 }
 def get_y_axis_label(s: str) -> str:
     try:
@@ -222,7 +222,7 @@ def plot_metrics(data: list[pd.Series],
 def plot_wer_to_snr(
         df: pd.DataFrame,
         ref_col: Literal["reference", "reference_kw"],
-        trans_col: Literal["machine_transcript", "machine_transcript_kw", "machine_trans_kw_from_time_align"],
+        trans_col: Literal["machine_transcript", "machine_transcript_kw", "machine_transcript_kw_from_time_align"],
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
         output_path: Path = None, ):
@@ -279,7 +279,7 @@ def plot_wer_to_snr(
         plt.plot(positions, mv, marker="x", label=l)
 
     align_info_str = ", derived from time alignments" if "align" in trans_col else ""
-    if trans_col=="estimated_transcript_kw":
+    if trans_col=="machine_transcript_kw_est":
         align_info_str = ", derived from search"
     kw_info_str = f" (keywords only{align_info_str})" if "kw" in ref_col else ""
     figure_title = f"WER of humans vs WER of machine transcripts{kw_info_str}{f"by {shifting_attribute_label}" if shifting_attribute_label else ""}"
@@ -343,7 +343,7 @@ def plot_x_to_snr(df: pd.DataFrame,
 
 
 def plot_microscopic_x_to_snr(df: pd.DataFrame,
-                              col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
+                              col_name: Literal["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
                               col_label: str,
                               y_axis_label: str = None,
                               shifting_attribute: str = "model_type",
@@ -403,7 +403,7 @@ from pylab import plot, show, savefig, xlim, figure, ylim, legend, boxplot, setp
 
 def box_or_barplot_microscopic_x_to_snr(
         df: pd.DataFrame,
-        col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
+        col_name: Literal["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
         col_label: str|None = None,
         special_metric: Literal["correlation"]|None = None,
         y_axis_label: str = None,
@@ -695,8 +695,8 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
 
 def boxplot_microscopic_special_metric_per_keyword(
         df: pd.DataFrame,
-        col_name: Literal["entropies_kw", "entropies_kw_from_time_align", "tad_kw"],
-        col_compare_against_ref_kw: Literal["estimated_transcript_kw", "machine_trans_kw_from_time_align", "human_transcript_kw"],  #kw column, estimated_transcript_kw for calibration
+        col_name: Literal["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
+        col_compare_against_ref_kw: Literal["machine_transcript_kw_est", "machine_transcript_kw_from_time_align", "human_transcript_kw"],  #kw column, estimated_transcript_kw for calibration
         special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
         output_path: Path|None = None):
     """
@@ -705,8 +705,8 @@ def boxplot_microscopic_special_metric_per_keyword(
 
     tmp_labels_dict = {
         "human_transcript_kw": "listener's",
-        "estimated_transcript_kw": " machine's", # specifically for calibration
-        "machine_trans_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
+        "machine_transcript_kw_est": " machine's", # specifically for calibration
+        "machine_transcript_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
     }
     cali = " (calibration)" if "machine_trans_kw" in col_compare_against_ref_kw else ""
     metric_name = {
