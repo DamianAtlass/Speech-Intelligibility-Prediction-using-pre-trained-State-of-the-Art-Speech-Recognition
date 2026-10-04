@@ -731,21 +731,30 @@ def plot_corr_for_laptev_alphas(df: pd.DataFrame,
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     values = []
     for attr in list_shifting_attribute:
-        df_model_type = df[df[shifting_attribute]==attr]
-        df_model_type = df_model_type.dropna()
-
-        values.append(corr(df_model_type))
+        min_and_mean = []
+        for m in ["min", "mean"]:
+            df_cp = df.copy()
+            df_cp[col_name] = df_cp[col_name].apply(lambda x: x[m])
+            df_attr = df_cp[df_cp[shifting_attribute]==attr]
+            df_attr = df_attr.dropna()
+            corr_coef = corr(df_attr)
+            min_and_mean.append(corr_coef)
+        values.append(min_and_mean)
 
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    corr_arr = [v["value"] for v in values]
+    corr_min = [v[0]["value"] for v in values]
+    corr_mean = [v[1]["value"] for v in values]
     tmp = ax.plot(
-        list_shifting_attribute,
-        corr_arr,
-        "ro"
-        )
+        list_shifting_attribute, corr_min, "ro",
+        list_shifting_attribute, corr_mean, "bo"
+    )
 
-    title = f"{get_label(special_metric)} of human WER and {model}'s {get_label(col_name)}"
+    ax.legend(["Minimum", "Mean"], title="aggregation function")
+    plt.xlabel("alpha")
+
+
+    title = f"{get_label(special_metric)} of human WER and {model}'s {get_label(col_name)} with different alpha values"
     plt.title(wrap_text(title, 55))
 
     plt.ylabel(get_label(special_metric))

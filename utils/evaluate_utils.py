@@ -1138,7 +1138,7 @@ def get_data(
 
                 macroscopic_entropy.append(float(entropies_per_token.mean()))
                 laptev.append(float(laptev_per_token.min()))
-                laptev_alpha.append({k:v.min() for k,v in laptev_per_token_alpha.items()})
+                laptev_alpha.append({k: {"min": v.min(), "mean": v.mean()} for k,v in laptev_per_token_alpha.items()})
 
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
