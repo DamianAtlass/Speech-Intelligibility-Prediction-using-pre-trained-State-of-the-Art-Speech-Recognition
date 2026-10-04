@@ -15,7 +15,7 @@ import os
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr
+    boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr, plot_corr_for_laptev_alphas
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -319,6 +319,32 @@ def evaluate_individual_run(config: InferenceConfig,
         idx_list = [np.array(a) for a in idx_list]
         summary.append({f"kw at index {i}": {"mean idx of word": arr.mean(), "std": arr.std()} for i, arr in zip( [1,3,4], idx_list)})
 
+    # explore alphas
+    df = df_single_run[["laptev_alpha", "wer_human_kw", "model_type", "listener"]].copy()
+    alpha_keys = df["laptev_alpha"].iloc[0].keys()
+
+    list_df = []
+    for a in alpha_keys:
+        df_cp = df.copy()
+        df_cp["laptev_alpha"] = df_cp["laptev_alpha"].apply(lambda x: x[a])
+        df_cp["alpha"] = a
+        list_df.append(df_cp)
+
+    df_alpha_concat = pd.concat(list_df, axis=0)
+
+    latev_alpha_dir = dir_plots / "diff_laptev_alpha"
+    latev_alpha_dir.mkdir(parents=False)
+
+    plot_corr_for_laptev_alphas(
+        df_alpha_concat[["laptev_alpha", "wer_human_kw", "model_type", "listener", "alpha"]],
+        col_name="laptev_alpha",
+        special_metric="spearman_correlation",
+        xlabel="alpha",
+        model=config.model.name,
+        model_type=config.model.model_type,
+        shifting_attribute="alpha",
+        output_path=latev_alpha_dir)
+
     # GROUPED
     ## create grouped df
     def wrapper(func: Callable) -> Callable:
@@ -361,7 +387,7 @@ def evaluate_individual_run(config: InferenceConfig,
         for m in ["tad_kw_var", "entropy_kw_var"]:
             output_path = dir_plots/ "multiple_runs_plots" / m
             output_path.mkdir(exist_ok=True, parents=True)
-            l = labels[m]
+            col_label = labels[m]
             box_or_barplot_microscopic_x_to_snr(
                 grouped_df,
                 col_name=m,
@@ -373,7 +399,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_name=m,
                 special_metric="spearman_correlation",
                 col_compare_against_ref_kw="human_transcript_kw",
-                col_title=f"{l} over different runs",
+                col_title=f"{col_label} over different runs",
                 output_path=output_path)
 
             boxplot_microscopic_special_metric_per_keyword(
@@ -381,7 +407,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_name=m,
                 special_metric="mutual_information",
                 col_compare_against_ref_kw="human_transcript_kw",
-                col_title=f"{l} over different runs",
+                col_title=f"{col_label} over different runs",
                 output_path=output_path)
 
     # dumping of summary should be the last action to symbolize that all went well on a short look
@@ -837,8 +863,8 @@ class MetricWrapper:
         return tad_per_kw
 
     @staticmethod
-    def laptev_ginsbrug_confidence(posteriors: torch.Tensor):
-        result = [LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(p) for p in posteriors]
+    def laptev_ginsbrug_confidence(posteriors: torch.Tensor, alpha: float = 0.99):
+        result = [LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(p, alpha=alpha) for p in posteriors]
         result = torch.hstack(result)
         return result
 
@@ -1049,6 +1075,7 @@ def get_data(
         time_alignment_difference: list[list[float|torch.nan]] = []
         # for Laptev / Ginsburg confidence
         laptev: list = []
+        laptev_alpha: list[dict] = []
         laptev_kw_est: list = []
         laptev_kw_from_time_align: list = []
 
@@ -1093,6 +1120,9 @@ def get_data(
                 assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
                 entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
                 laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
+                alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
+                laptev_per_token_alpha: dict = {a:MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=a) for a in
+                                          alpha_values}
                 del posteriors
                 assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
 
@@ -1101,12 +1131,15 @@ def get_data(
                 no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
                 entropies_per_token = entropies_per_token[no_timestamp_idx]
                 laptev_per_token = laptev_per_token[no_timestamp_idx]
+                laptev_per_token_alpha = {k:v[no_timestamp_idx] for k,v in laptev_per_token_alpha.items()}
                 decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
 
                 del decoded_tokens_with_timestamps
 
                 macroscopic_entropy.append(float(entropies_per_token.mean()))
                 laptev.append(float(laptev_per_token.min()))
+                laptev_alpha.append({k:v.min() for k,v in laptev_per_token_alpha.items()})
+
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
 
@@ -1190,6 +1223,7 @@ def get_data(
 
         df["macroscopic_entropy"] = macroscopic_entropy
         df["laptev"] = laptev
+        df["laptev_alpha"] = laptev_alpha
         df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
         df["machine_transcript_kw_est"] = machine_transcript_kw_est
         df["entropy_kw_est"] = entropy_kw_est

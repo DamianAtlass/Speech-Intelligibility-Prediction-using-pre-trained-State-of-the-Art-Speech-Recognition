@@ -37,7 +37,8 @@ labels_dict = {
     "entropy_kw_est": "entropy",
     "entropy_kw_from_time_align": "entropy",
     "laptev_kw_est": "Laptev Ginsburg Confidence",
-    "laptev_kw_from_time_align": "Laptev Ginsburg Confidence",
+    "laptev_kw_from_time_align": "Laptev Ginsburg Confidence (per keyword)",
+    "laptev_alpha": "Laptev Ginsburg Confidence",
 }
 def get_label(s: str) -> str:
     return labels_dict[s]
@@ -611,6 +612,7 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                               col_name: str,
                               model: str,
                               model_type: str | list[str],
+                              xlabel: str = None,
                               special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
                               output_path: Path = None,
                               shifting_attribute = "model_type"):
@@ -671,6 +673,8 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     plt.title(wrap_text(title, 55))
 
     plt.ylabel(get_label(special_metric))
+    if xlabel:
+        plt.xlabel(xlabel)
     ax.grid()
     if special_metric == "spearman_correlation":
         x_label = [f"{l}\ntotal corr. coef.: {v["value"]:.2f}\np-value: {v["p-value"]:.3f}" for l, v in
@@ -688,6 +692,64 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
     elif all([all([k<0 for k in o]) for o in corr_arr]):
         y_lim_top = 0
     plt.ylim(y_lim_button, y_lim_top)
+
+    if output_path:
+        plt.savefig(output_path/f'{title.replace("\n", "")}.png')
+    plt.close()
+
+def plot_corr_for_laptev_alphas(df: pd.DataFrame,
+                                col_name: str,
+                                model: str,
+                                model_type: str | list[str],
+                                xlabel: str = None,
+                                special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
+                                output_path: Path = None,
+                                shifting_attribute = "model_type"):
+
+    def corr(df)-> dict:
+        x = df[col_name]
+        y = df["wer_human_kw"]
+
+        filter = x.isna()
+        x = torch.from_numpy(np.array(x.astype(float))[~filter])
+        y = y[~filter]
+
+        if special_metric == "spearman_correlation":
+            x_ranked = stats.rankdata(x)
+            y_ranked = stats.rankdata(y)
+            #del y, x
+
+            # spearman corr == pearson corr of ranks
+            regr = stats.pearsonr(x_ranked, y_ranked)
+            return {"value": regr.statistic, "p-value": regr.pvalue}
+        elif special_metric == "mutual_information":
+            mi = mutual_info_regression(X=torch.Tensor(x).reshape(-1, 1), y=y)
+            return {"value": mi[0]}
+        else:
+            raise Exception(f"Unknown metric: {special_metric}")
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+    values = []
+    for attr in list_shifting_attribute:
+        df_model_type = df[df[shifting_attribute]==attr]
+        df_model_type = df_model_type.dropna()
+
+        values.append(corr(df_model_type))
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    corr_arr = [v["value"] for v in values]
+    tmp = ax.plot(
+        list_shifting_attribute,
+        corr_arr,
+        "ro"
+        )
+
+    title = f"{get_label(special_metric)} of human WER and {model}'s {get_label(col_name)}"
+    plt.title(wrap_text(title, 55))
+
+    plt.ylabel(get_label(special_metric))
+    ax.grid()
 
     if output_path:
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
