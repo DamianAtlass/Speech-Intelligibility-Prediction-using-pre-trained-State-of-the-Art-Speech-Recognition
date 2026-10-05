@@ -19,7 +19,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     config: InferenceConfig = load_config(path/"config.yaml")
 
     with catch_time() as t:
-        df_single_run = get_data(
+        df = get_data(
             config.model.name,
             config.output_path,
             config.data.test_split.dataset_type,
@@ -28,11 +28,11 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             device)
     print(f"Reading the generated files took: {t():.4f} s")
 
-    df_single_run["model_type"] = config.model.model_type
+    df["model_type"] = config.model.model_type
     if config.forced_alignment:
-        evaluate_forced_alignment_run(config, df_single_run)
+        evaluate_forced_alignment_run(config, df)
     else:
-        evaluate_individual_run(config=config, df_single_run=df_single_run)
+        evaluate_individual_run(config=config, df_single_run=df)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))
