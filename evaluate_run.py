@@ -17,22 +17,23 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
     config: InferenceConfig = load_config(path/"config.yaml")
+    for restrict_vocab in [False]:
+        with catch_time() as t:
+            df = get_data(
+                model_name=config.model.name,
+                output_path=config.output_path,
+                dataset_type=config.data.test_split.dataset_type,
+                extract_logprobs=config.extract_logprobs,
+                word_timestamps=config.word_timestamps,
+                restrict_vocab=restrict_vocab,
+                device=device)
+        print(f"Reading the generated files took: {t():.4f} s")
 
-    with catch_time() as t:
-        df = get_data(
-            config.model.name,
-            config.output_path,
-            config.data.test_split.dataset_type,
-            config.extract_logprobs,
-            config.word_timestamps,
-            device)
-    print(f"Reading the generated files took: {t():.4f} s")
-
-    df["model_type"] = config.model.model_type
-    if config.forced_alignment:
-        evaluate_forced_alignment_run(config, df)
-    else:
-        evaluate_individual_run(config=config, df_single_run=df)
+        df["model_type"] = config.model.model_type
+        if config.forced_alignment:
+            evaluate_forced_alignment_run(config, df, restrict_vocab)
+        else:
+            evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

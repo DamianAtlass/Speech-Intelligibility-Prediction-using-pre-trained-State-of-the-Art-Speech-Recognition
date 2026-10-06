@@ -134,7 +134,11 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
 
 
 def evaluate_individual_run(config: InferenceConfig,
-                            df_single_run: pd.DataFrame) -> None:
+                            df_single_run: pd.DataFrame,
+                            restrict_vocab: bool) -> None:
+    results_dir = config.output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    file_name_summary = results_dir / "summary.json"
+
     # check for missing rows
     d = get_dataset(config.data.test_split)
 
@@ -148,7 +152,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
     corr_summary = None
 
-    dir_plots = config.output_path / "plots"
+    dir_plots = results_dir / "plots"
     if dir_plots.exists():
         shutil.rmtree(dir_plots)
     dir_plots.mkdir(parents=False, exist_ok=False)
@@ -411,16 +415,17 @@ def evaluate_individual_run(config: InferenceConfig,
                 output_path=output_path)
 
     # dumping of summary should be the last action to symbolize that all went well on a short look
-    with open(config.output_path / "summary.json", 'w') as f:
+    with open(file_name_summary, 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
 def evaluate_forced_alignment_run(config: InferenceConfig,
-                                  df_forced_alignment_run: pd.DataFrame) -> None:
+                                  df_forced_alignment_run: pd.DataFrame,
+                                  restrict_vocab: bool) -> None:
 
     print("Creating the grouped dataframe...", end="")
     with catch_time() as t:
-        grouped_df: pd.DataFrame = get_grouped_data(df_forced_alignment_run, config.output_path)
+        grouped_df: pd.DataFrame = get_grouped_data(df_forced_alignment_run, config.output_path, restrict_vocab, )
 
     print(f"took: {t():.2f} s.")
 
@@ -905,19 +910,24 @@ def get_data(
     dataset_type: str,
     extract_logprobs: bool,
     word_timestamps: bool,
+    restrict_vocab: bool,
     device: torch.device) -> pd.DataFrame:
 
-    file_name_df = output_path / "df.pkl"
+    results_dir = output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    results_dir.mkdir(parents=False, exist_ok=True)
+
+    file_name_df = results_dir / "df.pkl"
+    file_name_df_grouped = results_dir / "df_grouped.pkl"
+    file_name_summary = results_dir / "summary.json"
     if file_name_df.exists():
         print("Load df from disk.")
         df: pd.DataFrame = pd.read_pickle(file_name_df)
         return df
     else:
-        if (output_path / "summary.json").exists():
-            os.remove(output_path / "summary.json")
-        file_name_grouped_df = output_path / "grouped_df.pkl"
-        if file_name_grouped_df.exists():
-            os.remove(file_name_grouped_df)
+        if file_name_summary.exists():
+            os.remove(file_name_summary)
+        if file_name_df_grouped.exists():
+            os.remove(file_name_df_grouped)
 
     dg = DataGetterWhisper() if model_name == "whisper" else DataGetterParakeet()
 
@@ -1243,12 +1253,14 @@ def get_data(
 
     df = eval_df()
 
-    df.to_pickle(output_path/"df.pkl")
+    df.to_pickle(file_name_df)
 
     return df
 
-def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path):
-    file_name_grouped_df = output_path / "grouped_df.pkl"
+def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path, restrict_vocab: bool):
+    results_dir = output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+
+    file_name_grouped_df = results_dir / "df_grouped.pkl"
     if file_name_grouped_df.exists():
         print("Load df from disk.")
         grouped_df: pd.DataFrame = pd.read_pickle(file_name_grouped_df)
