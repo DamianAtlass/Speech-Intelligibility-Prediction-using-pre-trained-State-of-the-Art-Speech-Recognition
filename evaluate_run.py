@@ -17,7 +17,9 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
     config: InferenceConfig = load_config(path/"config.yaml")
-    for restrict_vocab in [False]:
+    for restrict_vocab in [False, True]:
+        if restrict_vocab and config.model.model_type == "parakeet":
+            continue
         with catch_time() as t:
             df = get_data(
                 model_name=config.model.name,

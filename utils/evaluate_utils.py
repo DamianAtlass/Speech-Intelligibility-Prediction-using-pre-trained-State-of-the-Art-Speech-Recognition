@@ -958,7 +958,7 @@ def get_data(
 
         # read files
         for file in tqdm(data_path.iterdir(), total=len(list(data_path.iterdir()))):
-            if counter == 100:
+            if counter == 500:
                 pass
             counter += 1
             with open(file) as f:
@@ -1090,6 +1090,7 @@ def get_data(
         laptev_kw_from_time_align: list = []
 
 
+        alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
         no_transcript_counter = 0
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
@@ -1103,6 +1104,10 @@ def get_data(
                 entropy_kw_est.append([torch.nan, torch.nan, torch.nan])
                 normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
                 mean_temporal_distance.append(torch.nan)
+                laptev.append(torch.nan)
+
+                laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
+                laptev_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
 
                 if word_timestamps:
                     machine_transcript_kw_from_time_align.append([None, None, None])
@@ -1111,48 +1116,52 @@ def get_data(
 
                 if word_timestamps and extract_logprobs:
                     entropy_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
+                    laptev_kw_est.append([torch.nan, torch.nan, torch.nan])
                 continue
 
             if extract_logprobs:
+                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+                no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
+
                 logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
                     row["logprobs_path"]).name
                 logprob_tensor = torch.load(logprob_path)
 
+                ## rm timestamp tokens or BLANK tokens
+                logprob_tensor = logprob_tensor[no_timestamp_idx]
+                decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
+                del decoded_tokens_with_timestamps
+
                 posteriors = logprob_tensor.exp()
                 del logprob_tensor
+
+                if restrict_vocab:
+                    posteriors = posteriors[:, grid_vocab_whisper_tokens]
+                    posteriors /= posteriors.sum(dim=-1, keepdim=True)
+
+                num_tokens = len(decoded_tokens_without_timestamp_tokens)
+                assert posteriors.shape[0] == num_tokens
+                assert torch.round(posteriors.sum(), decimals=2).item() == num_tokens
 
                 #calculate mean temporal distance
                 mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors))
 
-                # calculate microscopic entropy
-                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
-                assert len(decoded_tokens_with_timestamps) == posteriors.shape[0]
-                assert torch.round(posteriors.sum(), decimals=2).item() == len(decoded_tokens_with_timestamps)
+                # calculate microscopic and macroscopic entropy
                 entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+                assert len(entropies_per_token) == num_tokens
+                macroscopic_entropy.append(float(entropies_per_token.mean()))
+
+                #laptev
                 laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
-                alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
+                laptev.append(float(laptev_per_token.min()))
+
                 laptev_per_token_alpha: dict = {a:MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=a) for a in
                                           alpha_values}
-                del posteriors
-                assert len(entropies_per_token) == len(decoded_tokens_with_timestamps)
-
-                ## rm timestamp tokens
-
-                no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
-                entropies_per_token = entropies_per_token[no_timestamp_idx]
-                laptev_per_token = laptev_per_token[no_timestamp_idx]
-                laptev_per_token_alpha = {k:v[no_timestamp_idx] for k,v in laptev_per_token_alpha.items()}
-                decoded_tokens_without_timestamp_tokens = [t for t, b in zip(decoded_tokens_with_timestamps, no_timestamp_idx) if b]
-
-                del decoded_tokens_with_timestamps
-
-                macroscopic_entropy.append(float(entropies_per_token.mean()))
-                laptev.append(float(laptev_per_token.min()))
                 laptev_alpha.append({k: {"min": v.min(), "mean": v.mean()} for k,v in laptev_per_token_alpha.items()})
 
+                del posteriors
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
-
                 ### merge if necessary
                 words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
                 words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
@@ -1161,12 +1170,12 @@ def get_data(
 
                 ### find "correct" kw position
                 words: list[str] = [o.lower().strip() for o in words]
-                words = normalize(words,
-                                                                    apply_separate_numbers_from_letter=False,
-                                                                    apply_numbers_to_words=True,
-                                                                    apply_werpy_normalize=False)
+                words = normalize(
+                    strings=words,
+                    apply_separate_numbers_from_letter=False,
+                    apply_numbers_to_words=True,
+                    apply_werpy_normalize=False)
                 normalized_decoded_tokens_without_timestamps_list.append(words)
-
 
                 estimated_transcript_kw_idx_per_word = cast(list[int | None], KeywordGetter.get_kw_using_mixed_approaches(
                      reference_kw=row["reference_kw"],
