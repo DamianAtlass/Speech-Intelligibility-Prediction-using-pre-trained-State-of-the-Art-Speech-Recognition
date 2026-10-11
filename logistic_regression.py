@@ -14,11 +14,33 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sklearn.datasets import load_breast_cancer
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+import numpy as np
+from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix,precision_score, recall_score,f1_score,roc_curve, roc_auc_score
+
+import json
+def get_X_and_y(df: pd.DataFrame, metrics: list[str], kw_number: int | None = None):
+    if kw_number is not None:
+        if kw_number<0 or kw_number>2: raise ValueError("Must be between 0 and 2")
+
+    X = df.copy()
+    X = X[metrics]
+    if kw_number is not None:
+        for metric in metrics:
+            X[metric] = X[metric].apply(lambda x: x[kw_number])
+
+
+
+    human_kw = df["human_transcript_kw"].apply(lambda x: x[kw_number])
+    ref_kw = df["reference_kw"].apply(lambda x: x[kw_number])
+    y = human_kw == ref_kw
+
+    filter = X.isna().any(axis=1)
+    X = X[~filter]
+    y = y[~filter]
+    return X, y
+
+
 
 def regr(path: Path, restrict_vocab: bool, device: torch.device | None = None):
     if not device:
@@ -40,37 +62,54 @@ def regr(path: Path, restrict_vocab: bool, device: torch.device | None = None):
 
     df["model_type"] = config.model.model_type
 
-    metric_col = "entropy_kw_from_time_align"
-    kw_col = "machine_transcript_kw_from_time_align"
+    metrics_list = [
+        ["entropy_kw_from_time_align"],
+        ["laptev_kw_from_time_align"],
+        ["tad_kw"],
+        ["entropy_kw_from_time_align", "laptev_kw_from_time_align", "tad_kw"],
+    ]
 
-    curr_kw_idx = 0
-    df[metric_col] = df[metric_col].apply(lambda x: x[curr_kw_idx])
-    df[kw_col] = df[kw_col].apply(lambda x: x[curr_kw_idx])
-    human_kw = df["human_transcript_kw"].apply(lambda x: x[curr_kw_idx]).values
-    ref_kw = df["reference_kw"].apply(lambda x: x[curr_kw_idx]).values
+    n_splits = 5
+    keywords = ["color", "letter", "digit"]
+    results_list: list[dict] = []
 
-    x = df[metric_col]
-    y = human_kw == ref_kw
+    for metrics in metrics_list:
+        metric_is_micro = "kw" in metrics[0]
+        metric_results = {
+            "micro/macro": "microscopic" if metric_is_micro else "macroscopic",
+            "used metrics": metrics,
+            "results": []
+        }
 
-    filter = x.isna()
-    x = x[~filter]
-    y = y[~filter]
-    #https://www.geeksforgeeks.org/machine-learning/ml-logistic-regression-using-python/
+        kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]
+        for kw_number in kw_numbers:
+            result = {
+                "keyword number": keywords[kw_number] if metric_is_micro else "None (macroscopic)",
+                "n samples": len(df)
+            }
+            X, y = get_X_and_y(
+                df=df,
+                metrics=metrics,
+                kw_number=kw_number)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        x, y, test_size=0.25, random_state=29
-    )
+            model = LogisticRegression(max_iter=200)
+            kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train.to_frame())
-    X_test = scaler.transform(X_test.to_frame())
+            scores = cross_val_score(model, X, y, cv=kfold, scoring='accuracy')
 
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_train, y_train)
+            valid_rows = len(X)
+            non_valid_rows = (len(df)-valid_rows)/len(df)
+            result["non-valid rows"] = f"{non_valid_rows*100:.2f} %"
+            result["mean score of valid rows"] = f"{np.mean(scores):.2f} %"
+            result["adjusted score"] = f"{(np.mean(scores)*valid_rows)/len(df):.2f} %"
 
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"accuracy: {round(accuracy, 2)}")
+            metric_results["results"].append(result)
+        results_list.append(metric_results)
+
+    results_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+
+    with open(path / results_dir / "cross_validation.json", 'w') as f:
+        json.dump(results_list, f, indent=4)
 
 
 if __name__ == '__main__':

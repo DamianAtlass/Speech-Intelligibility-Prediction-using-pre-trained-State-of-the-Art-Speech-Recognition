@@ -344,7 +344,7 @@ def plot_x_to_snr(df: pd.DataFrame,
 
 
 def plot_microscopic_x_to_snr(df: pd.DataFrame,
-                              col_name: Literal["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
+                              col_name:str,
                               col_label: str,
                               y_axis_label: str = None,
                               shifting_attribute: str = "model_type",
