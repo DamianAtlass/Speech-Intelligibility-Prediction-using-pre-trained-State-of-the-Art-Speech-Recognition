@@ -9,7 +9,19 @@ import torch
 import logging
 logger = logging.getLogger(__name__)
 from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run
+from logistic_regression import build_predictors
 
+evaluation_rows = [
+    ["macroscopic_entropy"],
+    ["mtd"],
+    ["laptev"],
+    ["macroscopic_entropy", "mtd", "laptev"],
+
+    ["entropy_kw_est"],
+    ["entropy_kw_from_time_align"],
+    ["tad_kw"],
+    ["entropy_kw_from_time_align", "tad_kw"],
+]
 
 def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
@@ -18,7 +30,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
     config: InferenceConfig = load_config(path/"config.yaml")
     for restrict_vocab in [False, True]:
-        if restrict_vocab and config.model.model_type == "parakeet":
+        if restrict_vocab and config.model.name == "parakeet":
             continue
         with catch_time() as t:
             df = get_data(
@@ -36,6 +48,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             evaluate_forced_alignment_run(config, df, restrict_vocab)
         else:
             evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
+            build_predictors(df=df, config=config, restrict_vocab=restrict_vocab, device=device)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

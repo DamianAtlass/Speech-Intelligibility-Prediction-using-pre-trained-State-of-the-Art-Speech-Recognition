@@ -22,7 +22,7 @@ sorting_reverse = {
 }
 
 
-labels_dict = {
+labels_dict_long = {
     "macroscopic_entropy": "average (macroscopic) entropy",
     "wer_machine": "WER machine",
     "wer_machine_kw": "WER machine (keywords only)",
@@ -40,8 +40,27 @@ labels_dict = {
     "laptev_kw_from_time_align": "Laptev Ginsburg Confidence (per keyword)",
     "laptev_alpha": "Laptev Ginsburg Confidence",
 }
-def get_label(s: str) -> str:
-    return labels_dict[s]
+
+labels_dict_short = {
+    "macroscopic_entropy": "entropy",
+    "wer_machine": "WER machine",
+    "wer_machine_kw": "WER machine (kw only)",
+    "avg_logprob": "Logprob",
+    "machine_transcripts_len": "len(transcripts)",
+    "empty transcripts": "# of empty transcrips in %",
+    "mtd": "MTD",
+    "laptev": "Laptev-Ginsburg-Confidence",
+    "spearman_correlation": "Correlation",
+    "mutual_information": "Mutual Informaiton",
+    "tad_kw": "TAD",
+    "entropy_kw_est": "entropy",
+    "entropy_kw_from_time_align": "entropy",
+    "laptev_kw_est": "Laptev-Ginsburg-Confidence",
+    "laptev_kw_from_time_align": "Lapt.-Gins.-Confidence",
+    "laptev_alpha": "Laptev-Ginsburg-Confidence",
+}
+def get_label(s: str, l: Literal["long", "short"] = "long") -> str:
+    return labels_dict_long[s] if l=="long" else labels_dict_short[s]
 
 y_axis_labels_dict = {
     "tad_kw": "TAD in seconds",
@@ -51,7 +70,7 @@ def get_y_axis_label(s: str) -> str:
     try:
         return y_axis_labels_dict[s]
     except KeyError:
-        return labels_dict[s]
+        return labels_dict_long[s]
 
 plt.rcParams.update({
     "font.size": 14,
@@ -581,7 +600,7 @@ def barplot_x_to_snr(
     width = 0.8 / n_groups
 
     plt.figure(figsize=[12, 6])
-    plt.grid(axis="y")
+    plt.grid()
 
     for i, (means, stds, label) in enumerate(zip(values["mean"], values["std"], list_shifting_attribute)):
         offset = (i - (n_groups - 1) / 2) * width
@@ -865,3 +884,86 @@ def boxplot_microscopic_special_metric_per_keyword(
     plt.close()
 
 
+class PredictorPlots:
+
+    @classmethod
+    def plot_macroscopoic(self,
+            results: list,
+            output_path: Path|None = None):
+        scores = []
+        labels = []
+
+        for i, item in enumerate(results):
+            result = item["results"][0]
+            score = result.get("mean score of valid rows")
+            score = abs(score)
+            scores.append(score)
+            labels.append("\n".join(get_label(o, "short") for o in item.get("used metrics")))
+
+        plt.figure(figsize=(10, 7))
+        plt.bar(labels, scores, width=0.8)
+
+        plt.ylabel("absolute mean error")
+        title = f"Average error of linear regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
+        plt.title(wrap_text(title, 65))
+
+        if output_path:
+            plt.savefig(output_path / f'{title.replace("\n", "")}.png')
+        else:
+            plt.show()
+        plt.close()
+
+    @classmethod
+    def plot_microscopic(self,
+        results: list,
+        output_path: Path|None = None):
+
+        metrics = [o["used metrics"] for o in results]
+        metrics = ["\n".join(get_label(v, "short") + ("*" if "est" in v else "**") for v in o) for o in metrics]
+
+        x_ticks = np.arange(len(metrics))
+        width = 0.6 / max(len(grid_kw_labels), 1)
+        bar_spacing = 0.03
+
+        fig, ax = plt.subplots(figsize=(len(metrics)*2 +2, 7))
+
+        for i, (keyword, color) in enumerate(zip(grid_kw_labels, kw_colors_short)):
+            keyword_scores = []
+
+            for r in results:
+                score = [o["adjusted score"] for o in r["results"] if o["keyword type"]==keyword][0]
+                keyword_scores.append(score)
+
+            offset = (i - (len(grid_kw_labels) - 1) / 2) * (width + bar_spacing)
+            ax.bar(
+                x_ticks + offset,
+                keyword_scores,
+                width,
+                label=keyword,
+                color = color,
+            )
+
+        ax.set_ylabel("Adjusted score")
+        title = f"Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
+        plt.title(wrap_text(title, 65))
+
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(metrics)
+        ax.legend(title="Keyword")
+        ax.legend(loc="lower right")
+
+        ax.legend(loc="lower right", title="Keyword")
+
+        fig.text(
+            0.02, 0.02,
+            "* keyword positions based on estimation \n** keyword position based on timestamps",
+            ha="left",
+            fontsize=9
+        )
+
+        if output_path:
+            plt.savefig(output_path / f'{title.replace("\n", "")}.png')
+        else:
+            plt.show()
+
+        plt.close(fig)

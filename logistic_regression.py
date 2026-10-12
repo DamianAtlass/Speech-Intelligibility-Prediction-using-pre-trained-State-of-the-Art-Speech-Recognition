@@ -5,6 +5,7 @@ from utils.evaluate_utils import get_data
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
+from utils.plotting_utils import PredictorPlots
 
 from pathlib import Path
 import pandas as pd
@@ -43,35 +44,44 @@ def get_X_and_y(df: pd.DataFrame, metrics: list[str], kw_number: int | None = No
 
 
 
-def regr(path: Path, restrict_vocab: bool, device: torch.device | None = None):
+def train_and_evaluate_predictors(
+        df: pd.DataFrame | None = None,
+        config: InferenceConfig | None = None,
+        restrict_vocab: bool | None = None,
+        metrics_list: list[list[str]] = None,
+        device: torch.device | None = None,) -> list:
     if not device:
         device = torch.device("cpu")
 
+    if metrics_list is None:
+        metrics_list = [
+            ["macroscopic_entropy"],
+            ["mtd"],
+            ["laptev"],
+            ["macroscopic_entropy", "mtd", "laptev"],
 
-    config: InferenceConfig = load_config(path/"config.yaml")
+            ["entropy_kw_est"],
+            ["entropy_kw_from_time_align"],
+            ["tad_kw"],
+            ["entropy_kw_from_time_align", "tad_kw"],
+        ]
 
-    with catch_time() as t:
-        df = get_data(
-            model_name=config.model.name,
-            output_path=config.output_path,
-            dataset_type=config.data.test_split.dataset_type,
-            extract_logprobs=config.extract_logprobs,
-            word_timestamps=config.word_timestamps,
-            restrict_vocab=restrict_vocab,
-            device=device)
-    print(f"Reading the generated files took: {t():.4f} s")
+
+    if df is None:
+        assert config is not None
+        assert restrict_vocab is not None
+        with catch_time() as t:
+            df = get_data(
+                model_name=config.model.name,
+                output_path=config.output_path,
+                dataset_type=config.data.test_split.dataset_type,
+                extract_logprobs=config.extract_logprobs,
+                word_timestamps=config.word_timestamps,
+                restrict_vocab=restrict_vocab,
+                device=device)
+        print(f"Reading the generated files took: {t():.4f} s")
 
     df["model_type"] = config.model.model_type
-
-    metrics_list = [
-        ["entropy_kw_from_time_align"],
-        ["laptev_kw_from_time_align"],
-        ["tad_kw"],
-        ["entropy_kw_from_time_align", "laptev_kw_from_time_align", "tad_kw"],
-        ["mtd"],
-        ["macroscopic_entropy"],
-        ["macroscopic_entropy", "mtd"],
-    ]
 
     n_splits = 5
     keywords = ["color", "letter", "digit"]
@@ -90,7 +100,7 @@ def regr(path: Path, restrict_vocab: bool, device: torch.device | None = None):
         kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]
         for kw_number in kw_numbers:
             result = {
-                "keyword number": keywords[kw_number] if metric_is_micro else "None (macroscopic)",
+                "keyword type": keywords[kw_number] if metric_is_micro else "None (macroscopic)",
                 "n samples": len(df)
             }
             X, y = get_X_and_y(
@@ -109,19 +119,40 @@ def regr(path: Path, restrict_vocab: bool, device: torch.device | None = None):
             print(scores)
             valid_rows = len(X)
             non_valid_rows = (len(df)-valid_rows)/len(df)
-            result["non-valid rows"] = f"{non_valid_rows*100:.2f} %"
-            result["mean score of valid rows"] = f"{np.mean(scores):.2f} {"%" if metric_is_micro else ""}"
-            result["adjusted score"] = f"{(np.mean(scores)*valid_rows)/len(df):.2f} %" if metric_is_micro else "???"
+            result["non-valid rows (percent)"] = non_valid_rows*100
+            result["mean score of valid rows"] = np.mean(scores)
+            result["adjusted score"] = (np.mean(scores)*valid_rows)/len(df) if metric_is_micro else "???"
 
             metric_results["results"].append(result)
         results_list.append(metric_results)
 
     results_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
 
-    with open(path / results_dir / "cross_validation.json", 'w') as f:
+    with open(config.output_path / results_dir / "cross_validation.json", 'w') as f:
         json.dump(results_list, f, indent=4)
+    return results_list
+
+
+
+
+def build_predictors(
+        df: pd.DataFrame | None = None,
+        config: InferenceConfig | None = None,
+        restrict_vocab: bool | None = None,
+        metrics_list: list[list[str]] = None,
+        device: torch.device | None = None,):
+
+    results: list = train_and_evaluate_predictors(df=df, config=config, restrict_vocab=restrict_vocab, metrics_list=metrics_list, device=device)
+    results_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+
+    r = [o for o in results if o["micro/macro"] == "macroscopic"]
+    PredictorPlots.plot_macroscopoic(r, config.output_path / results_dir)
+
+    r = [o for o in results if o["micro/macro"] == "microscopic"]
+    PredictorPlots.plot_microscopic(r, config.output_path / results_dir)
 
 
 if __name__ == '__main__':
-    regr(Path("inferences/turbo_exp2_bc"), restrict_vocab=False)
-    #regr(Path("inferences/delete_me"), restrict_vocab=False)
+    #config: InferenceConfig = load_config(Path("inferences/turbo_exp2_bc") / "config.yaml")
+    config: InferenceConfig = load_config(Path("inferences/delete_me") / "config.yaml")
+    build_predictors(config = config, restrict_vocab=False)
