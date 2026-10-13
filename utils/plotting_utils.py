@@ -39,6 +39,7 @@ labels_dict_long = {
     "laptev_kw_est": "Laptev Ginsburg Confidence",
     "laptev_kw_from_time_align": "Laptev Ginsburg Confidence (per keyword)",
     "laptev_alpha": "Laptev Ginsburg Confidence",
+    "dispersion_kw": "Dispersion"
 }
 
 labels_dict_short = {

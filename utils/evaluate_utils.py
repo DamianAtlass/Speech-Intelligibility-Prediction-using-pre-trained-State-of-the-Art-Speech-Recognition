@@ -781,10 +781,35 @@ class MetricWrapper:
         for kw_label in grid_kw_labels:
             possible_keywords: list[str] = grid_kw_vocab[kw_label]
 
+            def return_focussed_word_and_consider_old_format(forced_alignment_options: dict):
+                # todo rather read the original data accordingly
+
+                # old format:
+                #forced_alignment_options = {'position': 1, 'token_id_or_word': ' green'}
+
+                # new format:
+                # focus = {"position": kw_pos, "token_or_id": kw_token}
+                # forced_alignment_options = {
+                #     "stop_after_alignment": True,
+                #     "focus": focus,
+                #     "alignments": default_alignment.copy(),
+                # }
+
+                if "position" in forced_alignment_options.keys():
+                    #old to new (only for keyword_only)
+                    forced_alignment_options = {
+                        "stop_after_alignment": False,
+                        "focus": forced_alignment_options,
+                        "alignments": {forced_alignment_options["position"]: forced_alignment_options["token_id_or_word"]}
+                    }
+
+                return forced_alignment_options["focus"]["token_or_id"].strip()
+
+
             # take the original transcription without alignment and all other of the keyword position
             rows_single_keyword_position = rows_single_audio[
                 rows_single_audio["forced_alignment_options"].apply(
-                    lambda x: x["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
+                    lambda x: return_focussed_word_and_consider_old_format(x) in possible_keywords if isinstance(x, dict) else True
                 )]
 
             assert len(rows_single_keyword_position) == len(possible_keywords) or len(
