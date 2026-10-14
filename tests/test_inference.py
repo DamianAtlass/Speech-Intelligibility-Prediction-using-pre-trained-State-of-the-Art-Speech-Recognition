@@ -7,7 +7,9 @@ load_dotenv() # needs to be before 'import torch'!
 import torch
 from utils.cuda_utils import select_device
 import shutil
-from utils.paths import GRID_FOLDER, TEST_FOLDER
+from utils.paths import TEST_FOLDER
+
+device = select_device()
 
 @pytest.mark.parametrize("time_stamps", [False,True])
 @pytest.mark.parametrize("extract_logprobs", [False,True])
@@ -28,7 +30,6 @@ def test_batch_inference_whisper(time_stamps, extract_logprobs):
         shutil.rmtree(config.output_path)
 
     dataset_dict = get_dataset_dict(config.data)
-    device = select_device()
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset_dict, device)
 
@@ -57,7 +58,6 @@ def test_inference_with_multiple_runs():
         shutil.rmtree(config.output_path)
 
     dataset_dict = get_dataset_dict(config.data)
-    device = select_device()
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset_dict, device)
 
@@ -77,12 +77,11 @@ def test_inference_expected_exception():
         word_timestamps=False,
         beam_size=2,
         model=ModelConfig(name="whisper", model_type="tiny", path=None),
-    ) #todo add run argument here
+    )
     if config.output_path.exists():
         shutil.rmtree(config.output_path)
 
     dataset_dict = get_dataset_dict(config.data)
-    device = select_device()
     config.output_path.mkdir(exist_ok=config.debug)
     try:
         inference(config, dataset_dict, device)
@@ -108,7 +107,6 @@ def test_forced_alignment_inference_whisper_only_keyword():
         shutil.rmtree(config.output_path)
 
     dataset_dict = get_dataset_dict(config.data)
-    device = select_device()
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset_dict, device)
     assert sum(1 for _ in (config.output_path/"data").iterdir()) == 37
@@ -134,7 +132,6 @@ def test_forced_alignment_inference_whisper_full_sequence():
         shutil.rmtree(config.output_path)
 
     dataset_dict = get_dataset_dict(config.data)
-    device = select_device()
     config.output_path.mkdir(exist_ok=config.debug)
     inference(config, dataset_dict, device)
     assert sum(1 for _ in (config.output_path/"data").iterdir()) == 37

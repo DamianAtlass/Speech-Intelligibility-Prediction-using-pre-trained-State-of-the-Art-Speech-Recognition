@@ -152,6 +152,4 @@ def build_predictors(
 
 
 if __name__ == '__main__':
-    #config: InferenceConfig = load_config(Path("inferences/turbo_exp2_bc") / "config.yaml")
-    config: InferenceConfig = load_config(Path("inferences/delete_me") / "config.yaml")
-    build_predictors(config = config, restrict_vocab=False)
+    pass
