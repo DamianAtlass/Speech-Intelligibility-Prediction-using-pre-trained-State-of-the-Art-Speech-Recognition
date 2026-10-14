@@ -52,15 +52,18 @@ labels_dict_short = {
     "machine_transcripts_len": "len(transcripts)",
     "empty transcripts": "# of empty transcrips in %",
     "mtd": "MTD",
-    "laptev": "Laptev-Ginsburg-Confidence",
+    "laptev": "Lapt.-Gins.-Confidence",
     "spearman_correlation": "Correlation",
     "mutual_information": "Mutual Informaiton",
     "tad_kw": "TAD",
     "entropy_kw_est": "entropy",
     "entropy_kw_from_time_align": "entropy",
-    "laptev_kw_est": "Laptev-Ginsburg-Confidence",
+    "laptev_kw_est": "Lapt.-Gins.-Confidence",
     "laptev_kw_from_time_align": "Lapt.-Gins.-Confidence",
     "laptev_alpha": "Laptev-Ginsburg-Confidence",
+    "tad_kw_var": "var. of TAD",
+    "entropy_kw_var": "var. of entropy",
+    "dispersion_kw": "Dispersion",
 }
 def get_label(s: str, l: Literal["long", "short"] = "long") -> str:
     return labels_dict_long[s] if l=="long" else labels_dict_short[s]
@@ -516,7 +519,7 @@ def box_or_barplot_microscopic_x_to_snr(
         hB.set_visible(False)
         hG.set_visible(False)
     elif box_or_bar=="bar":
-        space_between_plots = 2
+        space_between_plots = 3
         n_groups = 3
 
         # Increase this to make the bars thicker
@@ -930,8 +933,7 @@ class PredictorPlots:
         width = 0.6 / max(len(grid_kw_labels), 1)
         bar_spacing = 0.03
 
-        fig, ax = plt.subplots(figsize=(len(metrics)*2 +2, 7))
-
+        fig, ax = plt.subplots(figsize=(max([len(metrics)*2 + 2, 6]), 7))
         for i, (keyword, color) in enumerate(zip(grid_kw_labels, kw_colors_short)):
             keyword_scores = []
 
@@ -950,7 +952,7 @@ class PredictorPlots:
 
         ax.set_ylabel("Adjusted score")
         title = f"Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
-        plt.title(wrap_text(title, 65))
+        plt.title(wrap_text(title, 45 + 5*len(metrics)))
         plt.grid()
 
         ax.set_yticks(torch.linspace(0, 1, steps=11))

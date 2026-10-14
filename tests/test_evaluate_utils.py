@@ -154,3 +154,7 @@ def test_new_entropy():
     a = LaptevGinsburgConfidence.tsallis_entropy(t) #5.7 for 10
 
     assert round(a.item(), 5) ==  3.47782
+
+def test_exponentially_normalized_entropy_based_confidence():
+    tmp = torch.full((51,), 1 / 51)
+    assert 0 == LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(tmp, 0.3)

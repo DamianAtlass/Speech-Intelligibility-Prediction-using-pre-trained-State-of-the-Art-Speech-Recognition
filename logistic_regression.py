@@ -1,6 +1,4 @@
 from utils.new_config_dataclass import InferenceConfig, load_config
-from utils.logging_utils import catch_time
-from utils.evaluate_utils import get_data
 
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
@@ -65,23 +63,6 @@ def train_and_evaluate_predictors(
             ["tad_kw"],
             ["entropy_kw_from_time_align", "tad_kw"],
         ]
-
-
-    if df is None:
-        assert config is not None
-        assert restrict_vocab is not None
-        with catch_time() as t:
-            df = get_data(
-                model_name=config.model.name,
-                output_path=config.output_path,
-                dataset_type=config.data.test_split.dataset_type,
-                extract_logprobs=config.extract_logprobs,
-                word_timestamps=config.word_timestamps,
-                restrict_vocab=restrict_vocab,
-                device=device)
-        print(f"Reading the generated files took: {t():.4f} s")
-
-    df["model_type"] = config.model.model_type
 
     n_splits = 5
     keywords = ["color", "letter", "digit"]
@@ -152,6 +133,4 @@ def build_predictors(
 
 
 if __name__ == '__main__':
-    #config: InferenceConfig = load_config(Path("inferences/turbo_exp2_bc") / "config.yaml")
-    config: InferenceConfig = load_config(Path("inferences/delete_me") / "config.yaml")
-    build_predictors(config = config, restrict_vocab=False)
+    pass

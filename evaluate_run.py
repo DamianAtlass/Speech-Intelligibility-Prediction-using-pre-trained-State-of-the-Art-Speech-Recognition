@@ -12,7 +12,7 @@ from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_for
 from logistic_regression import build_predictors
 from utils.cuda_utils import select_device
 
-evaluation_rows = [
+rows_prediction_normal = [
     ["macroscopic_entropy"],
     ["mtd"],
     ["laptev"],
@@ -34,7 +34,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         if restrict_vocab and config.model.name == "parakeet":
             continue
         with catch_time() as t:
-            print(f"Get df...")
+            print(f"Get data...")
             df = get_data(
                 model_name=config.model.name,
                 output_path=config.output_path,
@@ -50,7 +50,12 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             evaluate_forced_alignment_run(config, df, restrict_vocab)
         else:
             evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
-            build_predictors(df=df, config=config, restrict_vocab=restrict_vocab, device=device)
+            build_predictors(
+                df=df,
+                config=config,
+                restrict_vocab=restrict_vocab,
+                device=device,
+                metrics_list=rows_prediction_normal)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

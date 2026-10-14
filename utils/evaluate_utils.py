@@ -12,6 +12,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 
+from logistic_regression import build_predictors
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
@@ -371,6 +372,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 "snr": group["snr"].iloc[0],
                 "reference_kw": group["reference_kw"].iloc[0],
                 "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+                "wer_human_kw": group["wer_human_kw"].iloc[0],
                 "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
                 "entropy_kw_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
             })
@@ -395,7 +397,7 @@ def evaluate_individual_run(config: InferenceConfig,
             box_or_barplot_microscopic_x_to_snr(
                 grouped_df,
                 col_name=m,
-                col_label="varience of the TAD",
+                col_label=col_label,
                 output_path=output_path)
 
             boxplot_microscopic_special_metric_per_keyword(
@@ -414,6 +416,12 @@ def evaluate_individual_run(config: InferenceConfig,
                 multiple_runs=True,
                 output_path=output_path)
 
+        build_predictors(
+            df=df,
+            config=config,
+            restrict_vocab=restrict_vocab,
+            metrics_list=[[k] for k in labels.keys()])
+
     # dumping of summary should be the last action to symbolize that all went well on a short look
     with open(file_name_summary, 'w') as f:
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
@@ -422,6 +430,7 @@ def evaluate_individual_run(config: InferenceConfig,
 def evaluate_forced_alignment_run(config: InferenceConfig,
                                   df_forced_alignment_run: pd.DataFrame,
                                   restrict_vocab: bool) -> None:
+    results_dir = config.output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
 
     print("Creating the grouped dataframe...", end="")
     with catch_time() as t:
@@ -432,7 +441,7 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
     num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
     print(f"{num_change_words = }")
 
-    output_dir = config.output_path/"dispersion_plots"
+    output_dir = results_dir/"dispersion_plots"
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -450,6 +459,11 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
         special_metric="spearman_correlation",
         output_path=output_dir)
 
+    build_predictors(
+        df=grouped_df,
+        config=config,
+        restrict_vocab=restrict_vocab,
+        metrics_list=[["dispersion_kw"]])
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
     def tmp(x):
@@ -877,7 +891,7 @@ class MetricWrapper:
         return tad_per_kw
 
     @staticmethod
-    def laptev_ginsbrug_confidence(posteriors: torch.Tensor, alpha: float = 0.99):
+    def laptev_ginsbrug_confidence(posteriors: torch.Tensor, alpha: float):
         result = [LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(p, alpha=alpha) for p in posteriors]
         result = torch.hstack(result)
         return result
@@ -889,10 +903,10 @@ class LaptevGinsburgConfidence:
     # 0.9: -0.74
     # 0.95:
     @classmethod
-    def exponentially_normalized_entropy_based_confidence(cls, p: torch.Tensor, alpha: float = 0.99) -> torch.Tensor:
+    def exponentially_normalized_entropy_based_confidence(cls, p: torch.Tensor, alpha: float) -> torch.Tensor:
         l = len(p)
         tmp = torch.full((l,), 1 / l)
-        max_possible_value = cls.tsallis_entropy(tmp)
+        max_possible_value = cls.tsallis_entropy(tmp, alpha)
 
         entropy = cls.tsallis_entropy(p, alpha=alpha)
 
@@ -905,7 +919,7 @@ class LaptevGinsburgConfidence:
 
 
     @staticmethod
-    def tsallis_entropy(p: torch.Tensor, alpha: float = 0.3) -> torch.Tensor:
+    def tsallis_entropy(p: torch.Tensor, alpha: float) -> torch.Tensor:
         assert len(p.shape) == 1
         k = 1 #scale parameter
         result = (k/(alpha-1)) * (1 - p.pow(alpha).sum())
@@ -966,10 +980,10 @@ def get_data(
         counter = 0
 
         # read files
-        for file in tqdm(data_path.iterdir(), total=len(list(data_path.iterdir()))):
+        for counter, file in enumerate(tqdm(data_path.iterdir(), total=len(list(data_path.iterdir())))):
             if counter == 500:
                 pass
-            counter += 1
+
             with open(file) as f:
                 json_file: dict = json.load(f)
 
@@ -1148,6 +1162,11 @@ def get_data(
                     posteriors = posteriors[:, grid_vocab_whisper_tokens]
                     posteriors /= posteriors.sum(dim=-1, keepdim=True)
 
+                    for i,b in zip(range(posteriors.shape[0]), posteriors.sum(dim=1).isnan()):
+                        if b:
+                            posteriors[i] = torch.full(size=(len(grid_vocab_whisper_tokens),), fill_value=1/len(grid_vocab_whisper_tokens))
+
+
                 num_tokens = len(decoded_tokens_without_timestamp_tokens)
                 assert posteriors.shape[0] == num_tokens
                 assert torch.round(posteriors.sum(), decimals=2).item() == num_tokens
@@ -1161,7 +1180,7 @@ def get_data(
                 macroscopic_entropy.append(float(entropies_per_token.mean()))
 
                 #laptev
-                laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors)
+                laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=0.7)
                 laptev.append(float(laptev_per_token.min()))
 
                 laptev_per_token_alpha: dict = {a:MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=a) for a in
