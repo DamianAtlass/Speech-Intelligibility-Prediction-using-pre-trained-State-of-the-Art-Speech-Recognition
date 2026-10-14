@@ -94,7 +94,6 @@ def train_and_evaluate_predictors(
             "used metrics": metrics,
             "n splits": n_splits,
             "results": [],
-            "scoring metric": None
         }
 
         kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]

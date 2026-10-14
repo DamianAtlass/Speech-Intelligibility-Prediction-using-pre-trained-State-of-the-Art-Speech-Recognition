@@ -403,7 +403,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_name=m,
                 special_metric="spearman_correlation",
                 col_compare_against_ref_kw="human_transcript_kw",
-                col_title=f"{col_label} over different runs",
+                multiple_runs=True,
                 output_path=output_path)
 
             boxplot_microscopic_special_metric_per_keyword(
@@ -411,7 +411,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 col_name=m,
                 special_metric="mutual_information",
                 col_compare_against_ref_kw="human_transcript_kw",
-                col_title=f"{col_label} over different runs",
+                multiple_runs=True,
                 output_path=output_path)
 
     # dumping of summary should be the last action to symbolize that all went well on a short look
@@ -452,7 +452,10 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
 
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
-    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: x["focus"]["position"] if x is not None else False))
+    def tmp(x):
+        x = consider_old_value(x)
+        return x["focus"]["position"] if x is not None else False
+    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: tmp(x)))
     keyword_idx.remove(False)
 
     original_transcript: str = group[group["forced_alignment_options"].apply(lambda x: x is None)]["machine_transcript"].iloc[0]
@@ -781,35 +784,16 @@ class MetricWrapper:
         for kw_label in grid_kw_labels:
             possible_keywords: list[str] = grid_kw_vocab[kw_label]
 
-            def return_focussed_word_and_consider_old_format(forced_alignment_options: dict):
-                # todo rather read the original data accordingly
+            def tmp(forced_alignment_options: dict):
 
-                # old format:
-                #forced_alignment_options = {'position': 1, 'token_id_or_word': ' green'}
-
-                # new format:
-                # focus = {"position": kw_pos, "token_or_id": kw_token}
-                # forced_alignment_options = {
-                #     "stop_after_alignment": True,
-                #     "focus": focus,
-                #     "alignments": default_alignment.copy(),
-                # }
-
-                if "position" in forced_alignment_options.keys():
-                    #old to new (only for keyword_only)
-                    forced_alignment_options = {
-                        "stop_after_alignment": False,
-                        "focus": forced_alignment_options,
-                        "alignments": {forced_alignment_options["position"]: forced_alignment_options["token_id_or_word"]}
-                    }
-
+                forced_alignment_options = consider_old_value(forced_alignment_options)
                 return forced_alignment_options["focus"]["token_or_id"].strip()
 
 
             # take the original transcription without alignment and all other of the keyword position
             rows_single_keyword_position = rows_single_audio[
                 rows_single_audio["forced_alignment_options"].apply(
-                    lambda x: return_focussed_word_and_consider_old_format(x) in possible_keywords if isinstance(x, dict) else True
+                    lambda x: tmp(x) in possible_keywords if isinstance(x, dict) else True
                 )]
 
             assert len(rows_single_keyword_position) == len(possible_keywords) or len(
@@ -1318,3 +1302,28 @@ def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path, r
 
     grouped_df.to_pickle(file_name_grouped_df)
     return grouped_df
+
+def consider_old_value(forced_alignment_options: dict):
+    # todo rather read the original data accordingly
+
+    # old format:
+    # forced_alignment_options = {'position': 1, 'token_id_or_word': ' green'}
+
+    # new format:
+    # focus = {"position": kw_pos, "token_or_id": kw_token}
+    # forced_alignment_options = {
+    #     "stop_after_alignment": True,
+    #     "focus": focus,
+    #     "alignments": default_alignment.copy(),
+    # }
+    if forced_alignment_options is None:
+        return forced_alignment_options
+    if "position" in forced_alignment_options.keys():
+        # old to new (only for keyword_only)
+        forced_alignment_options = {
+            "stop_after_alignment": False,
+            "focus": {'position': forced_alignment_options["position"],
+                      'token_or_id': forced_alignment_options["token_id_or_word"]},
+            "alignments": {forced_alignment_options["position"]: forced_alignment_options["token_id_or_word"]}
+        }
+    return forced_alignment_options

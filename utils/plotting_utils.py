@@ -39,7 +39,9 @@ labels_dict_long = {
     "laptev_kw_est": "Laptev Ginsburg Confidence",
     "laptev_kw_from_time_align": "Laptev Ginsburg Confidence (per keyword)",
     "laptev_alpha": "Laptev Ginsburg Confidence",
-    "dispersion_kw": "Dispersion"
+    "dispersion_kw": "Dispersion",
+    "tad_kw_var": "varience of the TAD",
+    "entropy_kw_var": "varience of the entropy",
 }
 
 labels_dict_short = {
@@ -789,6 +791,7 @@ def boxplot_microscopic_special_metric_per_keyword(
         col_name: Literal["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
         col_compare_against_ref_kw: Literal["machine_transcript_kw_est", "machine_transcript_kw_from_time_align", "human_transcript_kw"],  #kw column, estimated_transcript_kw for calibration
         special_metric: Literal["spearman_correlation", "mutual_information"] = "spearman_correlation",
+        multiple_runs: bool = False,
         output_path: Path|None = None):
     """
     3 boxplots for either spearman correlation or mutual information
@@ -865,8 +868,8 @@ def boxplot_microscopic_special_metric_per_keyword(
                      # meanline=True,
                      showmeans=True,
                      )
-
-    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {get_label(col_name)} (total and for each keyword{cali})"
+    runs = " over multiple runs" if multiple_runs else ""
+    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {get_label(col_name)} (total and for each keyword{cali}){runs}"
     plt.title(wrap_text(title, 65))
 
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
@@ -903,6 +906,7 @@ class PredictorPlots:
 
         plt.figure(figsize=(10, 7))
         plt.bar(labels, scores, width=0.8)
+        plt.grid()
 
         plt.ylabel("absolute mean error")
         title = f"Average error of linear regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
@@ -937,9 +941,9 @@ class PredictorPlots:
 
             offset = (i - (len(grid_kw_labels) - 1) / 2) * (width + bar_spacing)
             ax.bar(
-                x_ticks + offset,
-                keyword_scores,
-                width,
+                x=x_ticks + offset,
+                height=keyword_scores,
+                width=width,
                 label=keyword,
                 color = color,
             )
@@ -947,7 +951,9 @@ class PredictorPlots:
         ax.set_ylabel("Adjusted score")
         title = f"Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
         plt.title(wrap_text(title, 65))
+        plt.grid()
 
+        ax.set_yticks(torch.linspace(0, 1, steps=11))
         ax.set_xticks(x_ticks)
         ax.set_xticklabels(metrics)
         ax.legend(title="Keyword")

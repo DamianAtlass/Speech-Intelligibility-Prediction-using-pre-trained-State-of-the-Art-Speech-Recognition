@@ -248,13 +248,15 @@ def inference_whisper_with_forced_alignment(
                     "focus": focus,
                     "alignments": {kw_pos: kw_token},
                  }
-            else:
+            elif config.forced_alignment == "full_sequence":
                 forced_alignment_options = {
                     "stop_after_alignment": True,
                     "focus": focus,
                     "alignments": default_alignment.copy(),
                 }
                 forced_alignment_options["alignments"][kw_pos] = kw_token
+            else:
+                raise ValueError
             counter+=1
             logger.info(f"{forced_alignment_options = } ({counter}/{expected_length})")
             inference_whisper(model, config, sample, device, run, counter, forced_alignment_options)

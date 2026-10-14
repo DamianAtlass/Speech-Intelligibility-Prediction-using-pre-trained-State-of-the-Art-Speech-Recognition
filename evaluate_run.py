@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run
 from logistic_regression import build_predictors
+from utils.cuda_utils import select_device
 
 evaluation_rows = [
     ["macroscopic_entropy"],
@@ -33,6 +34,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         if restrict_vocab and config.model.name == "parakeet":
             continue
         with catch_time() as t:
+            print(f"Get df...")
             df = get_data(
                 model_name=config.model.name,
                 output_path=config.output_path,
