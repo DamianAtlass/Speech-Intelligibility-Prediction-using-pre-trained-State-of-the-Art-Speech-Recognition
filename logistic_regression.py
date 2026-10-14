@@ -43,13 +43,11 @@ def get_X_and_y(df: pd.DataFrame, metrics: list[str], kw_number: int | None = No
 
 
 def train_and_evaluate_predictors(
-        df: pd.DataFrame | None = None,
-        config: InferenceConfig | None = None,
-        restrict_vocab: bool | None = None,
-        metrics_list: list[list[str]] = None,
-        device: torch.device | None = None,) -> list:
-    if not device:
-        device = torch.device("cpu")
+        df: pd.DataFrame,
+        metrics_list: list[list[str]],
+        output_path: Path,
+) -> list:
+
 
     if metrics_list is None:
         metrics_list = [
@@ -96,7 +94,6 @@ def train_and_evaluate_predictors(
             scoring_metric = 'accuracy' if metric_is_micro else "neg_mean_absolute_error"
             result["scoring metric"] = scoring_metric
             scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_metric)
-            print(scores)
             valid_rows = len(X)
             non_valid_rows = (len(df)-valid_rows)/len(df)
             result["non-valid rows (percent)"] = non_valid_rows*100
@@ -106,30 +103,24 @@ def train_and_evaluate_predictors(
             metric_results["results"].append(result)
         results_list.append(metric_results)
 
-    results_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
-
-    with open(config.output_path / results_dir / "cross_validation.json", 'w') as f:
+    with open(output_path / "cross_validation.json", 'w') as f:
         json.dump(results_list, f, indent=4)
     return results_list
 
 
 
 
-def build_predictors(
-        df: pd.DataFrame | None = None,
-        config: InferenceConfig | None = None,
-        restrict_vocab: bool | None = None,
-        metrics_list: list[list[str]] = None,
-        device: torch.device | None = None,):
+def build_predictors(df: pd.DataFrame,
+                     metrics_list: list[list[str]],
+                     output_path: Path):
 
-    results: list = train_and_evaluate_predictors(df=df, config=config, restrict_vocab=restrict_vocab, metrics_list=metrics_list, device=device)
-    results_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+    results: list = train_and_evaluate_predictors(df=df, metrics_list=metrics_list, output_path=output_path)
 
     r = [o for o in results if o["micro/macro"] == "macroscopic"]
-    PredictorPlots.plot_macroscopoic(r, config.output_path / results_dir)
+    PredictorPlots.plot_macroscopoic(r, output_path)
 
     r = [o for o in results if o["micro/macro"] == "microscopic"]
-    PredictorPlots.plot_microscopic(r, config.output_path / results_dir)
+    PredictorPlots.plot_microscopic(r, output_path)
 
 
 if __name__ == '__main__':

@@ -31,10 +31,14 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
     config: InferenceConfig = load_config(path/"config.yaml")
     for restrict_vocab in [False, True]:
+        if config.forced_alignment and restrict_vocab:
+            continue
+        logger.info(f"{restrict_vocab = }")
+        result_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
         if restrict_vocab and config.model.name == "parakeet":
             continue
         with catch_time() as t:
-            print(f"Get data...")
+            logger.info(f"Get data...")
             df = get_data(
                 model_name=config.model.name,
                 output_path=config.output_path,
@@ -43,19 +47,14 @@ def evaluate_run(path: Path, device: torch.device | None = None):
                 word_timestamps=config.word_timestamps,
                 restrict_vocab=restrict_vocab,
                 device=device)
-        print(f"Reading the generated files took: {t():.4f} s")
+        logger.info(f"Reading the generated files took: {t()/60:.2f} m")
 
         df["model_type"] = config.model.model_type
         if config.forced_alignment:
             evaluate_forced_alignment_run(config, df, restrict_vocab)
         else:
             evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
-            build_predictors(
-                df=df,
-                config=config,
-                restrict_vocab=restrict_vocab,
-                device=device,
-                metrics_list=rows_prediction_normal)
+            build_predictors(df=df, metrics_list=rows_prediction_normal, output_path=config.output_path / result_dir)
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

@@ -389,16 +389,18 @@ def evaluate_individual_run(config: InferenceConfig,
             "tad_kw_var": "varience of the TAD",
             "entropy_kw_var": "varience of the entropy",
         }
+        dir_runs = dir_plots / "multiple_runs"
+        dir_runs.mkdir(parents=False)
 
         for m in ["tad_kw_var", "entropy_kw_var"]:
-            output_path = dir_plots/ "multiple_runs_plots" / m
-            output_path.mkdir(exist_ok=True, parents=True)
+            out = dir_runs / m
+            out.mkdir(exist_ok=True, parents=True)
             col_label = labels[m]
             box_or_barplot_microscopic_x_to_snr(
                 grouped_df,
                 col_name=m,
                 col_label=col_label,
-                output_path=output_path)
+                output_path=out)
 
             boxplot_microscopic_special_metric_per_keyword(
                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
@@ -406,7 +408,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 special_metric="spearman_correlation",
                 col_compare_against_ref_kw="human_transcript_kw",
                 multiple_runs=True,
-                output_path=output_path)
+                output_path=out)
 
             boxplot_microscopic_special_metric_per_keyword(
                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
@@ -414,13 +416,12 @@ def evaluate_individual_run(config: InferenceConfig,
                 special_metric="mutual_information",
                 col_compare_against_ref_kw="human_transcript_kw",
                 multiple_runs=True,
-                output_path=output_path)
+                output_path=out)
 
         build_predictors(
-            df=df,
-            config=config,
-            restrict_vocab=restrict_vocab,
-            metrics_list=[[k] for k in labels.keys()])
+            df=grouped_df,
+            metrics_list=[[k] for k in labels.keys()],
+            output_path=dir_runs)
 
     # dumping of summary should be the last action to symbolize that all went well on a short look
     with open(file_name_summary, 'w') as f:
@@ -444,26 +445,24 @@ def evaluate_forced_alignment_run(config: InferenceConfig,
     output_dir = results_dir/"dispersion_plots"
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    dir_disp_plots = output_dir / "plots" / "dispersion"
+    dir_disp_plots.mkdir(exist_ok=True, parents=True)
 
     box_or_barplot_microscopic_x_to_snr(
         df=grouped_df,
         col_name="dispersion_kw",
         col_label="dispersion",
         box_or_bar="bar",
-        output_path=output_dir)
+        output_path=dir_disp_plots)
 
     boxplot_microscopic_special_metric_per_keyword(
         df=grouped_df,
         col_name="dispersion_kw",
         col_compare_against_ref_kw="human_transcript_kw",
         special_metric="spearman_correlation",
-        output_path=output_dir)
+        output_path=dir_disp_plots)
 
-    build_predictors(
-        df=grouped_df,
-        config=config,
-        restrict_vocab=restrict_vocab,
-        metrics_list=[["dispersion_kw"]])
+    build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots)
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
     def tmp(x):
@@ -913,8 +912,10 @@ class LaptevGinsburgConfidence:
         dividend = torch.exp(-entropy) - torch.exp(-max_possible_value)
         divisor = 1 - torch.exp(-max_possible_value)
         result = dividend / divisor
-
-        assert result>=0
+        try:
+            assert result>=0
+        except AssertionError:
+            assert torch.allclose(torch.Tensor([torch.exp(-entropy)]), torch.tensor([torch.exp(-max_possible_value)]))
         return result
 
 
@@ -1169,8 +1170,7 @@ def get_data(
 
                 num_tokens = len(decoded_tokens_without_timestamp_tokens)
                 assert posteriors.shape[0] == num_tokens
-                assert torch.round(posteriors.sum(), decimals=2).item() == num_tokens
-
+                assert torch.round(posteriors.sum(), decimals=2).item() == num_tokens, (torch.round(posteriors.sum(), decimals=2).item(), num_tokens)
                 #calculate mean temporal distance
                 mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors))
 
