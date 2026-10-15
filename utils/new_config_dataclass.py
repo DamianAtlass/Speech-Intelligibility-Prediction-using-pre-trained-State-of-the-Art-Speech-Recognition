@@ -109,6 +109,11 @@ class InferenceConfig(BaseConfig):
     def __post_init__(self):
         super().__post_init__()
 
+        if not (not self.forced_alignment or
+           self.forced_alignment=="full_sequence" or
+           self.forced_alignment=="only_keyword"):
+            raise ValueError(f"{self.forced_alignment} is not a possible argument for forced_alignment!")
+
 
 @dataclass(kw_only=True)
 class TrainingConfig(BaseConfig):
