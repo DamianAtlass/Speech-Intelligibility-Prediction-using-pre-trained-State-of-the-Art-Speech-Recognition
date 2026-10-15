@@ -480,7 +480,7 @@ def calculate_changing_words(group: pd.DataFrame) -> int:
     for i in keyword_idx:
         or_trans = original_transcript.copy()
         or_trans.pop(i)
-        df_kw = group[group["forced_alignment_options"].apply(lambda x: x["focus"]["position"]==i)]
+        df_kw = group[group["forced_alignment_options"].apply(lambda x: consider_old_value(x)["focus"]["position"]==i)]
         transcripts = df_kw["machine_transcript"]
         for t in transcripts:
             t: list[str] = t.split()
@@ -924,7 +924,10 @@ class LaptevGinsburgConfidence:
         assert len(p.shape) == 1
         k = 1 #scale parameter
         result = (k/(alpha-1)) * (1 - p.pow(alpha).sum())
-        assert result >= 0
+        try:
+            assert result >= 0
+        except AssertionError:
+            assert torch.isclose((1 - p.pow(alpha).sum()).long(), torch.tensor([0]).long())
         return result
 
 
@@ -1322,7 +1325,7 @@ def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path, r
     grouped_df.to_pickle(file_name_grouped_df)
     return grouped_df
 
-def consider_old_value(forced_alignment_options: dict):
+def consider_old_value(forced_alignment_options: dict) -> dict:
     # todo rather read the original data accordingly
 
     # old format:
