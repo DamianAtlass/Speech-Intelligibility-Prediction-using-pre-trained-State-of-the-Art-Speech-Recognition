@@ -908,6 +908,7 @@ class PredictorPlots:
             labels.append("\n".join(get_label(o, "short") for o in item.get("used metrics")))
 
         plt.figure(figsize=(10, 7))
+        labels = [f"{s:.2f}\n{l}" for l,s in zip(labels, scores)]
         plt.bar(labels, scores, width=0.8)
         plt.grid()
 
@@ -928,6 +929,7 @@ class PredictorPlots:
 
         metrics = [o["used metrics"] for o in results]
         metrics = ["\n".join(get_label(v, "short") + ("*" if "est" in v else "**") for v in o) for o in metrics]
+        metrics = ["\n"+m for m in metrics]
 
         x_ticks = np.arange(len(metrics))
         width = 0.6 / max(len(grid_kw_labels), 1)
@@ -949,6 +951,8 @@ class PredictorPlots:
                 label=keyword,
                 color = color,
             )
+            for x, score in zip(x_ticks + offset, keyword_scores):
+                ax.text(x, -0.03, s=f"{score:.2f}", ha="center", va="top", fontsize=8, rotation=0, clip_on=False)
 
         ax.set_ylabel("Adjusted score")
         title = f"Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
