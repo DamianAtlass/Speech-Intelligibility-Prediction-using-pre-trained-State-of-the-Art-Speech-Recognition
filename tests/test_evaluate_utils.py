@@ -150,10 +150,10 @@ def test_calculate_mtd():
     assert round(mtd, 5) == round(3**0.5, 5)
 
 def test_new_entropy():
-    t = torch.Tensor([0.1, 0.2, 0.1, 0.3, 0.1, 0.2])
-    a = LaptevGinsburgConfidence.tsallis_entropy(t) #5.7 for 10
+   t = torch.Tensor([0.1, 0.2, 0.1, 0.3, 0.1, 0.2])
+   a = LaptevGinsburgConfidence.tsallis_entropy(t, 0.8)
 
-    assert round(a.item(), 5) ==  3.47782
+   assert round(a.item(), 5) ==  2.04519
 
 def test_exponentially_normalized_entropy_based_confidence():
     tmp = torch.full((51,), 1 / 51)
