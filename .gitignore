@@ -20,3 +20,4 @@ __pycache__/
 /chained_tasks
 /nemo_experiments/
 /tests/nemo_experiments/
+/results/

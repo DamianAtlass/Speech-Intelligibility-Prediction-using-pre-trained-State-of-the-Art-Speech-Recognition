@@ -4,7 +4,6 @@ from abc import abstractmethod
 from typing import Tuple, List, Literal, cast, Callable
 import pandas as pd
 import torch
-from pandas import DataFrame
 from torch.distributions import Categorical
 from pathlib import Path
 import logging
@@ -137,7 +136,10 @@ def plot_regr_lines(df: pd.DataFrame, config: InferenceConfig):
 def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame,
                             restrict_vocab: bool) -> None:
-    results_dir = config.output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    results_dir = get_results_dir(config.output_path) / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    if results_dir.exists():
+        shutil.rmtree(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
     file_name_summary = results_dir / "summary.json"
 
     # check for missing rows
@@ -428,24 +430,24 @@ def evaluate_individual_run(config: InferenceConfig,
         json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
-def evaluate_forced_alignment_run(config: InferenceConfig,
-                                  df_forced_alignment_run: pd.DataFrame,
-                                  restrict_vocab: bool) -> None:
-    results_dir = config.output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+def evaluate_forced_alignment_run(
+        df_forced_alignment_run: pd.DataFrame,
+        restrict_vocab: bool,
+        output_path: Path,) -> None:
+    vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+    df_dir = output_path / vocab_dir
+    df_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Creating the grouped dataframe...", end="")
+    print("Getting the grouped dataframe...", end="")
     with catch_time() as t:
-        grouped_df: pd.DataFrame = get_grouped_data(df_forced_alignment_run, config.output_path, restrict_vocab, )
+        grouped_df: pd.DataFrame = get_grouped_forced_align_df(df_forced_alignment_run, df_dir)
 
     print(f"took: {t():.2f} s.")
 
     num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
     print(f"{num_change_words = }")
 
-    output_dir = results_dir/"dispersion_plots"
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    dir_disp_plots = output_dir / "plots" / "dispersion"
+    dir_disp_plots = get_results_dir(output_path) / vocab_dir / "plots" / "dispersion"
     dir_disp_plots.mkdir(exist_ok=True, parents=True)
 
     box_or_barplot_microscopic_x_to_snr(
@@ -939,12 +941,14 @@ def get_data(
     word_timestamps: bool,
     restrict_vocab: bool,
     device: torch.device) -> pd.DataFrame:
+    df_dir = output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    df_dir.mkdir(parents=False, exist_ok=True)
 
-    results_dir = output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
-    results_dir.mkdir(parents=False, exist_ok=True)
+    results_dir = get_results_dir(output_path) / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+    results_dir.mkdir(parents=True, exist_ok=True)
 
-    file_name_df = results_dir / "df.pkl"
-    file_name_df_grouped = results_dir / "df_grouped.pkl"
+    file_name_df = df_dir / "df.pkl"
+    file_name_df_grouped = df_dir / "df_grouped.pkl"
     file_name_summary = results_dir / "summary.json"
     if file_name_df.exists():
         print("Load df from disk.")
@@ -1297,10 +1301,9 @@ def get_data(
 
     return df
 
-def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path, restrict_vocab: bool):
-    results_dir = output_path / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
-
-    file_name_grouped_df = results_dir / "df_grouped.pkl"
+def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_path: Path):
+    output_path.mkdir(parents=True, exist_ok=True)
+    file_name_grouped_df = output_path/"df_grouped.pkl"
     if file_name_grouped_df.exists():
         print("Load df from disk.")
         grouped_df: pd.DataFrame = pd.read_pickle(file_name_grouped_df)
@@ -1322,7 +1325,7 @@ def get_grouped_data(df_forced_alignment_run: pd.DataFrame, output_path: Path, r
         })
     grouped_df = grouped_df.apply(compute_stats).reset_index()
 
-    grouped_df.to_pickle(file_name_grouped_df)
+    grouped_df.to_pickle(output_path/file_name_grouped_df)
     return grouped_df
 
 def consider_old_value(forced_alignment_options: dict) -> dict:
@@ -1349,3 +1352,9 @@ def consider_old_value(forced_alignment_options: dict) -> dict:
             "alignments": {forced_alignment_options["position"]: forced_alignment_options["token_id_or_word"]}
         }
     return forced_alignment_options
+
+def get_results_dir(output_path: Path) -> Path:
+    path_list = list(output_path.parts)
+    idx = path_list.index("inferences")
+    path_list[idx] = "results"
+    return Path("/".join(path_list))

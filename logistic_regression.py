@@ -113,7 +113,8 @@ def train_and_evaluate_predictors(
 def build_predictors(df: pd.DataFrame,
                      metrics_list: list[list[str]],
                      output_path: Path):
-
+    output_path = output_path / "predictors"
+    output_path.mkdir(parents=True, exist_ok=True)
     results: list = train_and_evaluate_predictors(df=df, metrics_list=metrics_list, output_path=output_path)
 
     r = [o for o in results if o["micro/macro"] == "macroscopic"]

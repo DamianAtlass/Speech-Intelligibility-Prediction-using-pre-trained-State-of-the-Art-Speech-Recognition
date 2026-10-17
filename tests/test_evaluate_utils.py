@@ -1,4 +1,4 @@
-from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence
+from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence, get_results_dir
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -158,3 +158,14 @@ def test_new_entropy():
 def test_exponentially_normalized_entropy_based_confidence():
     tmp = torch.full((51,), 1 / 51)
     assert 0 == LaptevGinsburgConfidence.exponentially_normalized_entropy_based_confidence(tmp, 0.3)
+
+@pytest.mark.parametrize(("path", "expected_result", "expect_exception"), [
+    ("inferences/delete_me", "results/delete_me", False),
+    ("foo/delete_me", "NOTHING", True),
+])
+def test_get_results_dir(path:str, expected_result: str, expect_exception: bool):
+    try:
+        r = get_results_dir(Path(path))
+        assert r == Path(expected_result)
+    except ValueError:
+        assert expect_exception, "Exception not expected"
