@@ -467,10 +467,7 @@ def evaluate_forced_alignment_run(
     build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots)
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
-    def tmp(x):
-        x = consider_old_value(x)
-        return x["focus"]["position"] if x is not None else False
-    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: tmp(x)))
+    keyword_idx = set(group["forced_alignment_options"].apply(lambda x: consider_old_value(x)["focus"]["position"] if x is not None else False))
     keyword_idx.remove(False)
 
     original_transcript: str = group[group["forced_alignment_options"].apply(lambda x: x is None)]["machine_transcript"].iloc[0]
@@ -799,16 +796,10 @@ class MetricWrapper:
         for kw_label in grid_kw_labels:
             possible_keywords: list[str] = grid_kw_vocab[kw_label]
 
-            def tmp(forced_alignment_options: dict):
-
-                forced_alignment_options = consider_old_value(forced_alignment_options)
-                return forced_alignment_options["focus"]["token_or_id"].strip()
-
-
             # take the original transcription without alignment and all other of the keyword position
             rows_single_keyword_position = rows_single_audio[
                 rows_single_audio["forced_alignment_options"].apply(
-                    lambda x: tmp(x) in possible_keywords if isinstance(x, dict) else True
+                    lambda x: consider_old_value(x)["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
                 )]
 
             assert len(rows_single_keyword_position) == len(possible_keywords) or len(
