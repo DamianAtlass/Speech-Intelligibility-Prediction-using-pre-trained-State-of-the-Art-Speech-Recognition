@@ -10,7 +10,7 @@ import logging
 import numpy as np
 from tqdm import tqdm
 import os
-
+import math
 from logistic_regression import build_predictors
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
@@ -137,10 +137,23 @@ def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame,
                             restrict_vocab: bool) -> None:
     results_dir = get_results_dir(config.output_path) / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+
+    file_name_summary = results_dir / "summary.json"
+    file_name_df_creation_summary = results_dir / "df_creation_summary.json"
+
+    if file_name_df_creation_summary.exists():
+        with open(file_name_df_creation_summary, "r", encoding="utf-8") as file:
+             tmp = json.load(file)
+    else:
+        tmp = {}
+
     if results_dir.exists():
         shutil.rmtree(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
-    file_name_summary = results_dir / "summary.json"
+
+    if tmp:
+        with open(file_name_df_creation_summary, "w", encoding="utf-8") as file:
+             json.dump(tmp, file, indent=4)
 
     # check for missing rows
     d = get_dataset(config.data.test_split)
@@ -233,7 +246,6 @@ def evaluate_individual_run(config: InferenceConfig,
         kw_col: Literal["machine_transcript_kw_est", "machine_transcript_kw_from_time_align"]
 
         entropies_kw_col = "entropy_kw_est" if kw_col == "machine_transcript_kw_est" else "entropy_kw_from_time_align"
-        laptev_kw_col = "laptev_kw_est" if kw_col == "machine_transcript_kw_est" else "laptev_kw_from_time_align"
 
         plot_wer_to_snr(
             df=df_single_run[["human_transcript_kw", kw_col, "snr", "reference_kw", "model_type"]],
@@ -283,12 +295,6 @@ def evaluate_individual_run(config: InferenceConfig,
                     curr_dir.mkdir(exist_ok=False)
 
                     generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=entropies_kw_col, curr_dir=curr_dir)
-
-                    # latpev
-                    curr_dir = out_dir / "laptev"
-                    curr_dir.mkdir(exist_ok=False)
-
-                    generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=laptev_kw_col, curr_dir=curr_dir)
 
 
         # time alignments stuff
@@ -941,6 +947,8 @@ def get_data(
     file_name_df = df_dir / "df.pkl"
     file_name_df_grouped = df_dir / "df_grouped.pkl"
     file_name_summary = results_dir / "summary.json"
+    file_name_df_creation_summary = results_dir / "df_creation_summary.json"
+
     if file_name_df.exists():
         print("Load df from disk.")
         df: pd.DataFrame = pd.read_pickle(file_name_df)
@@ -1108,12 +1116,15 @@ def get_data(
         # for Laptev / Ginsburg confidence
         laptev: list = []
         laptev_alpha: list[dict] = []
-        laptev_kw_est: list = []
-        laptev_kw_from_time_align: list = []
 
 
         alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
         no_transcript_counter = 0
+
+        nan_posterior_counter = 0
+        nan_kw_posterior_counter_est = 0
+        nan_kw_posterior_counter_from_time_align = 0
+
 
         for index, row in tqdm(df.iterrows(), total=len(df)):
 
@@ -1129,7 +1140,6 @@ def get_data(
                 laptev.append(torch.nan)
 
                 laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
-                laptev_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
 
                 if word_timestamps:
                     machine_transcript_kw_from_time_align.append([None, None, None])
@@ -1138,7 +1148,6 @@ def get_data(
 
                 if word_timestamps and extract_logprobs:
                     entropy_kw_from_time_align.append([torch.nan, torch.nan, torch.nan])
-                    laptev_kw_est.append([torch.nan, torch.nan, torch.nan])
                 continue
 
             if extract_logprobs:
@@ -1157,35 +1166,40 @@ def get_data(
                 posteriors = logprob_tensor.exp()
                 del logprob_tensor
 
+                nan_mask = posteriors.isnan().any(dim=1)
                 if restrict_vocab:
-                    posteriors = posteriors[:, grid_vocab_whisper_tokens]
-                    posteriors /= posteriors.sum(dim=-1, keepdim=True)
+                    posteriors = posteriors[:, grid_vocab_whisper_tokens].to(device)
+                    #posteriors[-2] = torch.full(size=(len(grid_vocab_whisper_tokens),), fill_value=torch.nan) # for testing
+                    nan_mask = posteriors.isnan().any(dim=1)
 
-                    for i,b in zip(range(posteriors.shape[0]), posteriors.sum(dim=1).isnan()):
-                        if b:
-                            posteriors[i] = torch.full(size=(len(grid_vocab_whisper_tokens),), fill_value=1/len(grid_vocab_whisper_tokens))
+                    nan_posterior_counter += nan_mask.sum().item()
+                    posteriors[~nan_mask] /= posteriors[~nan_mask].sum(dim=-1, keepdim=True) # <- properly scaled posteriors, nan (rightfully) not considered in sum
 
+                posteriors_no_nan = posteriors[~nan_mask].to(device)
 
                 num_tokens = len(decoded_tokens_without_timestamp_tokens)
                 assert posteriors.shape[0] == num_tokens
-                assert torch.round(posteriors.sum(), decimals=2).item() == num_tokens, (torch.round(posteriors.sum(), decimals=2).item(), num_tokens)
+                assert torch.round(posteriors_no_nan.sum(), decimals=2).item() == len(posteriors_no_nan), torch.round(posteriors_no_nan.sum(), decimals=2).item() == len(posteriors_no_nan)
                 #calculate mean temporal distance
-                mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors))
+                mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors_no_nan))
 
                 # calculate microscopic and macroscopic entropy
-                entropies_per_token = Categorical(probs=posteriors).entropy().to(device)
+                entropies_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
+                entropies_per_token[~nan_mask] = Categorical(probs=posteriors_no_nan).entropy().to(device)
                 assert len(entropies_per_token) == num_tokens
-                macroscopic_entropy.append(float(entropies_per_token.mean()))
+                macroscopic_entropy.append(float(Categorical(probs=posteriors_no_nan).entropy().to(device).mean()))
 
                 #laptev
-                laptev_per_token = MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=0.7)
+                laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.7)
+                assert len(laptev_per_token) == num_tokens
                 laptev.append(float(laptev_per_token.min()))
 
-                laptev_per_token_alpha: dict = {a:MetricWrapper.laptev_ginsbrug_confidence(posteriors, alpha=a) for a in
+                laptev_per_token_alpha: dict = {a:MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=a) for a in
                                           alpha_values}
                 laptev_alpha.append({k: {"min": v.min(), "mean": v.mean()} for k,v in laptev_per_token_alpha.items()})
 
-                del posteriors
+                del posteriors, posteriors_no_nan
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
                 ### merge if necessary
@@ -1215,12 +1229,18 @@ def get_data(
                 machine_transcript_kw_est.append(estimated_transcript_kw)
 
                 tmp_kw_entropy: list[float|np.nan] = []
-                tmp_kw_laptev: list[float|np.nan] = []
                 for idx in [(None if i is None else words_token_idx[i]) for i in estimated_transcript_kw_idx_per_word]:
-                    tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
-                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_per_token[idx].mean()))
+                    if idx is None:
+                        tmp_kw_entropy.append(torch.nan)
+                    else:
+                        tmp_e = float(entropies_per_token[idx].mean())
+                        tmp_kw_entropy.append(tmp_e)
+                        if math.isnan(tmp_e):
+                            nan_kw_posterior_counter_est+=1
+
                 entropy_kw_est.append(tmp_kw_entropy)
-                laptev_kw_est.append(tmp_kw_laptev)
+
+                del tmp_e, tmp_kw_entropy
 
             ## 2) get kw idx by using the time-alignments
             if word_timestamps:
@@ -1251,14 +1271,20 @@ def get_data(
                 # assume word_timestamps and extract_logprobs are True
                 # kw_token_idx_from_time_align: list[list[int|None]] idx for logprobs
                 tmp_kw_entropy: list[float|torch.nan] = []
-                tmp_kw_laptev: list[float|np.nan] = []
                 kw_token_idx_from_time_align: list[list[int]|None] = [(words_token_idx[i] if i is not None else None) for i in kw_idx_from_time_align]
                 for idx in kw_token_idx_from_time_align:
-                    tmp_kw_entropy.append(torch.nan if idx is None else float(entropies_per_token[idx].mean()))
-                    tmp_kw_laptev.append(torch.nan if idx is None else float(laptev_per_token[idx].mean()))
+                    if idx is None:
+                        tmp_kw_entropy.append(torch.nan)
+                    else:
+                        tmp_e = float(entropies_per_token[idx].mean())
+                        tmp_kw_entropy.append(tmp_e)
+                        if math.isnan(tmp_e):
+                            nan_kw_posterior_counter_est+=1
+                    #not necessary to count the same again for laptev
+
 
                 entropy_kw_from_time_align.append(tmp_kw_entropy)
-                laptev_kw_from_time_align.append(tmp_kw_laptev)
+                del tmp_e, tmp_kw_entropy
 
                 #tad
                 time_alignment_difference.append(MetricWrapper.calculate_tad(reference_alignments=ref_alignments,
@@ -1272,7 +1298,6 @@ def get_data(
         df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
         df["machine_transcript_kw_est"] = machine_transcript_kw_est
         df["entropy_kw_est"] = entropy_kw_est
-        df["laptev_kw_est"] = laptev_kw_est
         df["mtd"] = mean_temporal_distance
         df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
         del (macroscopic_entropy, machine_transcript_kw_est_idx, machine_transcript_kw_est, entropy_kw_est)
@@ -1280,10 +1305,19 @@ def get_data(
         if word_timestamps:
             df["machine_transcript_kw_from_time_align"] = machine_transcript_kw_from_time_align
             df["entropy_kw_from_time_align"] = entropy_kw_from_time_align
-            df["laptev_kw_from_time_align"] = laptev_kw_from_time_align
             df["machine_transcript_kw_from_time_align_idx"] = machine_transcript_kw_from_time_align_idx
             df["tad_kw"] = time_alignment_difference
 
+
+        data = {
+            "nan_posterior_counter": nan_posterior_counter,
+            "nan_kw_posterior_counter_est": nan_kw_posterior_counter_est,
+            "nan_kw_posterior_counter_from_time_align": nan_kw_posterior_counter_from_time_align,
+
+        }
+
+        with open(file_name_df_creation_summary, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
         return df
 
     df = eval_df()
