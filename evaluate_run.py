@@ -67,5 +67,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
             build_predictors(df=df, metrics_list=rows_prediction_normal, output_path=get_results_dir(config.output_path) / vocab_dir / "plots")
 
+    compare_predictors(get_results_dir(config.output_path), get_inference_type(config))
+
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))

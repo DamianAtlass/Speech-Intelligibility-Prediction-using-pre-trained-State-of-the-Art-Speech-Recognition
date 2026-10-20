@@ -1383,3 +1383,77 @@ def get_results_dir(output_path: Path) -> Path:
     idx = path_list.index("inferences")
     path_list[idx] = "results"
     return Path("/".join(path_list))
+
+def get_inference_type(config: InferenceConfig) -> Literal["forced_alignment", "multiple_runs", "normal"]:
+    if config.forced_alignment:
+        return "forced_alignment"
+    if config.runs_per_sample !=1:
+        return "multiple_runs"
+    else:
+        return "normal"
+
+def get_prediction_results(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+    prediction_results = []
+    for restrict_vocab in [False, True]:
+        vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+        p = result_dir / vocab_dir
+
+        match inference_type:
+            case "forced_alignment":
+                p = p / "todo"
+            case "multiple_runs":
+                p = p / "todo"
+            case "normal":
+                p = p / "plots" / "predictors" / "cross_validation.json"
+        if not p.exists():
+            continue
+
+        with open(p, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        foo = {}
+        for metric in data:
+            is_micro = metric["micro/macro"] == "microscopic"
+            score = "adjusted score" if is_micro else "mean score of valid rows"
+            foo[tuple(metric["used metrics"])] = [round(m[score], 2) for m in metric["results"]]
+        prediction_results.append(foo)
+
+    return prediction_results
+
+import xlsxwriter
+
+def save_prediction_results(prediction_results: dict, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+    workbook = xlsxwriter.Workbook('path_to_hello.xlsx')
+    worksheet = workbook.add_worksheet()
+    voc = ["full", "restricted"]
+    first_iter = True
+    for i, r in enumerate(prediction_results):
+        c = i*3
+        worksheet.write(*(0,2+c), voc[i])
+        micro = [(k,v) for k,v in r.items() if len(v)==3]
+        macro = [(k,v) for k,v in r.items() if len(v)==1]
+
+        if first_iter: worksheet.write(1, 0, "metric")
+        worksheet.write(1, 2+c, "error (macroscopic")
+        rows = 0
+        for j, (k,v) in enumerate(macro):
+            if first_iter: worksheet.write(2+j, 0, str(k))
+            worksheet.write(2+j, 2+c, str(v))
+            rows+=1
+        rows += 2
+
+        if first_iter: worksheet.write(1 + rows, 0, "metric")
+        worksheet.write(1 + rows, 2+c, "accuracy (microscopic)")
+        for j, (k, v) in enumerate(micro):
+            if first_iter: worksheet.write(2 + j + rows, 0, str(k))
+            worksheet.write(2 + j + rows, 1+c, str(v[0]))
+            worksheet.write(2 + j + rows, 2+c, str(v[1]))
+            worksheet.write(2 + j + rows, 3+c, str(v[2]))
+        first_iter = False
+
+    workbook.close()
+
+def compare_predictors(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+    prediction_results = get_prediction_results(result_dir, inference_type)
+    save_prediction_results(prediction_results, inference_type)
+
+
