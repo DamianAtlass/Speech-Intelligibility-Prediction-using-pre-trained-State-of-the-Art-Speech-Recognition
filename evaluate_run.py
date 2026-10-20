@@ -30,7 +30,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         device = torch.device("cpu")
 
     config: InferenceConfig = load_config(path/"config.yaml")
-
+    get_results_dir(path).mkdir(exist_ok=True, parents=True)
     shutil.copyfile(path/"config.yaml", get_results_dir(path)/"config.yaml")
 
     for restrict_vocab in [False, True]:
