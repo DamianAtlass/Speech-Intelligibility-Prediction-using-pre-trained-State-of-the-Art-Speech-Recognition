@@ -8,9 +8,9 @@ from utils.plotting_utils import PredictorPlots
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold, cross_val_score
-from sklearn.linear_model import LogisticRegression
-from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.metrics import mean_absolute_error, accuracy_score
 import json
 
 import logging
@@ -75,6 +75,10 @@ def train_and_evaluate_predictors(
             "results": [],
         }
 
+        scoring_metric = 'accuracy' if metric_is_micro else "neg_mean_absolute_error"
+        metric_results["scoring metric"] = scoring_metric
+        error_fn = accuracy_score if metric_is_micro else mean_absolute_error
+
         kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]
         for kw_number in kw_numbers:
             result = {
@@ -91,13 +95,32 @@ def train_and_evaluate_predictors(
                 model = LinearRegression()
 
             kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-            scoring_metric = 'accuracy' if metric_is_micro else "neg_mean_absolute_error"
-            result["scoring metric"] = scoring_metric
-            scores = cross_val_score(model, X, y, cv=kfold, scoring=scoring_metric)
+
+            scores = []
+            weights = []
+            intercepts = []
+
+            for train_idx, test_idx in kfold.split(X):
+                X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+                y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+                model.fit(X_train, y_train)
+
+                # Save model weights and intercept
+                weights.append(model.coef_.tolist())
+                intercepts.append(model.intercept_.tolist())
+
+                # Evaluate on the test fold
+                y_pred = model.predict(X_test)
+                scores.append(abs(error_fn(y_test, y_pred)))
+
             valid_rows = len(X)
             non_valid_rows = (len(df)-valid_rows)/len(df)
+            result["Weights per fold"] = weights
+            result["Mean weights"] = np.mean(weights, axis=0).tolist()
+            result["Mean intercept"] = np.mean(intercepts).tolist()
             result["non-valid rows (percent)"] = non_valid_rows*100
-            result["mean score of valid rows"] = np.mean(scores)
+            result["mean score of valid rows"] = np.mean(scores).tolist()
             result["adjusted score"] = (np.mean(scores)*valid_rows)/len(df) if metric_is_micro else "???"
 
             metric_results["results"].append(result)

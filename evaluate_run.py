@@ -8,7 +8,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir
+from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir, compare_predictors, get_inference_type
 from logistic_regression import build_predictors
 from utils.cuda_utils import select_device
 import shutil
@@ -39,8 +39,6 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     shutil.copyfile(path/"config.yaml", get_results_dir(path)/"config.yaml")
 
     for restrict_vocab in [False, True]:
-        if config.forced_alignment and restrict_vocab:
-            continue
         logger.info(f"{restrict_vocab = }")
         vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
         if restrict_vocab and config.model.name == "parakeet":
