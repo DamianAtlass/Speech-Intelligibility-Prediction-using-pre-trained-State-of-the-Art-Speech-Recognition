@@ -8,7 +8,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir, compare_predictors, get_inference_type
+from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir
 from logistic_regression import build_predictors
 from utils.cuda_utils import select_device
 import shutil
@@ -39,7 +39,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         if restrict_vocab and config.model.name == "parakeet":
             continue
         with catch_time() as t:
-            logger.info(f"Get data...")
+            print(f"Get data...")
             df = get_data(
                 model_name=config.model.name,
                 output_path=config.output_path,
@@ -51,9 +51,10 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         logger.info(f"Reading the generated files took: {t()/60:.2f} m")
 
         df["model_type"] = config.model.model_type
-        # # selected_paths = df["audio_path"].unique()[:5000]
-        # df_copy = df[df["snr"]<0]
-        # df_copy.to_pickle(get_results_dir(config.output_path) / vocab_dir / "df_cut.pkl")
+        # df_copy = df[df["snr"]<-2]
+        # selected_paths = df["audio_path"].unique()[:5000]
+        # df_copy = df_copy[df_copy["audio_path"].isin(selected_paths)]
+        # df_copy.to_pickle(config.output_path / vocab_dir / "df_cut.pkl")
         # exit()
 
         if config.forced_alignment:

@@ -1172,8 +1172,11 @@ def get_data(
                     #posteriors[-2] = torch.full(size=(len(grid_vocab_whisper_tokens),), fill_value=torch.nan) # for testing
                     nan_mask = posteriors.isnan().any(dim=1)
 
-                    nan_posterior_counter += nan_mask.sum().item()
                     posteriors[~nan_mask] /= posteriors[~nan_mask].sum(dim=-1, keepdim=True) # <- properly scaled posteriors, nan (rightfully) not considered in sum
+                    nan_mask = nan_mask + posteriors.isnan().any(dim=1)
+
+                    nan_posterior_counter += nan_mask.sum().item()
+
 
                 posteriors_no_nan = posteriors[~nan_mask].to(device)
 
