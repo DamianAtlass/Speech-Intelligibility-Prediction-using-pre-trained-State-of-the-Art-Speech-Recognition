@@ -1400,11 +1400,11 @@ def get_prediction_results(result_dir: Path, inference_type: Literal["forced_ali
 
         match inference_type:
             case "forced_alignment":
-                p = p / "todo"
+                p = p /"plots/dispersion/predictors/cross_validation.json"
             case "multiple_runs":
-                p = p / "todo"
+                p = p / "plots/multiple_runs/predictors/cross_validation.json"
             case "normal":
-                p = p / "plots" / "predictors" / "cross_validation.json"
+                p = p / "plots/predictors/cross_validation.json"
         if not p.exists():
             continue
 
@@ -1421,56 +1421,66 @@ def get_prediction_results(result_dir: Path, inference_type: Literal["forced_ali
 
 import xlsxwriter
 
-def save_prediction_results(prediction_results: dict, inference_type: Literal["forced_alignment", "multiple_runs", "normal"], name: str):
+def save_prediction_results(prediction_results: list[dict], inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]], name: list[str]):
     workbook = xlsxwriter.Workbook('path_to_hello.xlsx')
     worksheet = workbook.add_worksheet()
     voc = ["full vocab", "restricted vocab"]
-    first_iter = True
-    worksheet.write(0, 1, name)
 
-    for i, r in enumerate(prediction_results):
-        row = 1
-        offset = i*3
-        worksheet.write(row,2+offset, voc[i])
-        row += 1
-        micro = [(k,v) for k,v in r.items() if len(v)==3]
-        macro = [(k,v) for k,v in r.items() if len(v)==1]
+    row_global = 0
 
-        if first_iter: worksheet.write(row, 0, "metric")
-        row += 1
+    for pr, t, n in zip(prediction_results, inference_types, name):
+        start = row_global
+        worksheet.write(start, 1, f"{n} ({t})")
+        first_iter = True
+        for i, r in enumerate(pr):
+            row = start
+            row += 2
+            offset = i*3
+            worksheet.write(row,2+offset, voc[i])
+            row += 1
+            micro = [(k,v) for k,v in r.items() if len(v)==3]
+            macro = [(k,v) for k,v in r.items() if len(v)==1]
 
-        worksheet.write(row, 2+offset, "error (macroscopic)")
-        row += 1
+            if first_iter: worksheet.write(row, 0, "metric")
+            row += 1
 
-        for k,v in macro:
-            if first_iter:
-                worksheet.write(row, 0, str(k))
-            worksheet.write(row, 2+offset, str(v))
+            worksheet.write(row, 2+offset, "error (macroscopic)")
+            row += 1
+
+            for k,v in macro:
+                if first_iter:
+                    worksheet.write(row, 0, str(k))
+                worksheet.write(row, 2+offset, str(v))
+                row+=1
+
+            row+=2
+            if first_iter: worksheet.write(row, 0, "metric")
+            worksheet.write(row, 2 + offset, "accuracy (microscopic)")
+            row+=1
+            worksheet.write(row, 1 + offset, "color")
+            worksheet.write(row, 2 + offset, "letter")
+            worksheet.write(row, 3 + offset, "digit")
             row+=1
 
-        row+=2
-        if first_iter: worksheet.write(row, 0, "metric")
-        worksheet.write(row, 2 + offset, "accuracy (microscopic)")
-        row+=1
-        worksheet.write(row, 1 + offset, "color")
-        worksheet.write(row, 2 + offset, "letter")
-        worksheet.write(row, 3 + offset, "digit")
-        row+=1
+            for k, v in micro:
+                if first_iter: worksheet.write(row, 0, str(k))
+                worksheet.write(row, 1+offset, str(v[0]))
+                worksheet.write(row, 2+offset, str(v[1]))
+                worksheet.write(row, 3+offset, str(v[2]))
+                row+=1
 
-        for k, v in micro:
-            if first_iter: worksheet.write(row, 0, str(k))
-            worksheet.write(row, 1+offset, str(v[0]))
-            worksheet.write(row, 2+offset, str(v[1]))
-            worksheet.write(row, 3+offset, str(v[2]))
-            row+=1
-
-        first_iter = False
-
+            first_iter = False
+        row+=3
+        row_global = row
     workbook.close()
 
-def compare_predictors(result_dir: list[Path], inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]]):
-    for p, t in zip(result_dir, inference_types):
-        prediction_results = get_prediction_results(p, t)
-        save_prediction_results(prediction_results, t, p.parts[-1])
+def compare_predictors(configs: list[InferenceConfig]):
+    result_dirs = [c.output_path for c in configs]
+    inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]] = [get_inference_type(c) for c in configs]
+    a = []
+
+    for p, t in zip(result_dirs, inference_types):
+        a.append(get_prediction_results(get_results_dir(p), t))
+    save_prediction_results(a, inference_types, [p.parts[-1] for p in result_dirs])
 
 

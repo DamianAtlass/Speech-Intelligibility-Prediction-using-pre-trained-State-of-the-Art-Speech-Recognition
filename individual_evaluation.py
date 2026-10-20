@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 from utils.new_config_dataclass import load_config
-from utils.evaluate_utils import get_data
+from utils.evaluate_utils import get_data, compare_predictors, get_results_dir, get_inference_type
 from utils.plotting_utils import plot_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr
 import torch
 import pandas as pd
@@ -10,7 +10,7 @@ import json
 from utils.logging_utils import catch_time
 
 
-def foo():
+def compare_graphs():
     indi_eval_folder = Path.cwd() / "individual_evaluations"
 
     subfolder_name = indi_eval_folder / "compare_whisper_finetuned_vs_default"
@@ -71,6 +71,16 @@ def foo():
                       output_path=subfolder_name
                       )
 
+def generate_excel_file():
+
+    paths = [
+        "inferences/delete_me/",
+        "inferences/delete_me_runs/",
+    ]
+
+    configs = [load_config(Path(p)/"config.yaml") for p in paths]
+
+    compare_predictors(configs)
 
 if __name__ == '__main__':
-    foo()
+    generate_excel_file()

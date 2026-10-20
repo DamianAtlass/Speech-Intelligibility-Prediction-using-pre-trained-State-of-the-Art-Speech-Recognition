@@ -146,7 +146,7 @@ def load_config(config_file_path: str | Path) -> TrainingConfig | InferenceConfi
             save_config(new_config, config_file_path)
             return new_config
         else:
-            raise FileNotFoundError("No config file present!")
+            raise FileNotFoundError(f"No config file present: {config_file_path}")
 
 
 class FlowStyleDumper(yaml.Dumper):

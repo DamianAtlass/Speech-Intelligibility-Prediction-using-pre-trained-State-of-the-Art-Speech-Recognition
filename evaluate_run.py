@@ -29,13 +29,8 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
         device = torch.device("cpu")
 
-
     config: InferenceConfig = load_config(path/"config.yaml")
 
-    result_path = get_results_dir(path)
-    if result_path.exists():
-        shutil.rmtree(result_path)
-    result_path.mkdir(parents=True)
     shutil.copyfile(path/"config.yaml", get_results_dir(path)/"config.yaml")
 
     for restrict_vocab in [False, True]:
@@ -67,7 +62,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
             evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
             build_predictors(df=df, metrics_list=rows_prediction_normal, output_path=get_results_dir(config.output_path) / vocab_dir / "plots")
 
-    compare_predictors(get_results_dir(config.output_path), get_inference_type(config))
+    compare_predictors([get_results_dir(config.output_path)])
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me3"))
