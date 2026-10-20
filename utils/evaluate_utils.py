@@ -1421,39 +1421,56 @@ def get_prediction_results(result_dir: Path, inference_type: Literal["forced_ali
 
 import xlsxwriter
 
-def save_prediction_results(prediction_results: dict, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+def save_prediction_results(prediction_results: dict, inference_type: Literal["forced_alignment", "multiple_runs", "normal"], name: str):
     workbook = xlsxwriter.Workbook('path_to_hello.xlsx')
     worksheet = workbook.add_worksheet()
-    voc = ["full", "restricted"]
+    voc = ["full vocab", "restricted vocab"]
     first_iter = True
+    worksheet.write(0, 1, name)
+
     for i, r in enumerate(prediction_results):
-        c = i*3
-        worksheet.write(*(0,2+c), voc[i])
+        row = 1
+        offset = i*3
+        worksheet.write(row,2+offset, voc[i])
+        row += 1
         micro = [(k,v) for k,v in r.items() if len(v)==3]
         macro = [(k,v) for k,v in r.items() if len(v)==1]
 
-        if first_iter: worksheet.write(1, 0, "metric")
-        worksheet.write(1, 2+c, "error (macroscopic")
-        rows = 0
-        for j, (k,v) in enumerate(macro):
-            if first_iter: worksheet.write(2+j, 0, str(k))
-            worksheet.write(2+j, 2+c, str(v))
-            rows+=1
-        rows += 2
+        if first_iter: worksheet.write(row, 0, "metric")
+        row += 1
 
-        if first_iter: worksheet.write(1 + rows, 0, "metric")
-        worksheet.write(1 + rows, 2+c, "accuracy (microscopic)")
-        for j, (k, v) in enumerate(micro):
-            if first_iter: worksheet.write(2 + j + rows, 0, str(k))
-            worksheet.write(2 + j + rows, 1+c, str(v[0]))
-            worksheet.write(2 + j + rows, 2+c, str(v[1]))
-            worksheet.write(2 + j + rows, 3+c, str(v[2]))
+        worksheet.write(row, 2+offset, "error (macroscopic)")
+        row += 1
+
+        for k,v in macro:
+            if first_iter:
+                worksheet.write(row, 0, str(k))
+            worksheet.write(row, 2+offset, str(v))
+            row+=1
+
+        row+=2
+        if first_iter: worksheet.write(row, 0, "metric")
+        worksheet.write(row, 2 + offset, "accuracy (microscopic)")
+        row+=1
+        worksheet.write(row, 1 + offset, "color")
+        worksheet.write(row, 2 + offset, "letter")
+        worksheet.write(row, 3 + offset, "digit")
+        row+=1
+
+        for k, v in micro:
+            if first_iter: worksheet.write(row, 0, str(k))
+            worksheet.write(row, 1+offset, str(v[0]))
+            worksheet.write(row, 2+offset, str(v[1]))
+            worksheet.write(row, 3+offset, str(v[2]))
+            row+=1
+
         first_iter = False
 
     workbook.close()
 
-def compare_predictors(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
-    prediction_results = get_prediction_results(result_dir, inference_type)
-    save_prediction_results(prediction_results, inference_type)
+def compare_predictors(result_dir: list[Path], inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]]):
+    for p, t in zip(result_dir, inference_types):
+        prediction_results = get_prediction_results(p, t)
+        save_prediction_results(prediction_results, t, p.parts[-1])
 
 
