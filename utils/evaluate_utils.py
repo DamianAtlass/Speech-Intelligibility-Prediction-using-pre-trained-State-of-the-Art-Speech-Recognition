@@ -20,6 +20,7 @@ from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
 from utils.variables import *
+from utils.correlation_metrics import corr_or_mut
 
 logger = logging.getLogger(__name__)
 from utils.new_config_dataclass import InferenceConfig
@@ -167,6 +168,20 @@ def evaluate_individual_run(config: InferenceConfig,
     metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
     corr_summary = None
+
+    # plot most interesting correlations
+    correlations = {}
+    for m in ["macroscopic_entropy", "mtd", "laptev"]:
+        correlations.update({m: corr_or_mut(df=df_single_run, col_name=m,kw_idx=None, wer_col_or_kw_col='wer_human_kw', special_metric="spearman_correlation")})
+
+    for m in ["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"]:
+        a = []
+        for kw_idx in [0,1,2]:
+            a.append(corr_or_mut(df=df_single_run, col_name=m, kw_idx=kw_idx, wer_col_or_kw_col='human_transcript_kw', special_metric="spearman_correlation"))
+        correlations.update({m: a})
+
+    with open(results_dir/"correlation_summary.json", 'w') as f:
+        json.dump(correlations, f, indent=4)
 
     dir_plots = results_dir / "plots"
     if dir_plots.exists():

@@ -10,7 +10,7 @@ from typing import Literal, cast
 
 from utils.variables import *
 from utils.wer_needleman_wunsch import wer_needleman_wunsch
-from sklearn.feature_selection import mutual_info_classif, mutual_info_regression
+from utils.correlation_metrics import corr_or_mut
 
 kw_colors = ["green", "blue", "red"]
 kw_colors_short = ["g", "b", "r"]
@@ -642,28 +642,6 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
                               output_path: Path = None,
                               shifting_attribute = "model_type"):
 
-    def corr(df)-> dict:
-        x = df[col_name]
-        y = df["wer_human_kw"]
-
-        filter = x.isna()
-        x = torch.from_numpy(np.array(x.astype(float))[~filter])
-        y = y[~filter]
-
-        if special_metric == "spearman_correlation":
-            x_ranked = stats.rankdata(x)
-            y_ranked = stats.rankdata(y)
-            #del y, x
-
-            # spearman corr == pearson corr of ranks
-            regr = stats.pearsonr(x_ranked, y_ranked)
-            return {"value": regr.statistic, "p-value": regr.pvalue}
-        elif special_metric == "mutual_information":
-            mi = mutual_info_regression(X=torch.Tensor(x).reshape(-1, 1), y=y)
-            return {"value": mi[0]}
-        else:
-            raise Exception(f"Unknown metric: {special_metric}")
-
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     values = []
     values_per_listener = []
@@ -671,14 +649,26 @@ def boxplot_corr_per_listener(df: pd.DataFrame,
         df_model_type = df[df[shifting_attribute]==attr]
         df_model_type = df_model_type.dropna()
 
-        values.append(corr(df_model_type))
+        values.append(corr_or_mut(
+            df=df_model_type,
+            col_name=col_name,
+            kw_idx=None,
+            special_metric=special_metric,
+            wer_col_or_kw_col="wer_human_kw"
+        ))
 
         value_arr_tmp = []
 
         listeners = df_model_type["listener"].unique()
         for l in listeners:
             df_listener = df_model_type[df_model_type["listener"]==l]
-            value_arr_tmp.append(corr(df_listener.copy()))
+            value_arr_tmp.append(corr_or_mut(
+            df=df_listener,
+            col_name=col_name,
+            kw_idx=None,
+            special_metric=special_metric,
+            wer_col_or_kw_col="wer_human_kw"
+        ))
 
         values_per_listener.append(value_arr_tmp)
 
@@ -731,28 +721,6 @@ def plot_corr_for_laptev_alphas(df: pd.DataFrame,
                                 output_path: Path = None,
                                 shifting_attribute = "model_type"):
 
-    def corr(df)-> dict:
-        x = df[col_name]
-        y = df["wer_human_kw"]
-
-        filter = x.isna()
-        x = torch.from_numpy(np.array(x.astype(float))[~filter])
-        y = y[~filter]
-
-        if special_metric == "spearman_correlation":
-            x_ranked = stats.rankdata(x)
-            y_ranked = stats.rankdata(y)
-            #del y, x
-
-            # spearman corr == pearson corr of ranks
-            regr = stats.pearsonr(x_ranked, y_ranked)
-            return {"value": regr.statistic, "p-value": regr.pvalue}
-        elif special_metric == "mutual_information":
-            mi = mutual_info_regression(X=torch.Tensor(x).reshape(-1, 1), y=y)
-            return {"value": mi[0]}
-        else:
-            raise Exception(f"Unknown metric: {special_metric}")
-
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
     values = []
     for attr in list_shifting_attribute:
@@ -762,7 +730,13 @@ def plot_corr_for_laptev_alphas(df: pd.DataFrame,
             df_cp[col_name] = df_cp[col_name].apply(lambda x: x[m])
             df_attr = df_cp[df_cp[shifting_attribute]==attr]
             df_attr = df_attr.dropna()
-            corr_coef = corr(df_attr)
+            corr_coef = corr_or_mut(
+                df=df_attr,
+                col_name=col_name,
+                kw_idx=None,
+                special_metric=special_metric,
+                wer_col_or_kw_col="wer_human_kw"
+            )
             min_and_mean.append(corr_coef)
         values.append(min_and_mean)
 
@@ -806,42 +780,10 @@ def boxplot_microscopic_special_metric_per_keyword(
         "machine_transcript_kw_from_time_align": "time-alignment-derived machine's, ",  # specifically for calibration
     }
     cali = " (calibration)" if "machine_trans_kw" in col_compare_against_ref_kw else ""
-    metric_name = {
-        "spearman_correlation": "Spearman Correlation",
-        "mutual_information": "Mutual Information"
-    }
 
     # the speech intelligibility is basically the wer between human transcripts and reference.
     # we want to measure a correlation between that, and the entropies. no need for  machine_trans_kw(_from_time_align) here!
     # To check the calibration, we measure correlation between the wer of the machine (ref_kw vs machine_trans_kw).
-
-    def corr_or_mut(special_metric: str, df, kw_idx) -> dict:
-        ref_kw = df["reference_kw"].map(lambda x: x[kw_idx])
-
-        keywords = df[col_compare_against_ref_kw].map(lambda x: x[kw_idx])
-
-        x = df[col_name].map(lambda x: x[kw_idx])
-        y = (ref_kw != keywords).astype(int)  # basically the WER
-
-        filter = x.isna()
-        x = torch.from_numpy(np.array(x.astype(float))[~filter])
-        y = y[~filter]
-        if special_metric == "spearman_correlation":
-
-            x_ranked = stats.rankdata(x)
-            y_ranked = stats.rankdata(y)
-            del y, x
-
-            # spearman corr == pearson corr of ranks
-            regr = stats.pearsonr(x=x_ranked, y=y_ranked)
-
-            return {"value": regr.statistic, "p-value": regr.pvalue}
-
-        elif special_metric == "mutual_information":
-            mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
-            return {"value": mi[0]}
-        else:
-            raise NotImplementedError
 
     values_per_group_array = []
 
@@ -850,11 +792,24 @@ def boxplot_microscopic_special_metric_per_keyword(
     for kw_idx in tqdm(range(3)):
         value_array_per_kw = []
 
-        values_per_kw_label.append(corr_or_mut(special_metric, df, kw_idx))
+        #values_per_kw_label.append(corr_or_mut(special_metric, df, kw_idx))
+        values_per_kw_label.append(corr_or_mut(
+            df=df,
+            col_name=col_name,
+            kw_idx=kw_idx,
+            wer_col_or_kw_col=col_compare_against_ref_kw,
+            special_metric="spearman_correlation",
+        ))
 
         for kw in grid_kw_vocab[grid_kw_labels[kw_idx]]:
             df_keyword = df[df["reference_kw"].str[kw_idx].eq(kw)]
-            value_array_per_kw.append(corr_or_mut(special_metric, df_keyword, kw_idx))
+            value_array_per_kw.append(corr_or_mut(
+            df=df_keyword,
+            col_name=col_name,
+            kw_idx=kw_idx,
+            wer_col_or_kw_col=col_compare_against_ref_kw,
+            special_metric="spearman_correlation",
+        ))
 
         values_per_group_array.append(value_array_per_kw)
 
@@ -872,7 +827,7 @@ def boxplot_microscopic_special_metric_per_keyword(
                      showmeans=True,
                      )
     runs = " over multiple runs" if multiple_runs else ""
-    title = f"{metric_name[special_metric]} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {get_label(col_name)} (total and for each keyword{cali}){runs}"
+    title = f"{get_label(special_metric)} between the {tmp_labels_dict[col_compare_against_ref_kw]} word-level WER and whisper's token-level {get_label(col_name)} (total and for each keyword{cali}){runs}"
     plt.title(wrap_text(title, 65))
 
     plt.ylabel("Spearman Correlation Coefficient" if special_metric == "spearman_correlation" else "Mutual Information")
