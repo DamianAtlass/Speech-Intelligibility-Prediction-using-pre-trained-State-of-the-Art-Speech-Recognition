@@ -11,6 +11,8 @@ import numpy as np
 from tqdm import tqdm
 import os
 import math
+import xlsxwriter
+
 from logistic_regression import build_predictors
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
@@ -169,19 +171,10 @@ def evaluate_individual_run(config: InferenceConfig,
 
     corr_summary = None
 
-    # plot most interesting correlations
-    correlations = {}
-    for m in ["macroscopic_entropy", "mtd", "laptev"]:
-        correlations.update({m: corr_or_mut(df=df_single_run, col_name=m,kw_idx=None, wer_col_or_kw_col='wer_human_kw', special_metric="spearman_correlation")})
-
-    for m in ["entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"]:
-        a = []
-        for kw_idx in [0,1,2]:
-            a.append(corr_or_mut(df=df_single_run, col_name=m, kw_idx=kw_idx, wer_col_or_kw_col='human_transcript_kw', special_metric="spearman_correlation"))
-        correlations.update({m: a})
-
-    with open(results_dir/"correlation_summary.json", 'w') as f:
-        json.dump(correlations, f, indent=4)
+    CorrelationManager.calculate_and_save_correlations(
+        df=df_single_run,
+        metrics = ["macroscopic_entropy", "mtd", "laptev", "entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
+        save_dir=results_dir)
 
     dir_plots = results_dir / "plots"
     if dir_plots.exists():
@@ -415,7 +408,13 @@ def evaluate_individual_run(config: InferenceConfig,
         dir_runs = dir_plots / "multiple_runs"
         dir_runs.mkdir(parents=False)
 
-        for m in ["tad_kw_var", "entropy_kw_var"]:
+        metrics = ["tad_kw_var", "entropy_kw_var"]
+        CorrelationManager.calculate_and_save_correlations(
+            df=grouped_df,
+            metrics=metrics,
+            save_dir=dir_runs)
+
+        for m in metrics:
             out = dir_runs / m
             out.mkdir(exist_ok=True, parents=True)
             col_label = labels[m]
@@ -470,6 +469,8 @@ def evaluate_forced_alignment_run(
 
     dir_disp_plots = get_results_dir(output_path) / vocab_dir / "plots" / "dispersion"
     dir_disp_plots.mkdir(exist_ok=True, parents=True)
+
+    CorrelationManager.calculate_and_save_correlations(df=grouped_df,metrics=["dispersion_kw"], save_dir=dir_disp_plots)
 
     box_or_barplot_microscopic_x_to_snr(
         df=grouped_df,
@@ -1410,95 +1411,169 @@ def get_inference_type(config: InferenceConfig) -> Literal["forced_alignment", "
     else:
         return "normal"
 
-def get_prediction_results(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
-    prediction_results = []
-    for restrict_vocab in [False, True]:
-        vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
-        p = result_dir / vocab_dir
+class ResultManager:
 
-        match inference_type:
-            case "forced_alignment":
-                p = p /"plots/dispersion/predictors/cross_validation.json"
-            case "multiple_runs":
-                p = p / "plots/multiple_runs/predictors/cross_validation.json"
-            case "normal":
-                p = p / "plots/predictors/cross_validation.json"
-        if not p.exists():
-            continue
+    @staticmethod
+    def save_results(
+            results: list[list[dict]],
+            inference_types: list[Literal["forced_alignment",
+            "multiple_runs", "normal"]], name: list[str],
+            obj_class: object
+    ):
+        is_corr = issubclass(obj_class, CorrelationManager)
+        workbook = xlsxwriter.Workbook('correlation_results.xlsx' if is_corr else "prediction_results.xlsx")
+        worksheet = workbook.add_worksheet()
+        voc = ["full vocab", "restricted vocab"]
 
-        with open(p, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        foo = {}
-        for metric in data:
-            is_micro = metric["micro/macro"] == "microscopic"
-            score = "adjusted score" if is_micro else "mean score of valid rows"
-            foo[tuple(metric["used metrics"])] = [round(m[score], 2) for m in metric["results"]]
-        prediction_results.append(foo)
+        row_global = 0
 
-    return prediction_results
+        for res, t, n in zip(results, inference_types, name):
+            start = row_global
+            worksheet.write(start, 1, f"{n} ({t})")
+            first_iter = True
+            for i, r in enumerate(res):
+                row = start
+                row += 2
+                offset = i * 4
+                worksheet.write(row, 2 + offset, voc[i])
+                row += 1
+                micro = [(k, v) for k, v in r.items() if "kw" in k]
+                macro = [(k, v) for k, v in r.items() if "kw" not in k]
 
-import xlsxwriter
-
-def save_prediction_results(prediction_results: list[dict], inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]], name: list[str]):
-    workbook = xlsxwriter.Workbook('path_to_hello.xlsx')
-    worksheet = workbook.add_worksheet()
-    voc = ["full vocab", "restricted vocab"]
-
-    row_global = 0
-
-    for pr, t, n in zip(prediction_results, inference_types, name):
-        start = row_global
-        worksheet.write(start, 1, f"{n} ({t})")
-        first_iter = True
-        for i, r in enumerate(pr):
-            row = start
-            row += 2
-            offset = i*3
-            worksheet.write(row,2+offset, voc[i])
-            row += 1
-            micro = [(k,v) for k,v in r.items() if len(v)==3]
-            macro = [(k,v) for k,v in r.items() if len(v)==1]
-
-            if first_iter: worksheet.write(row, 0, "metric")
-            row += 1
-
-            worksheet.write(row, 2+offset, "error (macroscopic)")
-            row += 1
-
-            for k,v in macro:
-                if first_iter:
-                    worksheet.write(row, 0, str(k))
-                worksheet.write(row, 2+offset, str(v))
-                row+=1
-
-            row+=2
-            if first_iter: worksheet.write(row, 0, "metric")
-            worksheet.write(row, 2 + offset, "accuracy (microscopic)")
-            row+=1
-            worksheet.write(row, 1 + offset, "color")
-            worksheet.write(row, 2 + offset, "letter")
-            worksheet.write(row, 3 + offset, "digit")
-            row+=1
-
-            for k, v in micro:
-                if first_iter: worksheet.write(row, 0, str(k))
-                worksheet.write(row, 1+offset, str(v[0]))
-                worksheet.write(row, 2+offset, str(v[1]))
-                worksheet.write(row, 3+offset, str(v[2]))
-                row+=1
-
-            first_iter = False
-        row+=3
-        row_global = row
-    workbook.close()
-
-def compare_predictors(configs: list[InferenceConfig]):
-    result_dirs = [c.output_path for c in configs]
-    inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]] = [get_inference_type(c) for c in configs]
-    a = []
-
-    for p, t in zip(result_dirs, inference_types):
-        a.append(get_prediction_results(get_results_dir(p), t))
-    save_prediction_results(a, inference_types, [p.parts[-1] for p in result_dirs])
+                def tmp(o:dict)->str:
+                    return f"{round(o["value"], 2)}|{round(o["p-value"], 2)}|{round(o["n"]*100,1)}%"
+                if is_corr:
+                    macro = [(o,tmp(v)) for o,v in macro]
+                    micro = [(o, [tmp(t) for t in v]) for o,v in micro]
 
 
+                if first_iter: worksheet.write(row, 0, "metric")
+                row += 1
+
+                worksheet.write(row, 2 + offset,"Spearman Correlation Coefficient" if is_corr else "error (macroscopic)")
+                row += 1
+
+                for k, v in macro:
+                    if first_iter:
+                        worksheet.write(row, 0, str(k))
+                    worksheet.write(row, 2 + offset, str(v))
+                    row += 1
+
+                row += 2
+                if first_iter: worksheet.write(row, 0, "metric")
+                worksheet.write(row, 2 + offset,
+                                "Spearman Correlation Coefficient" if is_corr else "accuracy (microscopic)")
+                row += 1
+                worksheet.write(row, 1 + offset, "color")
+                worksheet.write(row, 2 + offset, "letter")
+                worksheet.write(row, 3 + offset, "digit")
+                row += 1
+
+                for k, v in micro:
+                    if first_iter: worksheet.write(row, 0, str(k))
+                    worksheet.write(row, 1 + offset, str(v[0]))
+                    worksheet.write(row, 2 + offset, str(v[1]))
+                    worksheet.write(row, 3 + offset, str(v[2]))
+                    row += 1
+
+                first_iter = False
+            row += 3
+            row_global = row
+        workbook.close()
+
+class PredictionManager(ResultManager):
+
+    @staticmethod
+    def get_prediction_results(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+        prediction_results = []
+        for restrict_vocab in [False, True]:
+            vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+            p = result_dir / vocab_dir
+
+            match inference_type:
+                case "forced_alignment":
+                    p = p /"plots/dispersion/predictors/cross_validation.json"
+                case "multiple_runs":
+                    p = p / "plots/multiple_runs/predictors/cross_validation.json"
+                case "normal":
+                    p = p / "plots/predictors/cross_validation.json"
+            if not p.exists():
+                continue
+
+            with open(p, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            foo = {}
+            for metric in data:
+                is_micro = metric["micro/macro"] == "microscopic"
+                score = "adjusted score" if is_micro else "mean score of valid rows"
+                foo[tuple(metric["used metrics"])] = [round(m[score], 2) for m in metric["results"]]
+            prediction_results.append(foo)
+
+        return prediction_results
+
+
+    @classmethod
+    def compare_predictors(cls, configs: list[InferenceConfig]):
+        result_dirs = [c.output_path for c in configs]
+        inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]] = [get_inference_type(c) for c
+                                                                                         in configs]
+        a = []
+
+        for p, t in zip(result_dirs, inference_types):
+            a.append(cls.get_prediction_results(get_results_dir(p), t))
+        cls.save_results(a, inference_types, [p.parts[-1] for p in result_dirs], cls)
+
+class CorrelationManager(ResultManager):
+
+    @staticmethod
+    def get_correlation_results(result_dir: Path, inference_type: Literal["forced_alignment", "multiple_runs", "normal"]):
+        correlation = []
+        for restrict_vocab in [False, True]:
+            vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
+            p = result_dir / vocab_dir
+
+            match inference_type:
+                case "forced_alignment":
+                    p = p /"plots/dispersion/correlation_summary.json"
+                case "multiple_runs":
+                    p = p / "plots/multiple_runs/correlation_summary.json"
+                case "normal":
+                    p = p / "correlation_summary.json"
+            if not p.exists():
+                continue
+
+            with open(p, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            correlation.append(data)
+
+        return correlation
+
+    @classmethod
+    def compare_correlations(cls, configs: list[InferenceConfig]):
+        result_dirs = [c.output_path for c in configs]
+        inference_types: list[Literal["forced_alignment", "multiple_runs", "normal"]] = [get_inference_type(c) for c in
+                                                                                         configs]
+        a = []
+
+        for p, t in zip(result_dirs, inference_types):
+            a.append(cls.get_correlation_results(get_results_dir(p), t))
+        cls.save_results(a, inference_types, [p.parts[-1] for p in result_dirs], cls)
+
+    @classmethod
+    def calculate_and_save_correlations(cls, df: pd.DataFrame, metrics: list[str], save_dir: Path):
+        correlations = {}
+        for m in metrics:
+            if isinstance(df[m].iloc[0], list) or isinstance(df[m].iloc[0], torch.Tensor):
+                a = []
+                for kw_idx in [0, 1, 2]:
+                    a.append(corr_or_mut(df=df, col_name=m, kw_idx=kw_idx, wer_col_or_kw_col='human_transcript_kw',
+                                         special_metric="spearman_correlation"))
+                correlations.update({m: a})
+            elif isinstance(df[m].iloc[0], float):
+                correlations.update({m: corr_or_mut(df=df, col_name=m, kw_idx=None, wer_col_or_kw_col='wer_human_kw',
+                                                    special_metric="spearman_correlation")})
+            else:
+                raise ValueError(type(df[m].iloc[0]))
+
+        with open(save_dir / "correlation_summary.json", 'w') as f:
+            json.dump(correlations, f, indent=4)

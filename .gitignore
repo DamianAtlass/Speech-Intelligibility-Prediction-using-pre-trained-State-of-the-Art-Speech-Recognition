@@ -21,3 +21,5 @@ __pycache__/
 /nemo_experiments/
 /tests/nemo_experiments/
 /results/
+/correlation_results.xlsx
+/prediction_results.xlsx

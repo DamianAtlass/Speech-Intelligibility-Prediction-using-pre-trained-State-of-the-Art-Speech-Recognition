@@ -27,10 +27,11 @@ def corr_or_mut(
     else:
         x = df[col_name]
         y = df["wer_human_kw"]
-
+    n1 = len(y)
     filter = x.isna()
     x = torch.from_numpy(np.array(x.astype(float))[~filter])
     y = y[~filter]
+    n2=len(y)
     if special_metric == "spearman_correlation":
 
         x_ranked = stats.rankdata(x)
@@ -40,13 +41,13 @@ def corr_or_mut(
         # spearman corr == pearson corr of ranks
         regr = stats.pearsonr(x=x_ranked, y=y_ranked)
 
-        return {"value": regr.statistic, "p-value": regr.pvalue}
+        return {"value": regr.statistic, "p-value": regr.pvalue, "n": n2/n1}
 
     elif special_metric == "mutual_information":
         if microscopic:
             mi = mutual_info_classif(X=torch.Tensor(x).reshape(-1, 1), y=y)
         else:
             mi = mutual_info_regression(X=torch.Tensor(x).reshape(-1, 1), y=y)
-        return {"value": mi[0]}
+        return {"value": mi[0], "n": n2/n1}
     else:
         raise Exception(f"Unknown metric: {special_metric}")

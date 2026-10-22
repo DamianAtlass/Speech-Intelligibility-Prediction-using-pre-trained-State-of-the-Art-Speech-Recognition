@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 from utils.new_config_dataclass import load_config
-from utils.evaluate_utils import get_data, compare_predictors, get_results_dir, get_inference_type
+from utils.evaluate_utils import get_data, PredictionManager, get_results_dir, get_inference_type, CorrelationManager
 from utils.plotting_utils import plot_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr
 import torch
 import pandas as pd
@@ -71,16 +71,19 @@ def compare_graphs():
                       output_path=subfolder_name
                       )
 
-def generate_excel_file():
+def generate_predictor_summary():
+    paths = [
+        "inferences/delete_me_parakeet/",
+    ]
+    configs = [load_config(Path(p)/"config.yaml") for p in paths]
+    PredictionManager.compare_predictors(configs)
 
+def generate_correlation_summary():
     paths = [
         "inferences/delete_me/",
-        "inferences/delete_me_runs/",
     ]
-
-    configs = [load_config(Path(p)/"config.yaml") for p in paths]
-
-    compare_predictors(configs)
+    configs = [load_config(Path(p) / "config.yaml") for p in paths]
+    CorrelationManager.compare_correlations(configs)
 
 if __name__ == '__main__':
-    generate_excel_file()
+    generate_correlation_summary()
