@@ -23,3 +23,4 @@ __pycache__/
 /results/
 /correlation_results.xlsx
 /prediction_results.xlsx
+/backups_inferences/
