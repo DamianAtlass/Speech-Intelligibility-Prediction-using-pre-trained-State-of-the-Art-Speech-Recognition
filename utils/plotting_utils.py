@@ -42,6 +42,7 @@ labels_dict_long = {
     "dispersion_kw": "Dispersion",
     "tad_kw_var": "varience of the TAD",
     "entropy_kw_var": "varience of the entropy",
+    "mtd_var": "varience of the MTD",
 }
 
 labels_dict_short = {
@@ -64,6 +65,7 @@ labels_dict_short = {
     "tad_kw_var": "var. of TAD",
     "entropy_kw_var": "var. of entropy",
     "dispersion_kw": "Dispersion",
+    "mtd_var": "var. of the MTD",
 }
 def get_label(s: str, l: Literal["long", "short"] = "long") -> str:
     return labels_dict_long[s] if l=="long" else labels_dict_short[s]

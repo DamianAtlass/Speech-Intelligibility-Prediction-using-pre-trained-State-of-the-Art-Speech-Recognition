@@ -17,7 +17,8 @@ from logistic_regression import build_predictors
 from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
-    boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr, plot_corr_for_laptev_alphas
+    boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr, plot_corr_for_laptev_alphas,\
+    get_label
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -369,13 +370,19 @@ def evaluate_individual_run(config: InferenceConfig,
     # GROUPED
     ## create grouped df
     def wrapper(func: Callable) -> Callable:
-        def inner(x) -> torch.Tensor:
+        def inner(x) -> torch.Tensor|float:
             x = torch.Tensor(x.tolist())
+            if len(x.shape) !=2:
+                #macroscopic
+                x = x[:, None]
+            assert len(x.shape) ==2
             result: torch.Tensor = torch.stack([
                 func(col[~torch.isnan(col)])
                 for col in x.T
             ])
-            assert result.shape == (3,)
+            assert result.shape == (3,) or result.shape == (1,)
+            if result.shape == (1,):
+                return result.item()
             return result
         return inner
 
@@ -391,6 +398,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 "wer_human_kw": group["wer_human_kw"].iloc[0],
                 "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
                 "entropy_kw_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
+                "mtd_var": wrapper(torch.var)(group["mtd"]),
             })
 
         print("Creating the grouped dataframe...", end="")
@@ -401,14 +409,10 @@ def evaluate_individual_run(config: InferenceConfig,
 
         ## plot stuff
 
-        labels = {
-            "tad_kw_var": "varience of the TAD",
-            "entropy_kw_var": "varience of the entropy",
-        }
         dir_runs = dir_plots / "multiple_runs"
         dir_runs.mkdir(parents=False)
 
-        metrics = ["tad_kw_var", "entropy_kw_var"]
+        metrics = ["tad_kw_var", "entropy_kw_var", "mtd_var"]
         CorrelationManager.calculate_and_save_correlations(
             df=grouped_df,
             metrics=metrics,
@@ -417,32 +421,57 @@ def evaluate_individual_run(config: InferenceConfig,
         for m in metrics:
             out = dir_runs / m
             out.mkdir(exist_ok=True, parents=True)
-            col_label = labels[m]
-            box_or_barplot_microscopic_x_to_snr(
-                grouped_df,
-                col_name=m,
-                col_label=col_label,
-                output_path=out)
+            col_label = get_label(m)
 
-            boxplot_microscopic_special_metric_per_keyword(
-                grouped_df[["reference_kw", m, "human_transcript_kw"]],
-                col_name=m,
-                special_metric="spearman_correlation",
-                col_compare_against_ref_kw="human_transcript_kw",
-                multiple_runs=True,
-                output_path=out)
+            if "kw" in m:
+                box_or_barplot_microscopic_x_to_snr(
+                    grouped_df,
+                    col_name=m,
+                    col_label=col_label,
+                    output_path=out)
 
-            boxplot_microscopic_special_metric_per_keyword(
-                grouped_df[["reference_kw", m, "human_transcript_kw"]],
-                col_name=m,
-                special_metric="mutual_information",
-                col_compare_against_ref_kw="human_transcript_kw",
-                multiple_runs=True,
-                output_path=out)
+                boxplot_microscopic_special_metric_per_keyword(
+                    grouped_df[["reference_kw", m, "human_transcript_kw"]],
+                    col_name=m,
+                    special_metric="spearman_correlation",
+                    col_compare_against_ref_kw="human_transcript_kw",
+                    multiple_runs=True,
+                    output_path=out)
+
+                boxplot_microscopic_special_metric_per_keyword(
+                    grouped_df[["reference_kw", m, "human_transcript_kw"]],
+                    col_name=m,
+                    special_metric="mutual_information",
+                    col_compare_against_ref_kw="human_transcript_kw",
+                    multiple_runs=True,
+                    output_path=out)
+            else:
+                grouped_df["model_type"] = config.model.model_type
+                barplot_x_to_snr(df=grouped_df[[m, "snr", "model_type"]],
+                                 col_name=m,
+                                 shifting_attribute_label="whisper",
+                                 shifting_attribute="model_type",
+                                 output_path=out)
+
+                # boxplot_corr_per_listener(
+                #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+                #     col_name=m,
+                #     special_metric="spearman_correlation",
+                #     model=config.model.name,
+                #     model_type=config.model.model_type,
+                #     output_path=out)
+                #
+                # boxplot_corr_per_listener(
+                #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+                #     col_name=m,
+                #     special_metric="mutual_information",
+                #     model=config.model.name,
+                #     model_type=config.model.model_type,
+                #     output_path=out)
 
         build_predictors(
             df=grouped_df,
-            metrics_list=[[k] for k in labels.keys()],
+            metrics_list=[[k] for k in metrics],
             output_path=dir_runs)
 
     # dumping of summary should be the last action to symbolize that all went well on a short look
