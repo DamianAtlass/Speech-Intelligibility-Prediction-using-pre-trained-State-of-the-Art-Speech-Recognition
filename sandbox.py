@@ -10,6 +10,7 @@ from utils.evaluate_utils import get_data
 from utils.dataset_utils import get_dataset, create_grid_without_bc_sentences, create_grid_bc_without_duplicates, override_noised_dataset_as_files
 from utils.logging_utils import catch_time
 from utils.new_config_dataclass import load_config, DataSplitConfig
+from utils.avsec_utils import parse_and_save_avsec2_enhanced
 
 from utils.cpc_utils import parse_and_save_cpc, get_cpc
 
@@ -65,4 +66,4 @@ def run_once():
 
 
 if __name__ == '__main__':
-    get_cpc()
+    parse_and_save_avsec2_enhanced()
