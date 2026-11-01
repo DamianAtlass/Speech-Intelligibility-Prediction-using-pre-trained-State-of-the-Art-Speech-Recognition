@@ -11,7 +11,7 @@ from utils.dataset_utils import get_dataset, create_grid_without_bc_sentences, c
 from utils.logging_utils import catch_time
 from utils.new_config_dataclass import load_config, DataSplitConfig
 
-from utils.cpc_utils import parse_and_save_cpc as cpc_main
+from utils.cpc_utils import parse_and_save_cpc, get_cpc
 
 def inspect_df(path: Path, device: torch.device | None = None):
     if not device:
@@ -65,4 +65,4 @@ def run_once():
 
 
 if __name__ == '__main__':
-    cpc_main()
+    get_cpc()

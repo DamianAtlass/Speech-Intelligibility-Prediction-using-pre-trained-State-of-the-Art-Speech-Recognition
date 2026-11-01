@@ -4,11 +4,12 @@ import csv
 from utils.paths import CPC_DEMO_FOLDER, PROJECT_ROOT
 from datasets import Dataset, load_from_disk, Audio
 from utils.manipulate_audio import calculate_snr
+from typing import cast
 
 
 WANTED_SAMPLE_RATE = 16_000
 
-def parse_and_save_cpc(cpc_folder: Path = CPC_DEMO_FOLDER):
+def parse_and_save_cpc(cpc_folder: Path = CPC_DEMO_FOLDER) -> Dataset:
     metadata_path = cpc_folder / "metadata"
 
     with open(metadata_path/"CPC3.train.json", "r") as file:
@@ -41,6 +42,8 @@ def parse_and_save_cpc(cpc_folder: Path = CPC_DEMO_FOLDER):
         assert ref_audio_path.exists()
         r["hearing_impairment_severity"] = listeners_to_HI_severity[r["listener"]]
 
+        r["response"] = "" if r["response"] == "#" else r["response"]
+
     del listeners_to_HI_severity
 
     d = {k: [o[k] for o in listening_test_results] for k in listening_test_results[0].keys()}
@@ -68,6 +71,14 @@ def parse_and_save_cpc(cpc_folder: Path = CPC_DEMO_FOLDER):
 
     save_at = cpc_folder / "saved_dataset"
     dataset.save_to_disk(save_at)
+    return dataset
+
+def get_cpc(cpc_dir: Path = CPC_DEMO_FOLDER) -> Dataset:
+    try:
+        return cast(Dataset, load_from_disk(cpc_dir / "saved_dataset"))
+    except FileNotFoundError:
+        return parse_and_save_cpc(cpc_dir)
+
 
 
 if __name__ == '__main__':
