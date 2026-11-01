@@ -53,6 +53,10 @@ def create_filename(dataset_type: str, sample: dict, run: int|None, forced_align
             tail = audio_path.stem
         case "libri":
             tail = sample["id"]
+        case "avsec2_enhanced":
+            snr_str = f"{"m" if float(sample["snr"]) < 0 else ""}{abs(float(sample["snr"]))}"
+            l.append(f"SNR{snr_str}")
+            tail = sample["sample_ID"]
         case _:
             raise RuntimeError("Unknown dataset type")
     if run is not None:

@@ -12,8 +12,9 @@ import shutil
 
 from utils.grid_utils import get_grid
 from utils.grid_bc_utils import get_grid_bc
+from utils.avsec_utils import get_avsec2_enhanced
 from utils.manipulate_audio import add_noise_transformation
-from utils.paths import GRID_FOLDER, BC_FOLDER, PROJECT_ROOT
+from utils.paths import GRID_FOLDER, BC_FOLDER, PROJECT_ROOT, AVSEC2_LTR
 from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
 WANTED_SAMPLE_RATE = 16_000
 SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
@@ -21,7 +22,8 @@ SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 
 default_dataset_paths = {
     "grid": GRID_FOLDER,
-    "grid_bc": BC_FOLDER
+    "grid_bc": BC_FOLDER,
+    "avsec2_enhanced": AVSEC2_LTR,
 }
 
 def _get_dataset(dataset_type: str,
@@ -43,6 +45,8 @@ def _get_dataset(dataset_type: str,
             return get_grid_bc(dataset_path)
         case "libri":
             return get_libri()
+        case "avsec2_enhanced":
+            return get_avsec2_enhanced()
     raise RuntimeError(f"Dataset type {dataset_type} not implemented")
 
 def get_libri() -> Dataset:
