@@ -77,3 +77,10 @@ Run the tests with:
 bash my_pytest
 ```
 Some tests may get stuck if the machine it runs on is connected the internet via a VPN.
+
+
+unpack cpc datasets
+```bash
+tar -xf clarity_CPC3_demo_data.v1_0.tar.gz
+find . -name "._*" -delete
+```

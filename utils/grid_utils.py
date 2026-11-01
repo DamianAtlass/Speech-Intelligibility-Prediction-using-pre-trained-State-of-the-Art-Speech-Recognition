@@ -3,14 +3,13 @@ import tarfile
 from shutil import rmtree
 
 import librosa
-from datasets import Dataset, load_from_disk
+from datasets import Dataset, load_from_disk, Audio
 
 SAMPLE_RATE_DOWNLOADED_FILES = 25_000
 WANTED_SAMPLE_RATE = 16_000
 
 import wave
 from tqdm import tqdm
-from datasets import Audio
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
