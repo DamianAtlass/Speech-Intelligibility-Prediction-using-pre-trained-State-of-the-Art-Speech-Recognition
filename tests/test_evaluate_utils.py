@@ -1,4 +1,4 @@
-from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence, get_results_dir
+from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence, get_results_dir, avsec_wers_human_kw
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -169,3 +169,26 @@ def test_get_results_dir(path:str, expected_result: str, expect_exception: bool)
         assert r == Path(expected_result)
     except ValueError:
         assert expect_exception, "Exception not expected"
+
+@pytest.mark.parametrize(("target_word", "human_transcript", "alternatives", "result"), [
+    ("hello", "hello", ["hello", "goodbye", "buona sera", "none"], 0),
+    ("hello", "goodbye", ["hello", "goodbye", "buona sera", "none"], 1),
+    ("baum", "none", ["hello", "goodbye", "buona sera", "none"], 0),
+    ("baum", "buona sera", ["hello", "goodbye", "buona sera", "none"], 1),
+])
+#target_word: str, human_transcript: str, alternatives
+def test_avsec_wers_human_kw(target_word: str, human_transcript: str, alternatives: list[str], result: int):
+    r = avsec_wers_human_kw(target_word, human_transcript, alternatives)
+    assert r == result
+
+
+#target_word: str, human_transcript: str, alternatives
+def test_avsec_wers_human_kw_exception():
+    target_word = "hello"
+    human_transcript = "XXXX"
+    alternatives = ["hello", "goodbye", "buona sera", "none"]
+    try:
+        r = avsec_wers_human_kw(target_word, human_transcript, alternatives)
+        assert False
+    except ValueError:
+        assert True

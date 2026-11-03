@@ -253,7 +253,8 @@ def plot_wer_to_snr(
         trans_col: Literal["machine_transcript", "machine_transcript_kw", "machine_transcript_kw_from_time_align"],
         shifting_attribute: str = "model_type",
         shifting_attribute_label = None,
-        output_path: Path = None, ):
+        output_path: Path = None,
+        avsec_col: bool|None=None):
     """
     Plot the WER for each SNR and add the human WER values for comparison.
     """
@@ -270,8 +271,11 @@ def plot_wer_to_snr(
     human_values = []
     for snr in np.sort(df_human_data["snr"].unique()):
         df_snr = df_human_data[df_human_data["snr"]==snr]
-        wer_snr = wer_needleman_wunsch(references=join_kw_list(df_snr["reference_kw"].values),
-                                       transcripts=join_kw_list(df_snr["human_transcript_kw"].values))
+        if not avsec_col:
+            wer_snr = wer_needleman_wunsch(references=join_kw_list(df_snr["reference_kw"].values),
+                                           transcripts=join_kw_list(df_snr["human_transcript_kw"].values))
+        else:
+            wer_snr = df_snr["wer_human_kw"].mean()
         human_values.append(wer_snr)
     human_values = torch.Tensor(human_values) * 100
     del df_human_data
@@ -289,11 +293,13 @@ def plot_wer_to_snr(
                 values = df_snr[col].values
                 return join_kw_list(values) if "kw" in col else values
 
-            references = get_values(ref_col)
-            transcripts = get_values(trans_col)
-
-            wer_snr = wer_needleman_wunsch(references=references,
-                                           transcripts=transcripts)
+            if not avsec_col:
+                references = get_values(ref_col)
+                transcripts = get_values(trans_col)
+                wer_snr = wer_needleman_wunsch(references=references,
+                                               transcripts=transcripts)
+            else:
+                wer_snr = df_snr[avsec_col].mean()
             mv_temp.append(wer_snr)
         machine_values.append(torch.tensor(mv_temp) * 100)
 
@@ -849,13 +855,25 @@ def boxplot_microscopic_special_metric_per_keyword(
 
 
 class PredictorPlots:
-
+    labels = {
+        "LogisticRegression":{
+            "ylabel": "Adjusted score",
+            "title": "Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)",
+        },
+        "LinearRegression": {
+            "ylabel":"absolute mean error",
+            "title": "Average error of linear regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
+        },
+    }
     @classmethod
     def plot_macroscopoic(self,
             results: list,
             output_path: Path|None = None):
         scores = []
         labels = []
+        rt = {o["regression_type"] for o in results}
+        assert len(rt)==1
+        rt = tuple(rt)[0]
 
         for i, item in enumerate(results):
             result = item["results"][0]
@@ -869,8 +887,8 @@ class PredictorPlots:
         plt.bar(labels, scores, width=0.8)
         plt.grid()
 
-        plt.ylabel("absolute mean error")
-        title = f"Average error of linear regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
+        plt.ylabel(self.labels[rt]["ylabel"])
+        title = "Macroscopic metrics - " + self.labels[rt]["title"]
         plt.title(wrap_text(title, 65))
 
         if output_path:
@@ -912,7 +930,7 @@ class PredictorPlots:
                 ax.text(x, -0.03, s=f"{score:.2f}", ha="center", va="top", fontsize=8, rotation=0, clip_on=False)
 
         ax.set_ylabel("Adjusted score")
-        title = f"Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
+        title = f"Microscopic metrics - Average accuracy of logistic regression with 5-fold cross-validation between different metrics with the human WER (keywords only)"
         plt.title(wrap_text(title, 45 + 5*len(metrics)))
         plt.grid()
 
@@ -937,3 +955,39 @@ class PredictorPlots:
             plt.show()
 
         plt.close(fig)
+
+class AvsecPlotter:
+
+    @classmethod
+    def plot_macroscopoic(self,
+                          snr,
+                          mean,
+                          std,
+                          metric_name,
+                          output_dir: Path) -> None:
+
+        x = np.arange(len(snr))
+
+        plt.figure(figsize=(12, 6))
+
+        plt.errorbar(
+            x,
+            mean,
+            yerr=std,
+            fmt='o',
+            capsize=5,
+            markersize=6
+        )
+
+        plt.xticks(x, snr)
+        plt.xlabel("SNR")
+        plt.ylabel(get_label(metric_name, l="short"))
+        plt.title(f"{get_label(metric_name)} per SNR (mean±std)")
+        plt.grid(axis="y", alpha=0.3)
+
+        plt.tight_layout()
+        if output_dir:
+            plt.savefig(output_dir / f'{metric_name}.png')
+        else:
+            plt.show()
+        pass

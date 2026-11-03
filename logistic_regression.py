@@ -77,7 +77,6 @@ def train_and_evaluate_predictors(
 
         scoring_metric = 'accuracy' if metric_is_micro else "neg_mean_absolute_error"
         metric_results["scoring metric"] = scoring_metric
-        error_fn = accuracy_score if metric_is_micro else mean_absolute_error
 
         kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]
         for kw_number in kw_numbers:
@@ -89,7 +88,10 @@ def train_and_evaluate_predictors(
                 df=df,
                 metrics=metrics,
                 kw_number=kw_number)
-            if metric_is_micro:
+
+            y_is_binary = set(y) == {0,1}
+            error_fn = accuracy_score if y_is_binary else mean_absolute_error
+            if y_is_binary: #avsec
                 model = LogisticRegression(max_iter=200)
             else:
                 model = LinearRegression()
@@ -121,8 +123,9 @@ def train_and_evaluate_predictors(
             result["Mean intercept"] = np.mean(intercepts).tolist()
             result["non-valid rows (percent)"] = non_valid_rows*100
             result["mean score of valid rows"] = np.mean(scores).tolist()
-            result["adjusted score"] = (np.mean(scores)*valid_rows)/len(df) if metric_is_micro else "???"
+            result["adjusted score"] = (np.mean(scores)*valid_rows)/len(df) if y_is_binary else "???"
 
+            metric_results["regression_type"] = "LogisticRegression" if y_is_binary else "LinearRegression"
             metric_results["results"].append(result)
         results_list.append(metric_results)
 

@@ -9,7 +9,7 @@ import shutil
 
 def test_convert_video_to_audio_moviepy():
     video_file_path = TEST_FOLDER/ "ID1581.mp4"
-    assert video_file_path.exists(), "File doesnt exist: {}"
+    assert video_file_path.exists(), "File doesnt exist: {video_file_path}"
     audio_file_path = TEST_FOLDER / "ID1581.wav"
     convert_video_to_audio_moviepy(video_file_path, audio_file_path)
 
@@ -23,7 +23,8 @@ def test_convert_video_to_audio_moviepy():
 def test_parse_and_save_avsec2_enhanced():
     test_avsec2 = TEST_FOLDER /"avsec2"
     dataset_dir = test_avsec2 /"saved_dataset"
-    shutil.rmtree(test_avsec2)
+    if test_avsec2.exists():
+        shutil.rmtree(test_avsec2)
 
     test_avsec2.mkdir(parents=True, exist_ok=True)
 

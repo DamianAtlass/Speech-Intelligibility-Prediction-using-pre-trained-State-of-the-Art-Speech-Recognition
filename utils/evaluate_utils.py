@@ -18,7 +18,7 @@ from utils.logging_utils import catch_time
 from utils.plotting_utils import plot_regr_line_for_spearman_corr, plot_metrics, \
     plot_wer_to_snr, boxplot_corr_per_listener, plot_microscopic_x_to_snr, plot_x_to_snr, \
     boxplot_microscopic_special_metric_per_keyword, join_kw_list, box_or_barplot_microscopic_x_to_snr, barplot_x_to_snr, plot_corr_for_laptev_alphas,\
-    get_label
+    get_label, AvsecPlotter
 from utils.werpy_utils import normalize
 from utils.wer_needleman_wunsch import wer_needleman_wunsch, wer_needleman_wunsch_per_sample, _needlemann_wunsch
 from utils.dataset_utils import get_dataset
@@ -34,6 +34,20 @@ dist = Distance()
 from phonemizer.backend import EspeakBackend
 backend = EspeakBackend("en-us")
 phonemize = backend.phonemize
+
+def ds_organizer(
+        dataset_type: Literal["sentence", "grid_bc", "libri", "avsec2_enhanced"],
+        var: Literal["reference_field"],
+        ):
+    return woo[var][dataset_type]
+
+woo = {
+    "reference_field": {
+                    "grid":             "sentence",
+                   "grid_bc":           "sentence",
+                   "libri":             "text",
+                   "avsec2_enhanced":   "reference"}
+}
 
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -474,9 +488,346 @@ def evaluate_individual_run(config: InferenceConfig,
             metrics_list=[[k] for k in metrics],
             output_path=dir_runs)
 
-    # dumping of summary should be the last action to symbolize that all went well on a short look
-    with open(file_name_summary, 'w') as f:
-        json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
+def evaluate_individual_avsec_run(config: InferenceConfig,
+                            df_single_run: pd.DataFrame,
+                            restrict_vocab: bool) -> None:
+    results_dir = get_results_dir(config.output_path) / (
+        "results_restrict_vocab" if restrict_vocab else "results_full_vocab")
+
+    file_name_summary = results_dir / "summary.json"
+    file_name_df_creation_summary = results_dir / "df_creation_summary.json"
+
+    if file_name_df_creation_summary.exists():
+        with open(file_name_df_creation_summary, "r", encoding="utf-8") as file:
+            tmp = json.load(file)
+    else:
+        tmp = {}
+
+    if results_dir.exists():
+        shutil.rmtree(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    if tmp:
+        with open(file_name_df_creation_summary, "w", encoding="utf-8") as file:
+            json.dump(tmp, file, indent=4)
+
+    # check for missing rows
+    d = get_dataset(config.data.test_split)
+
+    expected_df_len = len(d) * config.runs_per_sample
+    if expected_df_len != len(df_single_run):
+        print(f"Dataframe is missing rows! Expected {expected_df_len}, got {len(df_single_run)}.")
+    del d
+    dataset_type = config.data.test_split.dataset_type
+    if dataset_type != avesc2_enhanced:
+        summary = get_summary(df=df_single_run, dataset_type=config.data.test_split.dataset_type)
+
+    metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
+
+    corr_summary = None
+    corr_metrics_columns = ["macroscopic_entropy", "mtd", "laptev"]
+
+    CorrelationManager.calculate_and_save_correlations(
+        df=df_single_run,
+        metrics=corr_metrics_columns,
+        save_dir=results_dir)
+
+    dir_plots = results_dir / "plots"
+    if dir_plots.exists():
+        shutil.rmtree(dir_plots)
+    dir_plots.mkdir(parents=False, exist_ok=False)
+
+
+    plot_x_to_snr(df=df_single_run[["machine_transcript", "snr", "model_type"]],
+                  plotting_attribute="empty transcripts",
+                  shifting_attribute_label="whisper",
+                  shifting_attribute="model_type",
+                  output_path=dir_plots)
+
+    plot_wer_to_snr(df=df_single_run[
+        ["snr", "reference", "model_type", "wer_machine", "wer_human_kw"]],
+                    ref_col="reference_kw",
+                    trans_col="machine_transcript_kw",
+                    shifting_attribute="model_type",
+                    output_path=dir_plots,
+                    avsec_col="wer_machine")
+
+    plot_wer_to_snr(
+        df=df_single_run[["snr", "model_type", "wer_machine_kw", "wer_human_kw"]],
+        ref_col="reference_kw",
+        trans_col="machine_transcript_kw",
+        shifting_attribute="model_type",
+        output_path=dir_plots,
+        avsec_col="wer_machine_kw")
+
+    #########################
+    #  macroscopic metrics  #
+    #########################
+
+    #here calc macro
+
+    df_groupy_by_snr = df_single_run.groupby("snr")
+    # ["macroscopic_entropy", "mtd", "laptev"]
+    def compute_stats(group: pd.DataFrame):
+        return pd.Series({
+            m: {"mean": group[m].mean(), "std": group[m].std()} for m in corr_metrics_columns
+        })
+
+    print("Creating the grouped dataframe...", end="")
+    with catch_time() as t:
+        df_groupy_by_snr: pd.DataFrame = df_groupy_by_snr.apply(compute_stats).reset_index()
+
+    snr = df_groupy_by_snr["snr"]
+    for m in corr_metrics_columns:
+        mean = df_groupy_by_snr[m].apply(lambda x: x["mean"])
+        std = df_groupy_by_snr[m].apply(lambda x: x["std"])
+
+        AvsecPlotter.plot_macroscopoic(
+            snr=snr,
+            mean=mean,
+            std=std,
+            metric_name=m,
+        output_dir=dir_plots)
+
+                #########################
+                #  microscopic metrics  #
+                #########################
+
+    # keyword_columns = ["machine_transcript_kw_est", "machine_transcript_kw_from_time_align"]
+    # output_dirs = [dir_plots / "est_kw", dir_plots / "kw_from_time_align"]
+    #
+    # for kw_col, out_dir in zip(keyword_columns, output_dirs):
+    #     if kw_col == "machine_transcript_kw_from_time_align" and not config.word_timestamps:
+    #         continue
+    #
+    #     out_dir.mkdir(parents=False, exist_ok=False)
+    #     kw_col: Literal["machine_transcript_kw_est", "machine_transcript_kw_from_time_align"]
+    #
+    #     entropies_kw_col = "entropy_kw_est" if kw_col == "machine_transcript_kw_est" else "entropy_kw_from_time_align"
+    #
+    #     plot_wer_to_snr(
+    #         df=df_single_run[["human_transcript_kw", kw_col, "snr", "reference_kw", "model_type"]],
+    #         ref_col="reference_kw",
+    #         trans_col=kw_col,
+    #         shifting_attribute="model_type",
+    #         output_path=out_dir)
+    #
+    #     def generate_plots_for_microscopic_metric(kw_col, metric_col, curr_dir):
+    #
+    #         box_or_barplot_microscopic_x_to_snr(
+    #             df_single_run[["reference_kw", "model_type", "snr", metric_col]],
+    #             col_name=metric_col,
+    #             col_label="entropy",
+    #             output_path=curr_dir,
+    #             box_or_bar="bar")
+    #
+    #         boxplot_microscopic_special_metric_per_keyword(
+    #             df_single_run[["reference_kw", "listener", "model_type", metric_col,
+    #                            "human_transcript_kw"]],
+    #             special_metric="spearman_correlation",
+    #             col_name=metric_col,
+    #             col_compare_against_ref_kw="human_transcript_kw",
+    #             output_path=curr_dir)
+    #
+    #         boxplot_microscopic_special_metric_per_keyword(
+    #             df_single_run[["reference_kw", "listener", "model_type", metric_col,
+    #                            "human_transcript_kw"]],
+    #             special_metric="mutual_information",
+    #             col_name=metric_col,
+    #             col_compare_against_ref_kw="human_transcript_kw",
+    #             output_path=curr_dir)
+    #
+    #         boxplot_microscopic_special_metric_per_keyword(
+    #             df_single_run[["reference_kw", "listener", "model_type", metric_col, kw_col]],
+    #             special_metric="spearman_correlation",
+    #             col_name=metric_col,
+    #             col_compare_against_ref_kw=kw_col,
+    #             output_path=curr_dir)
+    #
+    #     if config.extract_logprobs:
+    #         if config.data.test_split.dataset_type == "grid_bc":
+    #
+    #             if config.extract_logprobs:
+    #                 # entropy
+    #                 curr_dir = out_dir / "entropy"
+    #                 curr_dir.mkdir(exist_ok=False)
+    #
+    #                 generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=entropies_kw_col,
+    #                                                       curr_dir=curr_dir)
+    #
+    #     # time alignments stuff
+    #     if config.word_timestamps and config.data.test_split.dataset_type == "grid_bc":
+    #         time_align_tad_folder = out_dir / "TAD"
+    #         time_align_tad_folder.mkdir(exist_ok=False)
+    #
+    #         # plot_microscopic_x_to_snr(
+    #         #     df_single_run[["listener", "model_type", "snr", "tad_kw"]],
+    #         #     col_name="tad_kw",
+    #         #     col_label="time alignment difference (TAD)",
+    #         #     y_axis_label="TAD in seconds",
+    #         #     shifting_attribute="model_type",
+    #         #     output_path=time_align_tad_folder)
+    #
+    #         generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col="tad_kw",
+    #                                               curr_dir=time_align_tad_folder)
+    #
+    #         # boxplot_microscopic_x_to_snr(
+    #         #     df_single_run[["reference_kw", "listener", "model_type", "snr", "tad_kw", "machine_transcript_kw_from_time_align", "human_transcript_kw"]],
+    #         #     col_name="machine_transcript_kw_from_time_align",
+    #         #     value_label="TODO",
+    #         #     y_axis_label="something with correlation i guess",
+    #         #     special_metric="correlation",
+    #         #     output_path=None)
+    #
+    #     # average detected kw position
+    #     idx_list = [[], [], []]
+    #     for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
+    #         indexes = row["machine_transcript_kw_from_time_align_idx"]
+    #         for i, kw_idx in enumerate([1, 3, 4]):
+    #             if indexes[i] is not None:
+    #                 idx_list[i].append(indexes[i])
+    #
+    #     idx_list = [np.array(a) for a in idx_list]
+    #     summary.append({f"kw at index {i}": {"mean idx of word": arr.mean(), "std": arr.std()} for i, arr in
+    #                     zip([1, 3, 4], idx_list)})
+    #
+    # # explore alphas
+    # df = df_single_run[["laptev_alpha", "wer_human_kw", "model_type", "listener"]].copy()
+    # alpha_keys = df["laptev_alpha"].iloc[0].keys()
+    #
+    # list_df = []
+    # for a in alpha_keys:
+    #     df_cp = df.copy()
+    #     df_cp["laptev_alpha"] = df_cp["laptev_alpha"].apply(lambda x: x[a])
+    #     df_cp["alpha"] = a
+    #     list_df.append(df_cp)
+    #
+    # df_alpha_concat = pd.concat(list_df, axis=0)
+    #
+    # latev_alpha_dir = dir_plots / "diff_laptev_alpha"
+    # latev_alpha_dir.mkdir(parents=False)
+    #
+    # plot_corr_for_laptev_alphas(
+    #     df_alpha_concat[["laptev_alpha", "wer_human_kw", "model_type", "listener", "alpha"]],
+    #     col_name="laptev_alpha",
+    #     special_metric="spearman_correlation",
+    #     xlabel="alpha",
+    #     model=config.model.name,
+    #     model_type=config.model.model_type,
+    #     shifting_attribute="alpha",
+    #     output_path=latev_alpha_dir)
+    #
+    # # GROUPED
+    # ## create grouped df
+    # def wrapper(func: Callable) -> Callable:
+    #     def inner(x) -> torch.Tensor | float:
+    #         x = torch.Tensor(x.tolist())
+    #         if len(x.shape) != 2:
+    #             # macroscopic
+    #             x = x[:, None]
+    #         assert len(x.shape) == 2
+    #         result: torch.Tensor = torch.stack([
+    #             func(col[~torch.isnan(col)])
+    #             for col in x.T
+    #         ])
+    #         assert result.shape == (3,) or result.shape == (1,)
+    #         if result.shape == (1,):
+    #             return result.item()
+    #         return result
+    #
+    #     return inner
+    #
+    # if config.runs_per_sample > 1:
+    #     if not config.extract_logprobs and config.word_timestamps: raise ValueError("Not supported.")
+    #     grouped_df = df_single_run.groupby("audio_path")
+    #
+    #     def compute_stats(group: pd.DataFrame):
+    #         return pd.Series({
+    #             "snr": group["snr"].iloc[0],
+    #             "reference_kw": group["reference_kw"].iloc[0],
+    #             "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+    #             "wer_human_kw": group["wer_human_kw"].iloc[0],
+    #             "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
+    #             "entropy_kw_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
+    #             "mtd_var": wrapper(torch.var)(group["mtd"]),
+    #         })
+    #
+    #     print("Creating the grouped dataframe...", end="")
+    #     with catch_time() as t:
+    #         grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+    #
+    #     print(f"took: {t():.2f} s.")
+    #
+    #     ## plot stuff
+    #
+    #     dir_runs = dir_plots / "multiple_runs"
+    #     dir_runs.mkdir(parents=False)
+    #
+    #     metrics = ["tad_kw_var", "entropy_kw_var", "mtd_var"]
+    #     CorrelationManager.calculate_and_save_correlations(
+    #         df=grouped_df,
+    #         metrics=metrics,
+    #         save_dir=dir_runs)
+    #
+    #     for m in metrics:
+    #         out = dir_runs / m
+    #         out.mkdir(exist_ok=True, parents=True)
+    #         col_label = get_label(m)
+    #
+    #         if "kw" in m:
+    #             box_or_barplot_microscopic_x_to_snr(
+    #                 grouped_df,
+    #                 col_name=m,
+    #                 col_label=col_label,
+    #                 output_path=out)
+    #
+    #             boxplot_microscopic_special_metric_per_keyword(
+    #                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
+    #                 col_name=m,
+    #                 special_metric="spearman_correlation",
+    #                 col_compare_against_ref_kw="human_transcript_kw",
+    #                 multiple_runs=True,
+    #                 output_path=out)
+    #
+    #             boxplot_microscopic_special_metric_per_keyword(
+    #                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
+    #                 col_name=m,
+    #                 special_metric="mutual_information",
+    #                 col_compare_against_ref_kw="human_transcript_kw",
+    #                 multiple_runs=True,
+    #                 output_path=out)
+    #         else:
+    #             grouped_df["model_type"] = config.model.model_type
+    #             barplot_x_to_snr(df=grouped_df[[m, "snr", "model_type"]],
+    #                              col_name=m,
+    #                              shifting_attribute_label="whisper",
+    #                              shifting_attribute="model_type",
+    #                              output_path=out)
+    #
+    #             # boxplot_corr_per_listener(
+    #             #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+    #             #     col_name=m,
+    #             #     special_metric="spearman_correlation",
+    #             #     model=config.model.name,
+    #             #     model_type=config.model.model_type,
+    #             #     output_path=out)
+    #             #
+    #             # boxplot_corr_per_listener(
+    #             #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+    #             #     col_name=m,
+    #             #     special_metric="mutual_information",
+    #             #     model=config.model.name,
+    #             #     model_type=config.model.model_type,
+    #             #     output_path=out)
+
+        # build_predictors(
+        #     df=grouped_df,
+        #     metrics_list=[[k] for k in metrics],
+        #     output_path=dir_runs)
+
+    # # dumping of summary should be the last action to symbolize that all went well on a short look
+    # with open(file_name_summary, 'w') as f:
+    #     json.dump({"summary:": summary, "correlation:": corr_summary if corr_summary else None}, f, indent=4)
 
 
 def evaluate_forced_alignment_run(
@@ -838,6 +1189,8 @@ class DataGetterParakeet(DataGetter):
 
         return tokens_list
 
+avesc2_enhanced = "avsec2_enhanced"
+
 class MetricWrapper:
     @classmethod
     def calculate_dispersion_per_file(cls, rows_single_audio: pd.DataFrame):
@@ -1027,9 +1380,8 @@ def get_data(
         forced_alignment_options = []
 
         temperature = []
-
-
-        counter = 0
+        alternatives = []
+        target_word = []
 
         # read files
         for counter, file in enumerate(tqdm(data_path.iterdir(), total=len(list(data_path.iterdir())))):
@@ -1057,15 +1409,25 @@ def get_data(
                     if word_timestamps:
                         transcript_alignments.append(dg.word_timestamps(json_file))
 
-                references.append(json_file["sentence" if dataset_type!="libri" else "text"])
-                if dataset_type != "libri":
+                references.append(json_file[ds_organizer(dataset_type, "reference_field")])
+
+                if dataset_type in ["grid", "grid_bc"]:
                     references_alignments.append([{"start": a[0], "end": a[1], "word": a[2]} for a in json_file["alignment"]])
-                    audio_paths.append(json_file["audio_path"])
+
+                if dataset_type in ["grid", "grid_bc", avesc2_enhanced]: audio_paths.append(json_file["audio_path"])
+
+                if dataset_type in ["grid_bc", avesc2_enhanced]:
+                    snr.append(float(json_file["snr_db"]))
+
+                if dataset_type == avesc2_enhanced:
+                    alternatives.append(json_file["alt"])
+                    target_word.append(json_file["target_word"])
+                    human_transcripts_kw.append(json_file["response"])
 
                 if dataset_type == "grid_bc":
                     human_transcripts_kw.append(json_file["human_recognized_words"])
-                    snr.append(int(json_file["snr_db"]))
                     listener.append(json_file["listener"])
+
 
                 if extract_logprobs:
                     logprobs_paths.append(json_file["prediction_result"]["logprobs_path"])
@@ -1083,40 +1445,66 @@ def get_data(
             exit()
 
         #post-processing
-        references_kw: list[list[str]] = [KeywordGetter.get_kw_by_index(o) for o in references]
+        if dataset_type in ["grid", "grid_bc"]:
+            references_kw: list[list[str]] = [KeywordGetter.get_kw_by_index(o) for o in references]
         machine_transcripts: list[str] = normalize(machine_transcripts)
 
-        human_transcripts_kw: list[str] = normalize(human_transcripts_kw)
-        human_transcripts_kw: list[list[str]] = [o.split() for o in human_transcripts_kw]
+        if dataset_type == avesc2_enhanced:
+            references = normalize(references)
+            target_word = normalize(target_word)
+            references_kw: list[list[str]] = [o.index(t) for o, t in zip(references, target_word)]
 
-        machine_transcripts_kw: list[list[str]] = cast(
-            list[list[str]],
-            [KeywordGetter.get_kw_by_identity(
-                reference_kw=r,
-                transcript=t.split())
-                for r, t in zip(references_kw, machine_transcripts)]
-        )
+        human_transcripts_kw: list[str] = normalize(human_transcripts_kw)
+
+        if dataset_type in ["grid", "grid_bc"]:
+            human_transcripts_kw: list[list[str]] = [o.split() for o in human_transcripts_kw]
+            machine_transcripts_kw: list[list[str]] = cast(
+                list[list[str]],
+                [KeywordGetter.get_kw_by_identity(
+                    reference_kw=r,
+                    transcript=t.split())
+                    for r, t in zip(references_kw, machine_transcripts)]
+            )
+            wers_machine_kw: list[float] = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(machine_transcripts_kw))
 
         wers_machine: list[float] = wer_needleman_wunsch_per_sample(references=references, transcripts=machine_transcripts)
-        wers_machine_kw: list[float] = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(machine_transcripts_kw))
 
-        if dataset_type != "grid":
+        if dataset_type==avesc2_enhanced:
+            wers_human_kw = [avsec_wers_human_kw(tw, tr, a) for tw, tr, a in zip(target_word, human_transcripts_kw, alternatives)]
+            wers_machine_kw: list[int] = [ int(not t in m) for t, m in zip(target_word, machine_transcripts)]
+
+
+        if dataset_type == "grid_bc":
             wers_human_kw = wer_needleman_wunsch_per_sample(references=join_kw_list(references_kw), transcripts=join_kw_list(human_transcripts_kw))
 
         data = {
             "avg_logprob": avg_logprobs,
             "reference": references,
-            "reference_alignments": references_alignments,
-            "reference_kw": references_kw,
             "wer_machine": wers_machine,
-            "wer_machine_kw": wers_machine_kw,
             "machine_transcript": machine_transcripts,
-            "machine_transcript_kw": machine_transcripts_kw,
             "audio_path": audio_paths,
             "json_path": json_path
         }
 
-        if dataset_type != "grid":
+        if dataset_type in ["grid", "grid_bc"]:
+            data.update({
+            "reference_kw": references_kw,
+            "wer_machine_kw": wers_machine_kw,
+            "machine_transcript_kw": machine_transcripts_kw,
+            "reference_alignments": references_alignments,
+                })
+
+        if dataset_type == avesc2_enhanced:
+            data.update({
+                    "alternatives": alternatives,
+                    "target_word": target_word,
+                    "wer_human_kw": wers_human_kw,
+                    "wer_machine_kw": wers_machine_kw,
+                    "human_transcript_kw": human_transcripts_kw,
+                    "snr": snr,
+                })
+
+        if dataset_type == "grid_bc":
             data.update({
             "wer_human_kw": wers_human_kw,
             "human_transcript_kw": human_transcripts_kw,
@@ -1368,8 +1756,175 @@ def get_data(
             json.dump(data, file, indent=4)
         return df
 
-    df = eval_df()
+    def eval_df_avsec():
 
+        # for logprobs
+        entropy_kw_est: list[list[float | torch.nan]] = []
+        macroscopic_entropy = []
+        machine_transcript_kw_est_idx: list[list[int | None]] = []
+        machine_transcript_kw_est: list[list[str | None]] = []
+        normalized_decoded_tokens_without_timestamps_list: list[list[str | None]] = []
+        mean_temporal_distance = []
+        # for time_alignments
+        # for tad
+        # for Laptev / Ginsburg confidence
+        laptev: list = []
+        laptev_alpha: list[dict] = []
+
+        alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
+        no_transcript_counter = 0
+
+        nan_posterior_counter = 0
+        nan_kw_posterior_counter_est = 0
+
+        for index, row in tqdm(df.iterrows(), total=len(df)):
+
+            transcript_exists = row["machine_transcript"] != ""
+            if not transcript_exists:
+                no_transcript_counter += 1
+                macroscopic_entropy.append(torch.nan)
+                machine_transcript_kw_est_idx.append([None, None, None])
+                machine_transcript_kw_est.append([None, None, None])
+                entropy_kw_est.append([torch.nan, torch.nan, torch.nan])
+                normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
+                mean_temporal_distance.append(torch.nan)
+                laptev.append(torch.nan)
+
+                laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
+
+                continue
+
+            if extract_logprobs:
+                decoded_tokens_with_timestamps = row["decoded_tokens_with_timestamps"]
+                no_timestamp_idx = dg.get_idx_of_regular_tokens(decoded_tokens_with_timestamps)
+
+                logprob_path = Path.cwd() / "inferences" / output_path / "logprobs" / Path(
+                    row["logprobs_path"]).name
+                logprob_tensor = torch.load(logprob_path)
+
+                ## rm timestamp tokens or BLANK tokens
+                logprob_tensor = logprob_tensor[no_timestamp_idx]
+                decoded_tokens_without_timestamp_tokens = [t for t, b in
+                                                           zip(decoded_tokens_with_timestamps, no_timestamp_idx) if
+                                                           b]
+                del decoded_tokens_with_timestamps
+
+                posteriors = logprob_tensor.exp()
+                del logprob_tensor
+
+                nan_mask = posteriors.isnan().any(dim=1)
+                if restrict_vocab:
+                    posteriors = posteriors[:, grid_vocab_whisper_tokens].to(device)
+                    # posteriors[-2] = torch.full(size=(len(grid_vocab_whisper_tokens),), fill_value=torch.nan) # for testing
+                    nan_mask = posteriors.isnan().any(dim=1)
+
+                    posteriors[~nan_mask] /= posteriors[~nan_mask].sum(dim=-1,
+                                                                       keepdim=True)  # <- properly scaled posteriors, nan (rightfully) not considered in sum
+                    nan_mask = nan_mask + posteriors.isnan().any(dim=1)
+
+                    nan_posterior_counter += nan_mask.sum().item()
+
+                posteriors_no_nan = posteriors[~nan_mask].to(device)
+
+                num_tokens = len(decoded_tokens_without_timestamp_tokens)
+                assert posteriors.shape[0] == num_tokens
+                assert torch.round(posteriors_no_nan.sum(), decimals=2).item() == len(
+                    posteriors_no_nan), torch.round(posteriors_no_nan.sum(), decimals=2).item() == len(
+                    posteriors_no_nan)
+                # calculate mean temporal distance
+                mean_temporal_distance.append(MetricWrapper.calculate_mtd(posteriors_no_nan))
+
+                # calculate microscopic and macroscopic entropy
+                entropies_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
+                entropies_per_token[~nan_mask] = Categorical(probs=posteriors_no_nan).entropy().to(device)
+                assert len(entropies_per_token) == num_tokens
+                macroscopic_entropy.append(float(Categorical(probs=posteriors_no_nan).entropy().to(device).mean()))
+
+                # laptev
+                laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.7)
+                assert len(laptev_per_token) == num_tokens
+                laptev.append(float(laptev_per_token.min()))
+
+                laptev_per_token_alpha: dict = {
+                    a: MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=a) for a in
+                    alpha_values}
+                laptev_alpha.append(
+                    {k: {"min": v.min(), "mean": v.mean()} for k, v in laptev_per_token_alpha.items()})
+
+                del posteriors, posteriors_no_nan
+
+                ## 1) get kw idx by: get_only_keywords_with_different_approaches
+                ### merge if necessary
+                words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens,
+                                                row["transcript_alignments"])
+                words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens,
+                                                                         row["transcript_alignments"])
+                assert len(words) == len(words_token_idx)
+                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_token_idx])
+
+                ### find "correct" kw position
+                words: list[str] = [o.lower().strip() for o in words]
+                words = normalize(
+                    strings=words,
+                    apply_separate_numbers_from_letter=False,
+                    apply_numbers_to_words=True,
+                    apply_werpy_normalize=False)
+                normalized_decoded_tokens_without_timestamps_list.append(words)
+
+                # estimated_transcript_kw_idx_per_word = cast(list[int | None],
+                #                                             KeywordGetter.get_kw_using_mixed_approaches(
+                #                                                 reference_kw=row["reference_kw"],
+                #                                                 transcript=words,
+                #                                                 return_idx=True))
+                #assert len(estimated_transcript_kw_idx_per_word) == 3
+
+                # estimated_transcript_kw: list[str | None] = [None if idx is None else words[idx] for idx in
+                #                                              estimated_transcript_kw_idx_per_word]
+                #
+                # machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
+                # machine_transcript_kw_est.append(estimated_transcript_kw)
+
+                # tmp_kw_entropy: list[float | np.nan] = []
+                # for idx in [(None if i is None else words_token_idx[i]) for i in
+                #             estimated_transcript_kw_idx_per_word]:
+                #     if idx is None:
+                #         tmp_kw_entropy.append(torch.nan)
+                #     else:
+                #         tmp_e = float(entropies_per_token[idx].mean())
+                #         tmp_kw_entropy.append(tmp_e)
+                #         if math.isnan(tmp_e):
+                #             nan_kw_posterior_counter_est += 1
+                #
+                # entropy_kw_est.append(tmp_kw_entropy)
+                #
+                # del tmp_e, tmp_kw_entropy
+
+        df["macroscopic_entropy"] = macroscopic_entropy
+        df["laptev"] = laptev
+        df["laptev_alpha"] = laptev_alpha
+        #df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
+        #df["machine_transcript_kw_est"] = machine_transcript_kw_est
+        #df["entropy_kw_est"] = entropy_kw_est
+        df["mtd"] = mean_temporal_distance
+        df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
+        del (macroscopic_entropy, machine_transcript_kw_est_idx, machine_transcript_kw_est, entropy_kw_est)
+
+
+        data = {
+            "nan_posterior_counter": nan_posterior_counter,
+            "nan_kw_posterior_counter_est": nan_kw_posterior_counter_est,
+
+        }
+
+        with open(file_name_df_creation_summary, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
+        return df
+
+    if dataset_type in ["grid", "grid_bc"]:
+        df = eval_df()
+    else:
+        df = eval_df_avsec()
     df.to_pickle(file_name_df)
 
     return df
@@ -1606,3 +2161,11 @@ class CorrelationManager(ResultManager):
 
         with open(save_dir / "correlation_summary.json", 'w') as f:
             json.dump(correlations, f, indent=4)
+
+def avsec_wers_human_kw(target_word: str, human_transcript: str, alternatives: list[str]):
+    if human_transcript not in alternatives:
+        raise ValueError("The response should be in the list of alternatives!")
+    if target_word in alternatives:
+        return int(target_word!=human_transcript)
+    else:
+        return int(human_transcript!="none")

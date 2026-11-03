@@ -55,8 +55,6 @@ def parse_and_save_avsec2_enhanced(
             for a in alt:
                 d.append(row.pop(a))
             row["alt"] = d
-            row["reference"] = row["target_word"] if row["target_word"] in d else "none"
-
             video_file_name = f"{sample_id}.mp4"
             video_file_path = AVSEC2_ENHANCED_SAMPLES / video_file_name
 
@@ -75,7 +73,8 @@ def parse_and_save_avsec2_enhanced(
     dataset = {k: [o[k] for o in responses] for k in responses[0].keys()}
     print(Counter(dataset["snr"]))
     dataset = Dataset.from_dict(dataset).cast_column("audio", Audio(sampling_rate=WANTED_SAMPLE_RATE))
-
+    dataset = dataset.rename_column("snr", "snr_db")
+    dataset = dataset.rename_column("transcript", "reference")
     save_at.mkdir(parents=False, exist_ok=True)
     dataset.save_to_disk(save_at)
     return dataset
