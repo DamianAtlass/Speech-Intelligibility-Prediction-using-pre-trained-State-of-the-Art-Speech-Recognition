@@ -54,9 +54,10 @@ def train_and_evaluate_predictors(
 ) -> list:
     if is_avsec:
         def compute_stats(group: pd.DataFrame):
-            array = ["macroscopic_entropy", "mtd", "laptev", "wer_human_kw", "wer_machine"]
-            o = {m: group[m].mean() for m in array}
+            calc_mean = ["macroscopic_entropy", "mtd", "laptev", "wer_human_kw", "wer_machine"]
+            o = {m: group[m].mean() for m in calc_mean}
             o.update({"snr": group["snr"].iloc[0]})
+            o.update({"entropy_kw_est": [group["entropy_kw_est"].apply(lambda x: x[0]).mean()]})
             return pd.Series(o)
 
         df = df.groupby("audio_path").apply(compute_stats).reset_index()
@@ -91,6 +92,7 @@ def train_and_evaluate_predictors(
         metric_results["scoring metric"] = scoring_metric
 
         kw_numbers: list = [0, 1 ,2] if metric_is_micro else [None]
+        if is_avsec and metric_is_micro: kw_numbers = [0]
         for kw_number in kw_numbers:
             result = {
                 "keyword type": keywords[kw_number] if metric_is_micro else "None (macroscopic)",
@@ -155,7 +157,7 @@ def build_predictors(df: pd.DataFrame,
                      is_avsec: bool = False):
     output_path = output_path / "predictors"
     output_path.mkdir(parents=True, exist_ok=True)
-    results: list = train_and_evaluate_predictors(df=df, metrics_list=metrics_list, output_path=output_path)
+    results: list = train_and_evaluate_predictors(df=df, metrics_list=metrics_list, output_path=output_path, is_avsec=is_avsec)
 
     r = [o for o in results if o["micro/macro"] == "macroscopic"]
     PredictorPlots.plot_macroscopoic(r, output_path)

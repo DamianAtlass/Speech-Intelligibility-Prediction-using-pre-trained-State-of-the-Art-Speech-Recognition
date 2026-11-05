@@ -1869,12 +1869,12 @@ def get_data(
                     strings=words,
                     apply_separate_numbers_from_letter=False,
                     apply_numbers_to_words=True,
-                    apply_werpy_normalize=False)
+                    apply_werpy_normalize=True)
                 normalized_decoded_tokens_without_timestamps_list.append(words)
 
                 estimated_transcript_kw_idx_per_word = cast(list[int | None],
                                                             KeywordGetter.get_kw_using_phonetic_similarity(
-                                                                reference_kw=["should_always_use_phonetic_keyword_search_if_this_is_a_random_string"],
+                                                                reference_kw=[row["target_word"]],
                                                                 transcript=words,
                                                                 return_idx=True))
                 assert len(estimated_transcript_kw_idx_per_word) == 1

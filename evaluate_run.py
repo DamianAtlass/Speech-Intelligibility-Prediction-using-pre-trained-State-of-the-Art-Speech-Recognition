@@ -26,6 +26,8 @@ rows_prediction_normal = [
 ]
 
 avsec = [
+    ["entropy_kw_est"],
+
     ["macroscopic_entropy"],
     ["mtd"],
     ["laptev"],
