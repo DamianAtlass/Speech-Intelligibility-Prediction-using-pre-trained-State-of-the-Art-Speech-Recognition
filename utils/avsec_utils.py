@@ -32,18 +32,12 @@ def parse_and_save_avsec2_enhanced(
     wav_dir.mkdir(parents=True, exist_ok=True)
     responses = []
 
-    known_ids = []
-
     with open(AVSEC2_LTR/"avse2_responses.csv", "r") as f: #
         data = csv.DictReader(f)
-        for row in tqdm(data):
-            if len(known_ids) == max_samples:
+        for i, row in enumerate(tqdm(data)):
+            if i == max_samples:
                 break
             sample_id = row["sample_ID"]
-
-            if sample_id in known_ids:
-                continue
-            known_ids.append(sample_id)
 
             scene_id = sampleIDs_to_scenes[sample_id]
             row["scene"] = scene_id

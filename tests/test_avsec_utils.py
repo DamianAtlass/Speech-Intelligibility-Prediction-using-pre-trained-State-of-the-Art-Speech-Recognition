@@ -36,9 +36,6 @@ def test_parse_and_save_avsec2_enhanced():
     assert num_files == len(set(dataset["audio_path"]))
     assert num_files == len(set(dataset["sample_ID"]))
 
-    assert num_files == len(dataset["audio_path"])
-    assert num_files == len(dataset["sample_ID"])
-
     shutil.rmtree(test_avsec2)
 
 

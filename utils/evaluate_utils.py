@@ -1420,7 +1420,7 @@ def get_data(
                     snr.append(float(json_file["snr_db"]))
 
                 if dataset_type == avesc2_enhanced:
-                    alternatives.append(json_file["alt"])
+                    alternatives.append(normalize(json_file["alt"]))
                     target_word.append(json_file["target_word"])
                     human_transcripts_kw.append(json_file["response"])
 
@@ -1869,43 +1869,43 @@ def get_data(
                     strings=words,
                     apply_separate_numbers_from_letter=False,
                     apply_numbers_to_words=True,
-                    apply_werpy_normalize=False)
+                    apply_werpy_normalize=True)
                 normalized_decoded_tokens_without_timestamps_list.append(words)
 
-                # estimated_transcript_kw_idx_per_word = cast(list[int | None],
-                #                                             KeywordGetter.get_kw_using_mixed_approaches(
-                #                                                 reference_kw=row["reference_kw"],
-                #                                                 transcript=words,
-                #                                                 return_idx=True))
-                #assert len(estimated_transcript_kw_idx_per_word) == 3
+                estimated_transcript_kw_idx_per_word = cast(list[int | None],
+                                                            KeywordGetter.get_kw_using_phonetic_similarity(
+                                                                reference_kw=[row["target_word"]],
+                                                                transcript=words,
+                                                                return_idx=True))
+                assert len(estimated_transcript_kw_idx_per_word) == 1
 
-                # estimated_transcript_kw: list[str | None] = [None if idx is None else words[idx] for idx in
-                #                                              estimated_transcript_kw_idx_per_word]
-                #
-                # machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
-                # machine_transcript_kw_est.append(estimated_transcript_kw)
+                estimated_transcript_kw: list[str | None] = [None if idx is None else words[idx] for idx in
+                                                             estimated_transcript_kw_idx_per_word]
 
-                # tmp_kw_entropy: list[float | np.nan] = []
-                # for idx in [(None if i is None else words_token_idx[i]) for i in
-                #             estimated_transcript_kw_idx_per_word]:
-                #     if idx is None:
-                #         tmp_kw_entropy.append(torch.nan)
-                #     else:
-                #         tmp_e = float(entropies_per_token[idx].mean())
-                #         tmp_kw_entropy.append(tmp_e)
-                #         if math.isnan(tmp_e):
-                #             nan_kw_posterior_counter_est += 1
-                #
-                # entropy_kw_est.append(tmp_kw_entropy)
-                #
-                # del tmp_e, tmp_kw_entropy
+                machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
+                machine_transcript_kw_est.append(estimated_transcript_kw)
+
+                tmp_kw_entropy: list[float | np.nan] = []
+                for idx in [(None if i is None else words_token_idx[i]) for i in
+                            estimated_transcript_kw_idx_per_word]:
+                    if idx is None:
+                        tmp_kw_entropy.append(torch.nan)
+                    else:
+                        tmp_e = float(entropies_per_token[idx].mean())
+                        tmp_kw_entropy.append(tmp_e)
+                        if math.isnan(tmp_e):
+                            nan_kw_posterior_counter_est += 1
+
+                entropy_kw_est.append(tmp_kw_entropy)
+
+                del tmp_e, tmp_kw_entropy
 
         df["macroscopic_entropy"] = macroscopic_entropy
         df["laptev"] = laptev
         df["laptev_alpha"] = laptev_alpha
         #df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
-        #df["machine_transcript_kw_est"] = machine_transcript_kw_est
-        #df["entropy_kw_est"] = entropy_kw_est
+        df["machine_transcript_kw_est"] = machine_transcript_kw_est
+        df["entropy_kw_est"] = entropy_kw_est
         df["mtd"] = mean_temporal_distance
         df["normalized_decoded_tokens_without_timestamps"] = normalized_decoded_tokens_without_timestamps_list
         del (macroscopic_entropy, machine_transcript_kw_est_idx, machine_transcript_kw_est, entropy_kw_est)

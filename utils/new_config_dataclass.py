@@ -42,7 +42,7 @@ def config_to_dict(obj) -> dict | Any:
 
 @dataclass(kw_only=True)
 class DataSplitConfig:
-    dataset_type: str
+    dataset_type: Literal["grid", "grid_bc", "avsec2_enhanced"]
     path: Path | None
     start: float|int
     end: float|int

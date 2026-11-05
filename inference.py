@@ -325,7 +325,13 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
                     result_data_file_path = config.output_path / "data" / f"{result_file_name}.json"
 
                     logprobs_file_path = config.output_path / "logprobs" / f"{result_file_name}.pt"
-                    if logprobs_file_path.exists(): raise FileExistsError
+
+                    if config.data.test_split.dataset_type == "avsec2_enhanced":
+                        result_data_file_path = get_non_existent_path(result_data_file_path)
+                        logprobs_file_path = get_non_existent_path(logprobs_file_path)
+
+                    if logprobs_file_path.exists():
+                        raise FileExistsError
                     torch.save(result.pop("y_sequence"), logprobs_file_path)
                     result.pop("alignments") # same as y_sequence for ctc-0.6b
 
@@ -359,5 +365,12 @@ def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.devic
         raise NotImplementedError
     print()
 
+def get_non_existent_path(path: Path) -> Path:
+    n = 1
+    tmp = path
+    while tmp.exists():
+        tmp = path.parent / f"{path.stem}_{n}{path.suffix}"
+        n+=1
+    return tmp
 if __name__ == '__main__':
     pass
