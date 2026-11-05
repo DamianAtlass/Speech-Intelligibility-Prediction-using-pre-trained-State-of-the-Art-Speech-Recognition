@@ -118,9 +118,9 @@ def train_and_evaluate_predictors(
 
             valid_rows = len(X)
             non_valid_rows = (len(df)-valid_rows)/len(df)
-            result["Weights per fold"] = weights
-            result["Mean weights"] = np.mean(weights, axis=0).tolist()
-            result["Mean intercept"] = np.mean(intercepts).tolist()
+            #result["Weights per fold"] = weights
+            #result["Mean weights"] = np.mean(weights, axis=0).tolist()
+            #result["Mean intercept"] = np.mean(intercepts).tolist()
             result["non-valid rows (percent)"] = non_valid_rows*100
             result["mean score of valid rows"] = np.mean(scores).tolist()
             result["adjusted score"] = (np.mean(scores)*valid_rows)/len(df) if y_is_binary else "???"
