@@ -1,5 +1,3 @@
-from utils.new_config_dataclass import InferenceConfig, load_config
-
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
@@ -16,7 +14,10 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
-def get_X_and_y(df: pd.DataFrame, metrics: list[str], kw_number: int | None = None):
+def get_X_and_y(df: pd.DataFrame,
+                metrics: list[str],
+                kw_number: int | None = None,
+                is_avsec: bool = False):
     is_microscopic = kw_number is not None
     if is_microscopic:
         if kw_number<0 or kw_number>2: raise ValueError("Must be between 0 and 2")
@@ -29,9 +30,12 @@ def get_X_and_y(df: pd.DataFrame, metrics: list[str], kw_number: int | None = No
 
 
     if is_microscopic:
-        human_kw = df["human_transcript_kw"].apply(lambda x: x[kw_number])
-        ref_kw = df["reference_kw"].apply(lambda x: x[kw_number])
-        y = human_kw == ref_kw
+        if not is_avsec:
+            human_kw = df["human_transcript_kw"].apply(lambda x: x[kw_number])
+            ref_kw = df["reference_kw"].apply(lambda x: x[kw_number])
+            y = human_kw == ref_kw
+        else:
+            y = df["wer_human_kw"]
     else:
         y = df["wer_human_kw"]
 
@@ -46,8 +50,16 @@ def train_and_evaluate_predictors(
         df: pd.DataFrame,
         metrics_list: list[list[str]],
         output_path: Path,
+        is_avsec: bool = False,
 ) -> list:
+    if is_avsec:
+        def compute_stats(group: pd.DataFrame):
+            array = ["macroscopic_entropy", "mtd", "laptev", "wer_human_kw", "wer_machine"]
+            o = {m: group[m].mean() for m in array}
+            o.update({"snr": group["snr"].iloc[0]})
+            return pd.Series(o)
 
+        df = df.groupby("audio_path").apply(compute_stats).reset_index()
 
     if metrics_list is None:
         metrics_list = [
@@ -87,7 +99,8 @@ def train_and_evaluate_predictors(
             X, y = get_X_and_y(
                 df=df,
                 metrics=metrics,
-                kw_number=kw_number)
+                kw_number=kw_number,
+                is_avsec=is_avsec,)
 
             y_is_binary = set(y) == {0,1}
             error_fn = accuracy_score if y_is_binary else mean_absolute_error
@@ -138,7 +151,8 @@ def train_and_evaluate_predictors(
 
 def build_predictors(df: pd.DataFrame,
                      metrics_list: list[list[str]],
-                     output_path: Path):
+                     output_path: Path,
+                     is_avsec: bool = False):
     output_path = output_path / "predictors"
     output_path.mkdir(parents=True, exist_ok=True)
     results: list = train_and_evaluate_predictors(df=df, metrics_list=metrics_list, output_path=output_path)

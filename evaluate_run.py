@@ -8,7 +8,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir
+from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir, evaluate_individual_avsec_run
 from logistic_regression import build_predictors
 from utils.cuda_utils import select_device
 import shutil
@@ -25,6 +25,13 @@ rows_prediction_normal = [
     ["entropy_kw_from_time_align", "tad_kw"],
 ]
 
+avsec = [
+    ["macroscopic_entropy"],
+    ["mtd"],
+    ["laptev"],
+    ["macroscopic_entropy", "mtd", "laptev"],
+]
+
 def evaluate_run(path: Path, device: torch.device | None = None):
     if not device:
         device = torch.device("cpu")
@@ -34,9 +41,9 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     shutil.copyfile(path/"config.yaml", get_results_dir(path)/"config.yaml")
 
     for restrict_vocab in [False, True]:
-        logger.info(f"{restrict_vocab = }")
         vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
         if restrict_vocab and config.model.name == "parakeet":
+            logger.info(f"{restrict_vocab = }")
             continue
         with catch_time() as t:
             print(f"Get data...")
@@ -60,8 +67,15 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         if config.forced_alignment:
             evaluate_forced_alignment_run(df_forced_alignment_run=df, restrict_vocab=restrict_vocab, output_path=config.output_path)
         else:
-            evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
-            build_predictors(df=df, metrics_list=rows_prediction_normal, output_path=get_results_dir(config.output_path) / vocab_dir / "plots")
+            if config.data.test_split.dataset_type in ["grid", "grid_bc"]:
+                evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
+                build_predictors(df=df, metrics_list=rows_prediction_normal, output_path=get_results_dir(config.output_path) / vocab_dir / "plots")
+            else:
+                evaluate_individual_avsec_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
+                build_predictors(df=df, metrics_list=avsec, output_path=get_results_dir(config.output_path) / vocab_dir / "plots", is_avsec=True)
+
+
+
 
 if __name__ == '__main__':
     evaluate_run(Path("inferences/delete_me"))

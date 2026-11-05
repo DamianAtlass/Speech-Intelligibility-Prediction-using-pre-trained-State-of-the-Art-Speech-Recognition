@@ -1420,7 +1420,7 @@ def get_data(
                     snr.append(float(json_file["snr_db"]))
 
                 if dataset_type == avesc2_enhanced:
-                    alternatives.append(json_file["alt"])
+                    alternatives.append(normalize(json_file["alt"]))
                     target_word.append(json_file["target_word"])
                     human_transcripts_kw.append(json_file["response"])
 
