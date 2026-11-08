@@ -107,8 +107,8 @@ def needlemann_wunsch(reference: list[str], transcript: list[str]):
 def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float | int:
     """
 
-    references, list[str]: represents a single sequence to be aligned. Example ["A nice house"]
-    transcripts, list[str]: represents a single sequence to be aligned with the reference. Example ["A nice mouse"]
+    references, list[str]: objects in references represent a sequence to be aligned. Example ["A nice house"]
+    transcripts, list[str]: objects in transcripts represent a sequence to be aligned with the reference. Example ["A nice mouse"]
 
     Splits both at spaces. Doesn't normalize.
     :return:

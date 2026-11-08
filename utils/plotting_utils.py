@@ -877,8 +877,10 @@ class PredictorPlots:
             output_path: Path|None = None):
         scores = []
         labels = []
+        if len(results)==0:
+            return
         rt = {o["regression_type"] for o in results}
-        assert len(rt)==1
+        assert len(set(rt))==1
         rt = tuple(rt)[0]
 
         for i, item in enumerate(results):
