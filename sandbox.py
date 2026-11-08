@@ -7,7 +7,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 
 from utils.evaluate_utils import get_data
-from utils.dataset_utils import get_dataset, create_grid_without_bc_sentences, create_grid_bc_without_duplicates, override_noised_dataset_as_files
+from utils.dataset_utils import get_dataset, remove_bc_samples_from_grid_dataset, create_grid_bc_without_duplicates, override_noised_dataset_as_files
 from utils.logging_utils import catch_time
 from utils.new_config_dataclass import load_config, DataSplitConfig
 from utils.avsec_utils import parse_and_save_avsec2_enhanced
@@ -54,15 +54,12 @@ def nemo_sandbox():
 
 def run_once():
     create_grid_bc_without_duplicates()
-    create_grid_without_bc_sentences()
 
     grid_with_noise = "datasets/grid_with_noise"
-
     shutil.copytree(src="datasets/grid", dst=grid_with_noise)
-    shutil.rmtree("datasets/grid_with_noise/saved_dataset")
-    override_noised_dataset_as_files(target_folder=grid_with_noise)
 
-    create_grid_without_bc_sentences(source=grid_with_noise, dest="datasets/grid_with_noise_without_bc_sentences")
+    override_noised_dataset_as_files(target_folder=grid_with_noise)
+    remove_bc_samples_from_grid_dataset(source=grid_with_noise, dest="datasets/grid_with_noise_without_bc_sentences")
 
 
 if __name__ == '__main__':

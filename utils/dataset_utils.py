@@ -150,16 +150,15 @@ def create_manifest(manifest_path: Path, dataset: Dataset) -> Path:
     return manifest_path
 
 
-def override_noised_dataset_as_files(target_folder="datasets/grid_with_noise") -> None:
+def override_noised_dataset_as_files(target_folder: str = "datasets/grid_with_noise") -> None:
     """
-    Use this function when noise cant be applied using a transformation, bc saved files are needed (in a manifest for example).
+    Use this function when noise cant be applied using a transformation, bc saved files are needed
+    (in a manifest for training parakeet for example).
     Returns:
 
     Steps:
-    # 1: copy the original directory ("datasets/grid")
-    # 2: rm the saved_dataset directory
-    # 3: uncomment the double-noise prevention in DataSplitConfigs !!!!
-    # 4: run this function
+    # 1: uncomment the double-noise prevention in DataSplitConfigs !!!!
+    # 2: run this function
 
     Example:
     shutil.copytree(src="datasets/grid", dst=grid_with_noise)
@@ -167,7 +166,11 @@ def override_noised_dataset_as_files(target_folder="datasets/grid_with_noise") -
     override_noised_dataset_as_files(target_folder=grid_with_noise)
 
     """
-    split_config = DataSplitConfig(dataset_type='grid', path=target_folder, start=0, end=1., noise=True,
+    target_folder = Path(target_folder)
+    if str("datasets/grid") in str(PROJECT_ROOT/target_folder):
+        raise ValueError("Dont execute on original Grid folder, files would be overwritten!")
+
+    split_config = DataSplitConfig(dataset_type='grid', path=target_folder, start=0, end=1.0, noise=True,
                                    scaling=1.0)
     if not split_config.noise:
         raise ValueError("Sure this makes sense?")
@@ -190,33 +193,43 @@ def override_noised_dataset_as_files(target_folder="datasets/grid_with_noise") -
         audio_path = Path(sample["audio_path"])
         validate_path(audio_path)
         audio_array = sample["audio"]["array"] # noise is applied automatically with a transformation, see dataset_utils
-
         sf.write(str(audio_path), audio_array, 16_000)
-    print("Files copied.")
-    del dataset
-    print("Remove unnoised dataset...")
-    shutil.rmtree(str(saved_dataset_path))
+
+    print("Noisy files saved. Save dataset...")
+    dataset.reset_format() #dataset cant be saved if not reset
+    dataset = dataset.rename_column("snr", "snr_db")
+    dataset.save_to_disk(PROJECT_ROOT/target_folder/"saved_dataset")
 
 
-def create_grid_without_bc_sentences(source=None, dest="datasets/grid_without_bc_sentences") -> None:
+def remove_bc_samples_from_grid_dataset(source: str=None, dest="datasets/grid_without_bc_sentences") -> None:
+    """
+    Use this function to remove samples from the original Grid corpus whose reference occurs in the BC dataset.
+    Use specifically on a noised Grid to get a training set. It doesnt need to be a noised Grid, though.
 
-    # for noised: create_grid_without_bc_sentences(source="datasets/grid_with_noise", dest="datasets/grid_with_noise_without_bc_sentences")
-    #       (execute override_noised_dataset_as_files before)
-    # normal: create_grid_without_bc_sentences()
-    grid = get_dataset(split=DataSplitConfig(dataset_type='grid', path=source, start=0, end=1.0, noise=False, scaling=1.0))
+    Args:
+        source: str,  noised (or not) Grid source path
+        dest: str, new dataset path
+
+    Returns: None
+
+    """
+    save_at = PROJECT_ROOT / dest / "saved_dataset"
+    if save_at.exists(): raise RuntimeError("Dataset already exists!")
+
+    noisy_grid = get_dataset(split=DataSplitConfig(dataset_type='grid', path=Path(source), start=0, end=1.0, noise=False, scaling=1.0))
+    # noisy_grid should still have the snr column, IF it has been created with override_noised_dataset_as_files
+
     grid_bc = get_dataset(split=DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0))
 
-    sentences_in_grid = grid.unique("sentence")
+    sentences_in_grid = noisy_grid.unique("sentence")
     sentences_in_grid_bc = grid_bc.unique("sentence")
-    sentences_in_not_in_bc = set(sentences_in_grid) - set(sentences_in_grid_bc)
+    sentences_not_in_bc = set(sentences_in_grid) - set(sentences_in_grid_bc)
     del sentences_in_grid, sentences_in_grid_bc
 
-    grid = apply_filter(grid, {"sentence": sentences_in_not_in_bc})
+    noisy_grid_without_bc_samples = apply_filter(noisy_grid, {"sentence": sentences_not_in_bc})
 
-    save_at = Path.cwd() / dest / "saved_dataset"
-    if save_at.exists(): raise RuntimeError("Dataset already exists!")
     save_at.mkdir(parents=True, exist_ok=True)
-    grid.save_to_disk(save_at)
+    noisy_grid_without_bc_samples.save_to_disk(save_at)
 
 
 def create_grid_bc_without_duplicates() -> None:
