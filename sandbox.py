@@ -61,6 +61,19 @@ def run_once():
     override_noised_dataset_as_files(target_folder=grid_with_noise)
     remove_bc_samples_from_grid_dataset(source=grid_with_noise, dest="datasets/grid_with_noise_without_bc_sentences")
 
+def print_snr_count():
+    from collections import Counter
+
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,noise=False, scaling=1.0))
+    print(Counter(dataset["snr_db"]))
+
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=Path("datasets/grid_bc_without_duplicates"), start=0, end=1., noise=False, scaling=1.0))
+    print(Counter(dataset["snr_db"]))
+
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=Path("datasets/grid_with_noise_without_bc_sentences_snr_col"), start=0, end=1.,noise=False, scaling=1.0))
+    print(Counter(dataset["snr_db"]))
+
+
 
 if __name__ == '__main__':
     parse_and_save_avsec2_enhanced()
