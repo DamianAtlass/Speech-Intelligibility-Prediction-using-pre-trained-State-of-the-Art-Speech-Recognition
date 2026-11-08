@@ -121,6 +121,13 @@ def join_kw_list(transcript_kw_or_similar: list[list[str]]) -> list[str]:
         raise RuntimeError("Should not be a string!")
     return [" ".join(w for w in t if w is not None) for t in transcript_kw_or_similar]
 
+def get_x_labels(x_labels: np.ndarray) -> list:
+    x_labels: list = sorted([o.item() for o in x_labels])
+    if 40 in x_labels:  # if grid_bc
+        x_labels = [int(o) for o in x_labels]
+        x_labels[x_labels.index(40)] = "clean"
+    return x_labels
+
 
 def plot_regr_line_for_pearson_corr(df: pd.DataFrame,
                                     name: str,
@@ -279,8 +286,7 @@ def plot_wer_to_snr(
         human_values.append(wer_snr)
     human_values = torch.Tensor(human_values) * 100
     del df_human_data
-    x_labels = np.sort(df["snr"].unique())
-
+    x_labels = get_x_labels(df["snr"].unique())
     #plot machine values
     machine_values: list = []
     for attr in tqdm(list_shifting_attribute):
@@ -321,7 +327,7 @@ def plot_wer_to_snr(
     plt.xticks(positions, x_labels)
     plt.xlabel("SNR")
     plt.ylabel("Average WER in %")
-    plt.ylim(0, max([100, max([max(l) for l in machine_values])]))
+    plt.ylim(0, max([101, max([max(l) for l in machine_values])]))
     plt.grid()
     plt.legend()
 
@@ -339,7 +345,7 @@ def plot_x_to_snr(df: pd.DataFrame,
     Plot a specific column to all SNRs, without human WER data for comparison.
     """
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
-    x_labels = np.sort(df["snr"].unique())
+    x_labels = get_x_labels(df["snr"].unique())
 
     values: list = []
     for attr in tqdm(list_shifting_attribute):
@@ -391,7 +397,7 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
 
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
 
-    x_labels = np.sort(df["snr"].unique())
+    x_labels = get_x_labels(df["snr"].unique())
 
     values_means: list = []
     for attr in tqdm(list_shifting_attribute):
@@ -452,7 +458,7 @@ def box_or_barplot_microscopic_x_to_snr(
     if not special_metric and "kw" not in col_name:
         raise ValueError("This plot is for microscopic plotting (per kw)!")
 
-    x_labels = np.sort(df["snr"].unique())
+    x_labels = get_x_labels(df["snr"].unique())
 
     values_per_snr = []
     for snr in np.sort(df["snr"].unique()):
@@ -584,7 +590,7 @@ def barplot_x_to_snr(
     CAN be used to plot correlation to human_transcripts_kw per keyword and SNR, but doesn't have to.
     """
 
-    x_labels = np.sort(df["snr"].unique())
+    x_labels = get_x_labels(df["snr"].unique())
     list_shifting_attribute: list = list(df[shifting_attribute].unique())
 
 

@@ -2169,3 +2169,34 @@ def avsec_wers_human_kw(target_word: str, human_transcript: str, alternatives: l
         return int(target_word!=human_transcript)
     else:
         return int(human_transcript!="none")
+
+from scipy.stats import pearsonr
+def evaluate_transcripts(df):
+    results = []
+
+    for i, keyword in enumerate(grid_kw_labels):
+        human_wer = []
+        machine_wer = []
+
+        reference = df["reference_kw"].apply(lambda x: x[i])
+        human = df["human_transcript_kw"].apply(lambda x: x[i])
+        machine = df["machine_transcript_kw"].apply(lambda x: x[i])
+
+        human_wer = human != reference
+        machine_wer = machine != reference
+
+        # Pearson correlation between human and machine WER
+        if len(human_wer) >= 2:
+            correlation, p_value = pearsonr(human_wer, machine_wer)
+        else:
+            correlation, p_value = np.nan, np.nan
+
+        results.append({
+            "keyword": keyword,
+            "human_wer_mean": np.mean(human_wer),
+            "machine_wer_mean": np.mean(machine_wer),
+            "pearson_r": correlation,
+            "p_value": p_value
+        })
+
+    return pd.DataFrame(results)[["human_wer_mean", "machine_wer_mean", "pearson_r"]].mean()

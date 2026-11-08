@@ -16,7 +16,7 @@ from math import ceil
 import logging
 logger = logging.getLogger(__name__)
 
-
+# base on https://huggingface.co/blog/fine-tune-whisper
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     processor: Any
