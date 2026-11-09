@@ -8,7 +8,8 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 import logging
 logger = logging.getLogger(__name__)
-from utils.evaluate_utils import get_data, evaluate_individual_run, evaluate_forced_alignment_run, get_results_dir, evaluate_individual_avsec_run
+from utils.evaluate_utils import (get_data, evaluate_individual_run, evaluate_forced_alignment_run,
+    get_results_dir, evaluate_individual_avsec_run, has_even_snrs)
 from logistic_regression import build_predictors
 from utils.cuda_utils import select_device
 import shutil
@@ -58,7 +59,8 @@ def evaluate_run(path: Path, device: torch.device | None = None):
                 restrict_vocab=restrict_vocab,
                 device=device)
         logger.info(f"Reading the generated files took: {t()/60:.2f} m")
-
+        if config.data.test_split.dataset_type == ["grid_bc"]:
+            assert has_even_snrs(df)
         df["model_type"] = config.model.model_type
         # df_copy = df[df["snr"]<-2]
         # selected_paths = df["audio_path"].unique()[:5000]

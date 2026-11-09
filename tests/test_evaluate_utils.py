@@ -1,9 +1,11 @@
-from utils.evaluate_utils import remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence, get_results_dir, avsec_wers_human_kw
+from utils.evaluate_utils import (remove_nan, find_ordered_indices, MetricWrapper, KeywordGetter, LaptevGinsburgConfidence,
+                                  get_results_dir, avsec_wers_human_kw, even_out_snrs, has_even_snrs)
 from dotenv import load_dotenv
 load_dotenv() # needs to be before 'import torch' to control what gpu to use (since some libs chose automatically)!
 import torch
 import pytest
 from pathlib import Path
+import pandas as pd
 
 @pytest.mark.parametrize(("transcript", "keywords_to_find", "outcome"), [
     ("a b c d", "b c", [1,2]),
@@ -192,3 +194,64 @@ def test_avsec_wers_human_kw_exception():
         assert False
     except ValueError:
         assert True
+
+
+@pytest.mark.parametrize(("dictionary"), [
+    {"snr": [1, 2, 3, 1, 2, 3],
+     "audio_path": ["a", "b", "c", "d", "e", "f"]},
+    {"snr": [1],
+     "audio_path": ["a"]},
+    {"snr": [1, 1, 2, 2, 3, 3, 3, 3],
+         "audio_path": ["a", "b", "c", "d", "e", "f", "g", "h"]},
+    {"snr": [1, 1, 1, 1, 1, 1, 1, 2],
+         "audio_path": ["a", "b", "c", "d", "e", "f", "g", "h"]},
+    {"snr": [1, 1, 1, 1, 1],
+         "audio_path": ["a", "b", "c", "d", "e"]},
+])
+def test_even_out_snrs(dictionary: dict):
+    df = pd.DataFrame(
+        dictionary
+    )
+
+    n: int = df["snr"].value_counts().min()
+    df = even_out_snrs(df)
+    assert len(df) == len(df["snr"].unique()) * n
+
+
+@pytest.mark.parametrize(("dictionary", "expected_snrs", "l"), [
+    ({
+        "snr": [1, 1, 2, 2, 1, 1],
+        "audio_path": ["a", "a", "b", "b", "c", "c"],
+        "value": [1, 2, 3, 4, 5, 6],
+    }, [1,1], 4),
+    ({
+        "snr": [1, 1, 2, 2, 2,],
+        "audio_path": ["a", "a", "b", "b", "b"],
+        "value": [1, 2, 3, 4, 5],
+    }, [1,1], 5),
+])
+def test_even_out_snrs_complex(dictionary: dict, expected_snrs: list, l: int):
+    df = pd.DataFrame(
+        dictionary
+    )
+    df = even_out_snrs(df)
+    assert list(df.groupby("snr")["audio_path"].nunique()) == expected_snrs
+    assert len(df) == l
+
+
+@pytest.mark.parametrize(("dictionary", "expected_result"), [
+    ({"snr": [1],
+     "audio_path": ["a"]}, True),
+    ({"snr": [1, 1],
+     "audio_path": ["a", "b"]}, True),
+    ({"snr": [1, 1, 2],
+     "audio_path": ["a", "b", "c"]}, False),
+
+    ({"snr": [1, 1, 2, 3],
+      "audio_path": ["a", "a", "c", "d"]}, True),
+    ({"snr": [1, 1, 2, 3, 3],
+      "audio_path": ["a", "a", "c", "d", "e"]}, False),
+])
+def test_has_even_snrs(dictionary: dict, expected_result: bool):
+    df = pd.DataFrame(dictionary)
+    assert has_even_snrs(df) == expected_result

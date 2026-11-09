@@ -155,7 +155,8 @@ def evaluate_individual_run(config: InferenceConfig,
                             df_single_run: pd.DataFrame,
                             restrict_vocab: bool) -> None:
     results_dir = get_results_dir(config.output_path) / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
-
+    if config.data.test_split.dataset_type == ["grid_bc"]:
+        assert has_even_snrs(df_single_run)
     file_name_summary = results_dir / "summary.json"
     file_name_df_creation_summary = results_dir / "df_creation_summary.json"
 
@@ -1350,6 +1351,8 @@ def get_data(
     if file_name_df.exists():
         print("Load df from disk.")
         df: pd.DataFrame = pd.read_pickle(file_name_df)
+        if dataset_type == "grid_bc":
+            df = even_out_snrs(df)
         return df
     else:
         if file_name_summary.exists():
@@ -1527,6 +1530,8 @@ def get_data(
             data.update({"forced_alignment_options": forced_alignment_options})
 
         df = pd.DataFrame(data)
+        if dataset_type == "grid_bc":
+            df = even_out_snrs(df)
         return df
 
     df = read_data()
@@ -2200,3 +2205,29 @@ def evaluate_transcripts(df):
         })
 
     return pd.DataFrame(results)[["human_wer_mean", "machine_wer_mean", "pearson_r"]].mean()
+
+
+def even_out_snrs(df: pd.DataFrame) -> pd.DataFrame:
+    if has_even_snrs(df):
+        return df
+    by_snr = {
+        snr: [audio_path_group for _, audio_path_group in snr_group.groupby("audio_path")]
+        for snr, snr_group in df.groupby("snr")
+    }
+
+    # 3: n = fewest audio_path groups in any snr group
+    n = min(len(audio_path_groups) for audio_path_groups in by_snr.values())
+
+    # 4: sample n audio_path groups per snr group, keeping all their rows
+    rng = np.random.default_rng(0)
+    balanced: pd.DataFrame = pd.concat(
+        [groups[i]
+         for groups in by_snr.values()
+         for i in rng.choice(len(groups), size=n, replace=False)]
+    )
+    assert has_even_snrs(balanced)
+    return balanced
+
+def has_even_snrs(df: pd.DataFrame) -> bool:
+    s = set(df.groupby("snr")["audio_path"].nunique())
+    return len(s) == 1
