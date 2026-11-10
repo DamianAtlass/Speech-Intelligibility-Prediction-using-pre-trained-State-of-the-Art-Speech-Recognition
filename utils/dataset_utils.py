@@ -197,7 +197,7 @@ def override_noised_dataset_as_files(target_folder: str = "datasets/grid_with_no
 
     print("Noisy files saved. Save dataset...")
     dataset.reset_format() #dataset cant be saved if not reset
-    dataset = dataset.rename_column("snr", "snr_db")
+    #dataset = dataset.rename_column("snr", "snr_db")
     dataset.save_to_disk(PROJECT_ROOT/target_folder/"saved_dataset")
 
 
@@ -252,3 +252,20 @@ def create_grid_bc_without_duplicates() -> None:
     save_at = Path.cwd() / "datasets" / "grid_bc_without_duplicates" / "saved_dataset"
     save_at.mkdir(parents=True, exist_ok=True)
     dataset.save_to_disk(save_at)
+
+def even_out_snrs(dataset: Dataset):
+    #needs testing
+    snr_name = "snr" if "snr" in dataset.column_names else "snr_db"
+    snr_counter = Counter(dataset[snr_name])
+
+    n = min(snr_counter.values())
+    snrs = np.asarray(dataset[snr_name])  # reads only that one column
+    rng = np.random.default_rng(0)
+
+    dataset_list = [
+        rng.choice(np.flatnonzero(snrs == snr), n, replace=False)
+        for snr in snr_counter
+    ]
+    indices = np.concatenate(dataset_list)
+    balanced_snrs = dataset.select(np.sort(indices))
+    return balanced_snrs.shuffle(seed=0)
