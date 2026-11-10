@@ -157,7 +157,6 @@ def evaluate_individual_run(config: InferenceConfig,
     results_dir = get_results_dir(config.output_path) / ("results_restrict_vocab" if restrict_vocab else "results_full_vocab")
     if config.data.test_split.dataset_type == ["grid_bc"]:
         assert has_even_snrs(df_single_run)
-    file_name_summary = results_dir / "summary.json"
     file_name_df_creation_summary = results_dir / "df_creation_summary.json"
 
     if file_name_df_creation_summary.exists():
@@ -185,11 +184,10 @@ def evaluate_individual_run(config: InferenceConfig,
 
     metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
-    corr_summary = None
-
     CorrelationManager.calculate_and_save_correlations(
         df=df_single_run,
-        metrics = ["macroscopic_entropy", "mtd", "laptev", "entropy_kw_est", "entropy_kw_from_time_align", "tad_kw"],
+        metrics = ["macroscopic_entropy", "mtd", "laptev", "entropy_kw_est",
+                   "entropy_kw_from_time_align", "tad_kw", "laptev_kw_est", "laptev_kw_from_time_align"],
         save_dir=results_dir)
 
     dir_plots = results_dir / "plots"
@@ -270,6 +268,7 @@ def evaluate_individual_run(config: InferenceConfig,
         kw_col: Literal["machine_transcript_kw_est", "machine_transcript_kw_from_time_align"]
 
         entropies_kw_col = "entropy_kw_est" if kw_col == "machine_transcript_kw_est" else "entropy_kw_from_time_align"
+        laptev_kw_col = "laptev_kw_est" if kw_col == "machine_transcript_kw_est" else "laptev_kw_from_time_align"
 
         plot_wer_to_snr(
             df=df_single_run[["human_transcript_kw", kw_col, "snr", "reference_kw", "model_type"]],
@@ -319,6 +318,13 @@ def evaluate_individual_run(config: InferenceConfig,
                     curr_dir.mkdir(exist_ok=False)
 
                     generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=entropies_kw_col, curr_dir=curr_dir)
+
+                    # laptev_kw
+                    curr_dir = out_dir / "laptev_kw"
+                    curr_dir.mkdir(exist_ok=False)
+
+                    generate_plots_for_microscopic_metric(kw_col=kw_col, metric_col=laptev_kw_col, curr_dir=curr_dir)
+
 
 
         # time alignments stuff
@@ -1554,7 +1560,8 @@ def get_data(
         # for Laptev / Ginsburg confidence
         laptev: list = []
         laptev_alpha: list[dict] = []
-
+        laptev_kw_est: list = []
+        laptev_kw_from_time_align: list = []
 
         alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
         no_transcript_counter = 0
@@ -1576,6 +1583,8 @@ def get_data(
                 normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
                 mean_temporal_distance.append(torch.nan)
                 laptev.append(torch.nan)
+                laptev_kw_est.append([None, None, None])
+                laptev_kw_from_time_align.append([None, None, None])
 
                 laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
 
@@ -1645,9 +1654,9 @@ def get_data(
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
                 ### merge if necessary
                 words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
-                words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
-                assert len(words) == len(words_token_idx)
-                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_token_idx])
+                words_to_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
+                assert len(words) == len(words_to_token_idx)
+                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_to_token_idx])
 
                 ### find "correct" kw position
                 words: list[str] = [o.lower().strip() for o in words]
@@ -1669,19 +1678,43 @@ def get_data(
                 machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
                 machine_transcript_kw_est.append(estimated_transcript_kw)
 
-                tmp_kw_entropy: list[float|np.nan] = []
-                for idx in [(None if i is None else words_token_idx[i]) for i in estimated_transcript_kw_idx_per_word]:
-                    if idx is None:
-                        tmp_kw_entropy.append(torch.nan)
-                    else:
-                        tmp_e = float(entropies_per_token[idx].mean())
-                        tmp_kw_entropy.append(tmp_e)
-                        if math.isnan(tmp_e):
-                            nan_kw_posterior_counter_est+=1
+                def pick_correct_token_values(
+                        value_per_token: torch.Tensor,
+                        kw_indexes: list[int|None],
+                        aggr: Literal["mean", "min"]
+                    )-> list:
+                    result_array: list[float] = []
 
+                    idx_list_or_none: list[None|list[int]] = [(None if i is None else words_to_token_idx[i]) for i in kw_indexes]
+                    for i in idx_list_or_none:
+                        if i is None:
+                            result_array.append(torch.nan)
+                        else:
+                            if aggr == "mean":
+                                result_array.append(float(value_per_token[i].mean()))
+                            elif aggr == "min":
+                                result_array.append(float(value_per_token[i].min()))
+                            else:
+                                raise ValueError(f"Unknown aggregation {aggr}")
+                    return result_array
+
+                #tmp_kw_laptev: list[float|np.nan] = []
+
+                tmp_kw_entropy: list[float|np.nan] = pick_correct_token_values(
+                    value_per_token=entropies_per_token,
+                    kw_indexes=estimated_transcript_kw_idx_per_word,
+                    aggr="mean")
+
+                nan_kw_posterior_counter_est += torch.Tensor(tmp_kw_entropy).isnan().sum().item() #collect nan posteriors due to false timestamps
                 entropy_kw_est.append(tmp_kw_entropy)
 
-                del tmp_e, tmp_kw_entropy
+                tmp_kw_laptev: list[float | np.nan] = pick_correct_token_values(
+                    value_per_token=laptev_per_token,
+                    kw_indexes=estimated_transcript_kw_idx_per_word,
+                    aggr="mean")
+                laptev_kw_est.append(tmp_kw_laptev)
+
+                del tmp_kw_entropy, tmp_kw_laptev
 
             ## 2) get kw idx by using the time-alignments
             if word_timestamps:
@@ -1710,22 +1743,21 @@ def get_data(
 
             if word_timestamps and extract_logprobs:
                 # assume word_timestamps and extract_logprobs are True
-                # kw_token_idx_from_time_align: list[list[int|None]] idx for logprobs
-                tmp_kw_entropy: list[float|torch.nan] = []
-                kw_token_idx_from_time_align: list[list[int]|None] = [(words_token_idx[i] if i is not None else None) for i in kw_idx_from_time_align]
-                for idx in kw_token_idx_from_time_align:
-                    if idx is None:
-                        tmp_kw_entropy.append(torch.nan)
-                    else:
-                        tmp_e = float(entropies_per_token[idx].mean())
-                        tmp_kw_entropy.append(tmp_e)
-                        if math.isnan(tmp_e):
-                            nan_kw_posterior_counter_est+=1
-                    #not necessary to count the same again for laptev
 
-
+                tmp_kw_entropy: list[float | np.nan] = pick_correct_token_values(
+                    value_per_token=entropies_per_token,
+                    kw_indexes=kw_idx_from_time_align,
+                    aggr="mean")
+                nan_kw_posterior_counter_from_time_align += torch.Tensor(tmp_kw_entropy).isnan().sum().item() #collect nan posteriors due to false timestamps
                 entropy_kw_from_time_align.append(tmp_kw_entropy)
-                del tmp_e, tmp_kw_entropy
+
+                tmp_kw_laptev: list[float | np.nan] = pick_correct_token_values(
+                    value_per_token=laptev_per_token,
+                    kw_indexes=kw_idx_from_time_align,
+                    aggr="mean")
+                laptev_kw_from_time_align.append(tmp_kw_laptev)
+
+                del tmp_kw_entropy, tmp_kw_laptev
 
                 #tad
                 time_alignment_difference.append(MetricWrapper.calculate_tad(reference_alignments=ref_alignments,
@@ -1736,6 +1768,7 @@ def get_data(
         df["macroscopic_entropy"] = macroscopic_entropy
         df["laptev"] = laptev
         df["laptev_alpha"] = laptev_alpha
+        df["laptev_kw_est"] = laptev_kw_est
         df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
         df["machine_transcript_kw_est"] = machine_transcript_kw_est
         df["entropy_kw_est"] = entropy_kw_est
@@ -1747,6 +1780,7 @@ def get_data(
             df["machine_transcript_kw_from_time_align"] = machine_transcript_kw_from_time_align
             df["entropy_kw_from_time_align"] = entropy_kw_from_time_align
             df["machine_transcript_kw_from_time_align_idx"] = machine_transcript_kw_from_time_align_idx
+            df["laptev_kw_from_time_align"] = laptev_kw_from_time_align
             df["tad_kw"] = time_alignment_difference
 
 

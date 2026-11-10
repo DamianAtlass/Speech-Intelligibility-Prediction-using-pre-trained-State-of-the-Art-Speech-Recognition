@@ -23,6 +23,8 @@ rows_prediction_normal = [
     ["entropy_kw_est"],
     ["entropy_kw_from_time_align"],
     ["tad_kw"],
+    ["laptev_kw_est"],
+    ["laptev_kw_from_time_align"],
     ["entropy_kw_from_time_align", "tad_kw"],
 ]
 
@@ -47,6 +49,8 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
         if restrict_vocab and config.model.name == "parakeet":
             logger.info(f"{restrict_vocab = }")
+            continue
+        if restrict_vocab and config.forced_alignment:
             continue
         with catch_time() as t:
             print(f"Get data...")
