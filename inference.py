@@ -247,13 +247,13 @@ def inference_whisper_with_forced_alignment(
             kw_token = " " + kw
             focus = {"position": kw_pos, "token_or_id": kw_token}
 
-            if config.forced_alignment == "only_keyword":
+            if config.forced_alignment == "other_tokens_loose":
                 forced_alignment_options = {
                     "stop_after_alignment": False,
                     "focus": focus,
                     "alignments": {kw_pos: kw_token},
                  }
-            elif config.forced_alignment == "full_sequence":
+            elif config.forced_alignment == "other_tokens_fixed":
                 forced_alignment_options = {
                     "stop_after_alignment": True,
                     "focus": focus,

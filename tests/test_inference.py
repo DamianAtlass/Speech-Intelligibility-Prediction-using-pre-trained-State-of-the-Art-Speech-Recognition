@@ -101,7 +101,7 @@ def test_forced_alignment_inference_whisper_only_keyword():
         word_timestamps=True,
         beam_size=5,
         model=ModelConfig(name="whisper", model_type="large-v3-turbo", path=None),
-        forced_alignment="only_keyword",
+        forced_alignment="other_tokens_loose",
     )
     if config.output_path.exists():
         shutil.rmtree(config.output_path)
@@ -126,7 +126,7 @@ def test_forced_alignment_inference_whisper_full_sequence():
         word_timestamps=True,
         beam_size=5,
         model=ModelConfig(name="whisper", model_type="large-v3-turbo", path=None),
-        forced_alignment="full_sequence",
+        forced_alignment="other_tokens_fixed",
     )
     if config.output_path.exists():
         shutil.rmtree(config.output_path)

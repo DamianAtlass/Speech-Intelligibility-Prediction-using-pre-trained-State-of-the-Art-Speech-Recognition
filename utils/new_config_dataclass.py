@@ -104,14 +104,16 @@ class InferenceConfig(BaseConfig):
     subword_timestamps: bool = False
     temperature: float = 0
     runs_per_sample: int = 1
-    forced_alignment: bool|Literal["full_sequence", "only_keyword"] = False
+    # "full_sequence" -> "other_tokens_fixed"
+    # "only_keyword" -> "other_tokens_loose"
+    forced_alignment: bool|Literal["other_tokens_fixed", "other_tokens_loose"] = False
 
     def __post_init__(self):
         super().__post_init__()
 
         if not ((not self.forced_alignment) or
-           self.forced_alignment=="full_sequence" or
-           self.forced_alignment=="only_keyword"):
+           self.forced_alignment=="other_tokens_fixed" or
+           self.forced_alignment=="other_tokens_loose"):
             raise ValueError(f"{self.forced_alignment} is not a possible argument for forced_alignment!")
 
 
