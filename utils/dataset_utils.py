@@ -1,3 +1,5 @@
+import shutil
+
 from datasets import Dataset, DatasetDict, load_dataset
 from pathlib import Path
 import logging
@@ -253,7 +255,19 @@ def create_grid_bc_without_duplicates() -> None:
     save_at.mkdir(parents=True, exist_ok=True)
     dataset.save_to_disk(save_at)
 
+def has_even_snrs(dataset: Dataset) -> bool:
+    """
+    Check if a dataset has an even number of SNRs.
+    """
+    return len(set(Counter(dataset["snr_db"]).values())) == 1
+
 def even_out_snrs(dataset: Dataset):
+    """
+    Randomly choose samples so that the maximum possible samper per SNR exist.
+    """
+
+    if has_even_snrs(dataset):
+        return dataset
     #needs testing
     snr_name = "snr" if "snr" in dataset.column_names else "snr_db"
     snr_counter = Counter(dataset[snr_name])
@@ -268,4 +282,41 @@ def even_out_snrs(dataset: Dataset):
     ]
     indices = np.concatenate(dataset_list)
     balanced_snrs = dataset.select(np.sort(indices))
+    assert has_even_snrs(balanced_snrs)
     return balanced_snrs.shuffle(seed=0)
+
+
+def grid_bc_get_dataset_with_unique_audio_samples(dest: str = "datasets/grid_bc_unique_audios"):
+    save_at = PROJECT_ROOT / dest / "saved_dataset"
+    grid_bc = get_dataset(
+        DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,
+                        noise=False, scaling=1.0))
+
+    seen_audios = set()  # unique audio is identified by speaker & snr & reference sentence (NOT by listener, obviously)
+
+    def filter_fn(sample) -> bool:
+        speaker = sample["speaker"]
+        snr = sample["snr_db"]
+        reference = sample["sentence"]
+        identifying_tuple = tuple([speaker, snr, reference])
+
+        if identifying_tuple not in seen_audios:
+            seen_audios.add(identifying_tuple)
+            return True
+        else:
+            return False
+
+    grid_bc_unique_samples = grid_bc.filter(function=filter_fn)
+
+    # check if audios are really unique
+    audio_tuples = [tuple([o["speaker"], o["snr_db"], o["sentence"]]) for o in tqdm(grid_bc_unique_samples)]
+    assert len(audio_tuples) == len(set(audio_tuples)), "audios appear multiple times!"
+
+    grid_bc_unique_samples = even_out_snrs(grid_bc_unique_samples)
+    assert has_even_snrs(grid_bc_unique_samples)
+
+    if save_at.exists():
+        shutil.rmtree(save_at)
+    save_at.mkdir(exist_ok=True, parents=True)
+
+    grid_bc_unique_samples.save_to_disk(save_at)

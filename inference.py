@@ -5,6 +5,7 @@ from datasets import Dataset, DatasetDict
 
 from utils.evaluate_utils import KeywordGetter, ref_alignments_to_seconds_and_rm_non_words
 from utils.new_config_dataclass import InferenceConfig
+from utils.dataset_utils import has_even_snrs, even_out_snrs
 from typing import Any, cast
 import json
 from pathlib import Path
@@ -355,6 +356,10 @@ def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.devic
     (config.output_path / "data").mkdir(exist_ok=config.debug)
 
     model = load_model(config, device)
+
+    if config.data.test_split.dataset_type == "grid_bc":
+        if not has_even_snrs(dataset["test"]):
+            dataset["test"] = even_out_snrs(dataset["test"])
 
     #dataset["test"] = dataset["test"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
     if config.model.name =="whisper":
