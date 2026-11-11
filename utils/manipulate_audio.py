@@ -81,5 +81,5 @@ def add_noise_transformation(batch: dict):
     batch["audio"] = [
         {"array": add_speech_shaped_noise(sample["array"], target_snr),
          "sampling_rate": sample["sampling_rate"]}
-        for sample, target_snr in zip(batch["audio"], batch["snr"])]
+        for sample, target_snr in zip(batch["audio"], batch["snr_db"])]
     return batch

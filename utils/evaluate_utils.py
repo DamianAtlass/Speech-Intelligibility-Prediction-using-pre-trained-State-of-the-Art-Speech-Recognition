@@ -1881,7 +1881,7 @@ def get_data(
 
                 # laptev
                 laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
-                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.7)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.3)
                 assert len(laptev_per_token) == num_tokens
                 laptev.append(float(laptev_per_token.min()))
 

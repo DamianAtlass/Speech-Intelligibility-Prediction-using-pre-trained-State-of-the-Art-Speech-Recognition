@@ -92,7 +92,7 @@ def get_dataset_dict(config: DatasetConfig) -> DatasetDict:
 def add_noise_to_dataset(dataset: Dataset) -> Dataset:
     logger.info(f"Add noise to all {len(dataset)} samples.")
     rng = np.random.default_rng(0)
-    dataset = dataset.add_column("snr", rng.choice(SNRS, size=len(dataset)))
+    dataset = dataset.add_column("snr_db", rng.choice(SNRS, size=len(dataset)))
     dataset.set_transform(add_noise_transformation)
     return dataset
 
@@ -234,7 +234,7 @@ def remove_bc_samples_from_grid_dataset(source: str=None, dest="datasets/grid_wi
     noisy_grid_without_bc_samples.save_to_disk(save_at)
 
 
-def create_grid_bc_without_duplicates() -> None:
+def OUTDATED_create_grid_bc_without_duplicates() -> None:
     split_config = DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.0, noise=False, scaling=1.0)
     dataset = get_dataset(split_config)
 
@@ -286,7 +286,7 @@ def even_out_snrs(dataset: Dataset):
     return balanced_snrs.shuffle(seed=0)
 
 
-def grid_bc_get_dataset_with_unique_audio_samples(dest: str = "datasets/grid_bc_unique_audios"):
+def grid_bc_save_dataset_with_unique_audio_samples(dest: str = "datasets/grid_bc_unique_audios"):
     save_at = PROJECT_ROOT / dest / "saved_dataset"
     grid_bc = get_dataset(
         DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,

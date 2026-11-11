@@ -7,10 +7,11 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 
 from utils.evaluate_utils import get_data
-from utils.dataset_utils import get_dataset, remove_bc_samples_from_grid_dataset, create_grid_bc_without_duplicates, override_noised_dataset_as_files
+from utils.dataset_utils import get_dataset, remove_bc_samples_from_grid_dataset, OUTDATED_create_grid_bc_without_duplicates, override_noised_dataset_as_files
 from utils.logging_utils import catch_time
 from utils.new_config_dataclass import load_config, DataSplitConfig
-from utils.avsec_utils import parse_and_save_avsec2_enhanced
+from utils.logging_utils import catch_time
+from utils.dataset_utils import grid_bc_save_dataset_with_unique_audio_samples
 
 from utils.cpc_utils import parse_and_save_cpc, get_cpc
 
@@ -53,8 +54,10 @@ def nemo_sandbox():
     print(result[0].text)
 
 def run_once():
-    create_grid_bc_without_duplicates()
+    # get BC with unique audio files
+    grid_bc_save_dataset_with_unique_audio_samples()
 
+    # get grid with noise added to audio files (and not via transformation)
     grid_with_noise = "datasets/grid_with_noise"
     shutil.copytree(src="datasets/grid", dst=grid_with_noise)
 
@@ -70,9 +73,11 @@ def print_snr_count():
     dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=Path("datasets/grid_bc_without_duplicates"), start=0, end=1., noise=False, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
-    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=Path("datasets/grid_with_noise_without_bc_sentences_snr_col"), start=0, end=1.,noise=False, scaling=1.0))
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=500, noise=True, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=500, noise=True, scaling=1.0))
+    print(Counter(dataset["snr_db"]))
 
 
 if __name__ == '__main__':
