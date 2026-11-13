@@ -28,6 +28,8 @@ data:
 task_type: inference
 extract_logprobs: False
 word_timestamps: False
+subword_timestamps: true
+merge_punctuations: false
 beam_size: 5
 debug: True
 runs_per_sample: 1
