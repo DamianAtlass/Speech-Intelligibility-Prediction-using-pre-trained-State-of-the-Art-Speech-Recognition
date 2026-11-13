@@ -580,7 +580,7 @@ def evaluate_individual_avsec_run(config: InferenceConfig,
             m: {"mean": group[m].mean(), "std": group[m].std()} for m in corr_metrics_columns
         })
 
-    print("Creating the grouped dataframe...", end="")
+    # calculate macroscopic metrics by grouping
     with catch_time() as t:
         df_groupy_by_snr: pd.DataFrame = df_groupy_by_snr.apply(compute_stats).reset_index()
 
@@ -1881,7 +1881,7 @@ def get_data(
 
                 # laptev
                 laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
-                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.3)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.8)
                 assert len(laptev_per_token) == num_tokens
                 laptev.append(float(laptev_per_token.min()))
 
@@ -1895,10 +1895,19 @@ def get_data(
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
                 ### merge if necessary
-                words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens,
-                                                row["transcript_alignments"])
-                words_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens,
-                                                                         row["transcript_alignments"])
+                words: list[str] = []
+                tokens_per_word = []
+                words_token_idx: list[list[int]] = []
+
+                i=0
+                for word in row["transcript_alignments"]:
+                    words.append(word["word"])
+                    tokens_per_word.append(word["tokens"])
+
+                    tokens = len(word["tokens"])
+                    words_token_idx.append(list(range(0 + i, tokens + i)))
+                    i += tokens
+
                 assert len(words) == len(words_token_idx)
                 assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_token_idx])
 
