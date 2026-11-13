@@ -102,6 +102,7 @@ class InferenceConfig(BaseConfig):
     word_timestamps: bool = True
     beam_size: int = 5
     subword_timestamps: bool = False
+    merge_punctuations: bool = False
     temperature: float = 0
     runs_per_sample: int = 1
     # "full_sequence" -> "other_tokens_fixed"

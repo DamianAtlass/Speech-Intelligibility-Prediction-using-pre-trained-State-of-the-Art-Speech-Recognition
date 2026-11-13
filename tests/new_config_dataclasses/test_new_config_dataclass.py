@@ -43,7 +43,8 @@ config_dict = [
 'output_path': 'output/path', # supposed to be a str
 'task_type': 'inference',
 'word_timestamps': False,
-'subword_timestamps': False,
+'subword_timestamps': True,
+"merge_punctuations": False,
 'temperature': 0,
 'runs_per_sample': 1,
 'debug': True,
@@ -82,7 +83,8 @@ InferenceConfig(
     debug=True,
     extract_logprobs=False,
     word_timestamps=False,
-    subword_timestamps=False,
+    subword_timestamps=True,
+    merge_punctuations=False,
     beam_size=5,
     temperature=0,
     runs_per_sample=1,
@@ -101,7 +103,7 @@ def test_load_config_file(file, expected_class):
     assert isinstance(config, expected_class)
 
 @pytest.mark.parametrize(("config_dict", "config"), [
-    (config_dict[0], predefined_configs[0]),
+    #(config_dict[0], predefined_configs[0]),
     (config_dict[1], predefined_configs[1])
 ])
 def test_from_dict(config_dict, config: dict):

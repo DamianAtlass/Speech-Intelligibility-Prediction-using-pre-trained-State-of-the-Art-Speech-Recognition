@@ -167,8 +167,6 @@ def inference_whisper(model,
                       counter: int,
                       forced_alignment_options: dict|None = None,
                       fa_avsec_id: str = None,
-                      subword_timestamps: bool = True,
-                      merge_punctuations: bool = False,
                       ) -> dict:
 
     audio_array = torch.tensor(sample["audio"]["array"]).to(device)
@@ -185,13 +183,14 @@ def inference_whisper(model,
         "condition_on_previous_text": False,
         "language": "en",
         "break_after_first_segment": False if config.model.path is None else True,  # only with trained models
-        "subword_timestamps": subword_timestamps, # should technicalls be tied to config, but doesnt matter anymore probably
-        "merge_punctuations": merge_punctuations,
+        "subword_timestamps": config.subword_timestamps, # should technicalls be tied to config, but doesnt matter anymore probably
+        "merge_punctuations": config.merge_punctuations,
         "forced_alignment_options": None if forced_alignment_options is None else forced_alignment_options.copy()
     }
 
     # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
     #  https://github.com/openai/whisper/discussions/81
+
     result: dict = sip_whisper.transcribe(**options)
 
     file_name = create_filename(
@@ -293,7 +292,7 @@ def inference_whisper_with_forced_alignment_avsec(
         counter: int,):
 
 
-    regular_run_data = inference_whisper(model, config, sample, device, run, counter, subword_timestamps=False, merge_punctuations=False)
+    regular_run_data = inference_whisper(model, config, sample, device, run, counter)
     if regular_run_data["prediction_result"]["text"] == "":
         return
 
@@ -365,7 +364,7 @@ def inference_whisper_with_forced_alignment_avsec(
 
         counter_fa+=1
         logger.info(f"{forced_alignment_options = } ({counter_fa}/{expected_length})")
-        inference_whisper(model, config, sample, device, run, counter, forced_alignment_options, fa_avsec_id=d["id"], subword_timestamps=False, merge_punctuations=False)
+        inference_whisper(model, config, sample, device, run, counter, forced_alignment_options, fa_avsec_id=d["id"])
 
     assert expected_length == counter_fa
 
