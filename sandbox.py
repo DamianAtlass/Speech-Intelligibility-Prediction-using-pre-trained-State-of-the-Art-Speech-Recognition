@@ -70,7 +70,9 @@ def print_snr_count():
     dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,noise=False, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
-    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=Path("datasets/grid_bc_without_duplicates"), start=0, end=1., noise=False, scaling=1.0))
+    dataset = get_dataset(
+        DataSplitConfig(dataset_type='avsec2_enhanced', path=None,
+                        start=0, end=1., noise=False, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
     dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=500, noise=True, scaling=1.0))
@@ -81,4 +83,15 @@ def print_snr_count():
 
 
 if __name__ == '__main__':
-    parse_and_save_avsec2_enhanced()
+    # dataset = get_dataset(
+    #     DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,
+    #                     noise=False, scaling=1.0))
+    # print(f"{len(dataset)=}")
+    # foo = list()
+    # for i, (s, r, snr, a) in enumerate(zip(dataset["speaker"], dataset["sentence"], dataset["snr_db"], dataset["audio_path"])):
+    #     if int(s) ==27 and r=='place red by a six please' and int(snr)==-8:
+    #         print(i,a)
+    #     foo.append((int(s), r, int(snr)))
+    # c = Counter(foo)
+
+    print_snr_count()
