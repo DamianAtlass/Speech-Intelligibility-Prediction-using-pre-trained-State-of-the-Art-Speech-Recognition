@@ -1200,7 +1200,7 @@ avesc2_enhanced = "avsec2_enhanced"
 
 class MetricWrapper:
     @classmethod
-    def calculate_dispersion_per_file(cls, rows_single_audio: pd.DataFrame):
+    def calculate_dispersion_grid(cls, rows_single_audio: pd.DataFrame):
         rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
         dispersion_values: list[float] = []
 
@@ -1215,7 +1215,15 @@ class MetricWrapper:
 
             assert len(rows_single_keyword_position) == len(possible_keywords) or len(
                 rows_single_keyword_position) == len(possible_keywords) + 1
-            # consider case if in which isn't in original transcript
+
+            # filter out original transcript
+            if len(rows_single_keyword_position) == len(possible_keywords) + 1:
+                rows_single_keyword_position = rows_single_keyword_position[
+                rows_single_keyword_position["forced_alignment_options"].apply(
+                    lambda x: True if isinstance(x, dict) else False
+                )]
+
+            assert len(rows_single_keyword_position) == len(possible_keywords)
 
             probs: list[float] = sorted(rows_single_keyword_position["avg_logprob"],
                                         reverse=True)  # exp applied earlier
@@ -1995,7 +2003,7 @@ def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_pa
             "snr": group["snr"].iloc[0],
             "reference_kw": group["reference_kw"].iloc[0],
             "human_transcript_kw": group["human_transcript_kw"].iloc[0],
-            "dispersion_kw": MetricWrapper.calculate_dispersion_per_file(group),
+            "dispersion_kw": MetricWrapper.calculate_dispersion_grid(group),
             "model_type": group["model_type"].iloc[0],
             "changes_in_words": calculate_changing_words(group)
         })
