@@ -885,7 +885,6 @@ def evaluate_forced_alignment_run(
             # col_label="dispersion",
             # box_or_bar="bar",
             output_path=dir_disp_plots)
-        print("here")
 
         build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots,
                          is_avsec=config.data.test_split.dataset_type == avesc2_enhanced)
