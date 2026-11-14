@@ -483,16 +483,18 @@ def inference(config: InferenceConfig, dataset: DatasetDict, device: torch.devic
     (config.output_path / "data").mkdir(exist_ok=config.debug)
 
     model = load_model(config, device)
-
+    test_set: Dataset = dataset["test"]
     if config.data.test_split.dataset_type == "grid_bc":
-        if not has_even_snrs(dataset["test"]):
-            dataset["test"] = even_out_snrs(dataset["test"])
+        if not has_even_snrs(test_set):
+            test_set = even_out_snrs(test_set)
 
-    #dataset["test"] = dataset["test"].filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
+    test_set = test_set.add_column("internal_sample_id", list(range(len(test_set))))
+
+    #test_set = test_set.filter(lambda sample: sample["audio_path"]=='datasets/GridIntelligibilityDatabase/BC2007wavs/BC2007/m12/6/s5_bbar7s.wav')
     if config.model.name =="whisper":
-        inference_loop_whisper(config, model, dataset["test"], device)
+        inference_loop_whisper(config, model, test_set, device)
     elif config.model.name =="parakeet":
-        inference_parekeet(config, model, dataset["test"], device)
+        inference_parekeet(config, model, test_set, device)
     else:
         raise NotImplementedError
     print()

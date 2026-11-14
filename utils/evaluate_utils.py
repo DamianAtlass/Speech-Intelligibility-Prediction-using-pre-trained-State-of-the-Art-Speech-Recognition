@@ -1455,6 +1455,7 @@ def get_data(
         temperature = []
         alternatives = []
         target_word = []
+        internal_sample_id = []
 
         # read files
         for counter, file in enumerate(tqdm(data_path.iterdir(), total=len(list(data_path.iterdir())))):
@@ -1496,6 +1497,7 @@ def get_data(
                     alternatives.append(normalize(json_file["alt"]))
                     target_word.append(json_file["target_word"])
                     human_transcripts_kw.append(json_file["response"])
+                    internal_sample_id.append(json_file["internal_sample_id"])
 
                 if dataset_type == "grid_bc":
                     human_transcripts_kw.append(json_file["human_recognized_words"])
@@ -1575,6 +1577,7 @@ def get_data(
                     "wer_machine_kw": wers_machine_kw,
                     "human_transcript_kw": human_transcripts_kw,
                     "snr": snr,
+                    "internal_sample_id": internal_sample_id,
                 })
 
         if dataset_type == "grid_bc":
@@ -2049,7 +2052,7 @@ def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_pa
         grouped_df: pd.DataFrame = pd.read_pickle(file_name_grouped_df)
         return grouped_df
 
-    grouped_df = df_forced_alignment_run.groupby("audio_path")
+    grouped_df = df_forced_alignment_run.groupby("internal_sample_id" if is_avsec else "audio_path")
     counter = 0
 
     def compute_stats_grid(group: pd.DataFrame):
