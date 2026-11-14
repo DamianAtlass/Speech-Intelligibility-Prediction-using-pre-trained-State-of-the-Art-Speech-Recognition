@@ -127,6 +127,10 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
 
     Returns: None
     """
+
+    #dataset  = dataset.filter(lambda x: int(x["snr_db"]) in [-4,0,6])
+    #dataset  = dataset.filter(lambda x: int(x["listener"]) <=5)
+
     if config.forced_alignment and not config.word_timestamps:
         raise RuntimeError("Need timestamps for forced alignment!")
     if config.temperature!=0 and config.beam_size!=1:

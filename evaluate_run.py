@@ -48,10 +48,10 @@ def evaluate_run(path: Path, device: torch.device | None = None):
     for restrict_vocab in [False, True]:
         vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
         if restrict_vocab and (config.model.name == "parakeet" or config.data.test_split.dataset_type == "avsec2_enhanced"):
-            logger.info(f"{restrict_vocab = }")
             continue
         if restrict_vocab and config.forced_alignment:
             continue
+        logger.info(f"{restrict_vocab = }")
         with catch_time() as t:
             print(f"Get data...")
             df = get_data(
