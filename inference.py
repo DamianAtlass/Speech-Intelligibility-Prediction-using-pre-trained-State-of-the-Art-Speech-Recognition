@@ -183,7 +183,7 @@ def inference_whisper(model,
         "condition_on_previous_text": False,
         "language": "en",
         "break_after_first_segment": False if config.model.path is None else True,  # only with trained models
-        "subword_timestamps": config.subword_timestamps, # should technicalls be tied to config, but doesnt matter anymore probably
+        "subword_timestamps": config.subword_timestamps,
         "merge_punctuations": config.merge_punctuations,
         "forced_alignment_options": None if forced_alignment_options is None else forced_alignment_options.copy()
     }

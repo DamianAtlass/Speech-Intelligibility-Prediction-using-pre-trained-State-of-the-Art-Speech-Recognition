@@ -838,42 +838,57 @@ def evaluate_individual_avsec_run(config: InferenceConfig,
 
 
 def evaluate_forced_alignment_run(
+        config: InferenceConfig,
         df_forced_alignment_run: pd.DataFrame,
         restrict_vocab: bool,
         output_path: Path,) -> None:
     vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
     df_dir = output_path / vocab_dir
     df_dir.mkdir(parents=True, exist_ok=True)
-
+    is_avsec = config.data.test_split.dataset_type == avesc2_enhanced
     print("Getting the grouped dataframe...", end="")
     with catch_time() as t:
-        grouped_df: pd.DataFrame = get_grouped_forced_align_df(df_forced_alignment_run, df_dir)
+        grouped_df: pd.DataFrame = get_grouped_forced_align_df(df_forced_alignment_run, df_dir, is_avsec)
 
     print(f"took: {t():.2f} s.")
 
-    num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
-    print(f"{num_change_words = }")
+    if not is_avsec:
+        num_change_words = sum(grouped_df["changes_in_words"]) / len(df_forced_alignment_run)
+        print(f"{num_change_words = }")
 
     dir_disp_plots = get_results_dir(output_path) / vocab_dir / "plots" / "dispersion"
     dir_disp_plots.mkdir(exist_ok=True, parents=True)
 
     CorrelationManager.calculate_and_save_correlations(df=grouped_df,metrics=["dispersion_kw"], save_dir=dir_disp_plots)
 
-    box_or_barplot_microscopic_x_to_snr(
-        df=grouped_df,
-        col_name="dispersion_kw",
-        col_label="dispersion",
-        box_or_bar="bar",
-        output_path=dir_disp_plots)
+    if not is_avsec:
+        box_or_barplot_microscopic_x_to_snr(
+            df=grouped_df,
+            col_name="dispersion_kw",
+            col_label="dispersion",
+            box_or_bar="bar",
+            output_path=dir_disp_plots)
 
-    boxplot_microscopic_special_metric_per_keyword(
-        df=grouped_df,
-        col_name="dispersion_kw",
-        col_compare_against_ref_kw="human_transcript_kw",
-        special_metric="spearman_correlation",
-        output_path=dir_disp_plots)
+        boxplot_microscopic_special_metric_per_keyword(
+            df=grouped_df,
+            col_name="dispersion_kw",
+            col_compare_against_ref_kw="human_transcript_kw",
+            special_metric="spearman_correlation",
+            output_path=dir_disp_plots)
 
-    build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots)
+        build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots)
+
+    else:
+        plot_x_to_snr(
+            df=grouped_df,
+            plotting_attribute="dispersion_kw",
+            # col_label="dispersion",
+            # box_or_bar="bar",
+            output_path=dir_disp_plots)
+        print("here")
+
+        build_predictors(df=grouped_df, metrics_list=[["dispersion_kw"]], output_path=dir_disp_plots,
+                         is_avsec=config.data.test_split.dataset_type == avesc2_enhanced)
 
 def calculate_changing_words(group: pd.DataFrame) -> int:
     keyword_idx = set(group["forced_alignment_options"].apply(lambda x: consider_old_value(x)["focus"]["position"] if x is not None else False))
@@ -1231,6 +1246,47 @@ class MetricWrapper:
             dispersion_values.append(cls.dispersion(probs))
 
         return dispersion_values
+
+    @classmethod
+    def calculate_dispersion_avsec(cls, rows_single_audio: pd.DataFrame):
+        if len(rows_single_audio) == 1:
+            # empty transcript
+            return torch.nan
+
+        rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
+        dispersion_value: float
+        print(len(rows_single_audio))
+
+        possible_keywords: set[str] = set([rows_single_audio.iloc[0]["target_word"], *(rows_single_audio.iloc[0]["alternatives"][:-1])])
+
+        # take the original transcription without alignment and all other of the keyword position
+        # rows_single_keyword_position = rows_single_audio[
+        #     rows_single_audio["forced_alignment_options"].apply(
+        #         lambda x: consider_old_value(x)["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
+        #     )]
+
+        if not (len(rows_single_audio) == len(possible_keywords) or len(
+                rows_single_audio) == len(possible_keywords) + 1):
+            pass
+        if len(rows_single_audio) == len(possible_keywords) + 1:
+            pass
+
+        # filter out transcript not fitting into the forced alignment scheme
+        if len(rows_single_audio) == len(possible_keywords) + 1:
+            rows_single_audio = rows_single_audio[
+                rows_single_audio["forced_alignment_options"].apply(
+                    lambda x: True if isinstance(x, dict) else False
+                )]
+
+        if not (len(rows_single_audio) == len(possible_keywords)):
+            pass
+
+        probs: list[float] = sorted(rows_single_audio["avg_logprob"],
+                                    reverse=True)  # exp applied earlier
+
+        dispersion_value: float = cls.dispersion(probs)
+
+        return dispersion_value
 
     @staticmethod
     def dispersion(probs: list[float]) -> float:
@@ -1985,7 +2041,7 @@ def get_data(
 
     return df
 
-def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_path: Path):
+def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_path: Path, is_avsec: bool,):
     output_path.mkdir(parents=True, exist_ok=True)
     file_name_grouped_df = output_path/"df_grouped.pkl"
     if file_name_grouped_df.exists():
@@ -1996,7 +2052,7 @@ def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_pa
     grouped_df = df_forced_alignment_run.groupby("audio_path")
     counter = 0
 
-    def compute_stats(group: pd.DataFrame):
+    def compute_stats_grid(group: pd.DataFrame):
         nonlocal counter
         counter += 1
         return pd.Series({
@@ -2007,7 +2063,21 @@ def get_grouped_forced_align_df(df_forced_alignment_run: pd.DataFrame, output_pa
             "model_type": group["model_type"].iloc[0],
             "changes_in_words": calculate_changing_words(group)
         })
-    grouped_df = grouped_df.apply(compute_stats).reset_index()
+
+    def compute_stats_avsec(group: pd.DataFrame):
+        nonlocal counter
+        counter += 1
+        return pd.Series({
+            "snr": group["snr"].iloc[0],
+            "target_word": group["target_word"].iloc[0],
+            "wer_human_kw": group["wer_human_kw"].iloc[0],
+            "dispersion_kw": MetricWrapper.calculate_dispersion_avsec(group),
+            "model_type": group["model_type"].iloc[0],
+        })
+
+    compute_stats_func = compute_stats_avsec if is_avsec else compute_stats_grid
+
+    grouped_df = grouped_df.apply(compute_stats_func).reset_index()
 
     grouped_df.to_pickle(output_path/file_name_grouped_df)
     return grouped_df

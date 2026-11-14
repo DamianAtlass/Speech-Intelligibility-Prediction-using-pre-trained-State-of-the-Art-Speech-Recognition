@@ -25,8 +25,9 @@ def get_X_and_y(df: pd.DataFrame,
     X = df.copy()
     X = X[metrics]
     if kw_number is not None:
-        for metric in metrics:
-            X[metric] = X[metric].apply(lambda x: x[kw_number])
+        if not (is_avsec and metrics==["dispersion_kw"]): #very special case
+            for metric in metrics:
+                X[metric] = X[metric].apply(lambda x: x[kw_number])
 
 
     if is_microscopic:

@@ -47,7 +47,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
     for restrict_vocab in [False, True]:
         vocab_dir = "results_restrict_vocab" if restrict_vocab else "results_full_vocab"
-        if restrict_vocab and config.model.name == "parakeet":
+        if restrict_vocab and (config.model.name == "parakeet" or config.data.test_split.dataset_type == "avsec2_enhanced"):
             logger.info(f"{restrict_vocab = }")
             continue
         if restrict_vocab and config.forced_alignment:
@@ -73,7 +73,7 @@ def evaluate_run(path: Path, device: torch.device | None = None):
         # exit()
 
         if config.forced_alignment:
-            evaluate_forced_alignment_run(df_forced_alignment_run=df, restrict_vocab=restrict_vocab, output_path=config.output_path)
+            evaluate_forced_alignment_run(config=config, df_forced_alignment_run=df, restrict_vocab=restrict_vocab, output_path=config.output_path)
         else:
             if config.data.test_split.dataset_type in ["grid", "grid_bc"]:
                 evaluate_individual_run(config=config, df_single_run=df, restrict_vocab=restrict_vocab)
