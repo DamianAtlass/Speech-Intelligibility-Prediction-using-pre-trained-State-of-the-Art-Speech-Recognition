@@ -1,24 +1,25 @@
-output_path: inferences/base_exp_forced_alignment_delete_me
+output_path: inferences/dummy_avsec_fa_delete_me
 task_type: inference
 data:
     train_split: null
     val_split: null
     test_split:
-        dataset_type: grid_bc
-        path: null
+        dataset_type: avsec2_enhanced
+        path:
         start: 0
-        end: 1000
+        end: 100
         noise: false
         scaling: 1.0
 model:
     name: whisper
     model_type: base
-    path: finetuned_models/base_exp
+    path:
 debug: true
-extract_logprobs: true
-word_timestamps: true
-beam_size: 5
-subword_timestamps: true
+extract_logprobs: true #always true
+word_timestamps: true #always true
+beam_size: 5 # always 5 in my experiments, no influence on parakeet
+subword_timestamps: false # false for avsec, true for grid
+merge_punctuations: false # always false
 temperature: 0
 runs_per_sample: 1
-forced_alignment: true
+forced_alignment: other_tokens_loose
