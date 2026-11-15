@@ -1256,21 +1256,11 @@ class MetricWrapper:
 
         rows_single_audio["avg_logprob"] = np.exp(rows_single_audio["avg_logprob"])
         dispersion_value: float
-        print(len(rows_single_audio))
 
         possible_keywords: set[str] = set([rows_single_audio.iloc[0]["target_word"], *(rows_single_audio.iloc[0]["alternatives"][:-1])])
 
-        # take the original transcription without alignment and all other of the keyword position
-        # rows_single_keyword_position = rows_single_audio[
-        #     rows_single_audio["forced_alignment_options"].apply(
-        #         lambda x: consider_old_value(x)["focus"]["token_or_id"].strip() in possible_keywords if isinstance(x, dict) else True
-        #     )]
+        assert len(rows_single_audio) == len(possible_keywords) or len(rows_single_audio) == (len(possible_keywords) + 1)
 
-        if not (len(rows_single_audio) == len(possible_keywords) or len(
-                rows_single_audio) == len(possible_keywords) + 1):
-            pass
-        if len(rows_single_audio) == len(possible_keywords) + 1:
-            pass
 
         # filter out transcript not fitting into the forced alignment scheme
         if len(rows_single_audio) == len(possible_keywords) + 1:
@@ -1279,8 +1269,7 @@ class MetricWrapper:
                     lambda x: True if isinstance(x, dict) else False
                 )]
 
-        if not (len(rows_single_audio) == len(possible_keywords)):
-            pass
+        assert len(rows_single_audio) == len(possible_keywords)
 
         probs: list[float] = sorted(rows_single_audio["avg_logprob"],
                                     reverse=True)  # exp applied earlier
