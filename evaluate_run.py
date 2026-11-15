@@ -18,6 +18,7 @@ rows_prediction_normal = [
     ["macroscopic_entropy"],
     ["mtd"],
     ["laptev"],
+    ["wer_machine"],
     ["macroscopic_entropy", "mtd", "laptev"],
 
     ["entropy_kw_est"],
@@ -31,6 +32,7 @@ rows_prediction_normal = [
 avsec = [
     ["entropy_kw_est"],
 
+    ["wer_machine"],
     ["macroscopic_entropy"],
     ["mtd"],
     ["laptev"],
@@ -86,4 +88,4 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/delete_me"))
+    evaluate_run(Path("inferences/avsec_parakeet"))

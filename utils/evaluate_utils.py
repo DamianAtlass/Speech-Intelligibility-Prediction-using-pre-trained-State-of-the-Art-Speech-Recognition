@@ -187,7 +187,7 @@ def evaluate_individual_run(config: InferenceConfig,
     CorrelationManager.calculate_and_save_correlations(
         df=df_single_run,
         metrics = ["macroscopic_entropy", "mtd", "laptev", "entropy_kw_est",
-                   "entropy_kw_from_time_align", "tad_kw", "laptev_kw_est", "laptev_kw_from_time_align"],
+                   "wer_machine", "entropy_kw_from_time_align", "tad_kw", "laptev_kw_est", "laptev_kw_from_time_align"],
         save_dir=results_dir)
 
     dir_plots = results_dir / "plots"
@@ -532,7 +532,7 @@ def evaluate_individual_avsec_run(config: InferenceConfig,
     metrics = ["avg_logprob", "wer_machine", "wer_machine_kw", "machine_transcripts_len"]
 
     corr_summary = None
-    corr_metrics_columns = ["macroscopic_entropy", "mtd", "laptev"]
+    corr_metrics_columns = ["wer_machine", "macroscopic_entropy", "mtd", "laptev"]
 
     CorrelationManager.calculate_and_save_correlations(
         df=df_single_run,

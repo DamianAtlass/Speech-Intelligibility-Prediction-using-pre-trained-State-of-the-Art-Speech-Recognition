@@ -9,7 +9,7 @@
 #
 ################################################################################
 import numpy as np
-
+import pandas as pd
 
 def _needlemann_wunsch(reference, transcript):
     """
@@ -113,8 +113,8 @@ def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float
     Splits both at spaces. Doesn't normalize.
     :return:
     """
-    assert isinstance(references, list)
-    assert isinstance(transcripts, list)
+    assert isinstance(references, list) or isinstance(transcripts, pd.arrays.ArrowStringArray)
+    assert isinstance(transcripts, list) or isinstance(transcripts, pd.arrays.ArrowStringArray)
     assert isinstance(references[0], str) if len(references) else True , "references needs to be list[str]"
     assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
     references = [o.split() for o in references]
