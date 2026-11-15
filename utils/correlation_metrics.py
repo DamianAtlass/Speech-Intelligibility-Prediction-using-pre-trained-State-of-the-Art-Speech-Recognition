@@ -9,7 +9,7 @@ def corr_or_mut(
         df: pd.DataFrame,
         col_name: str,
         kw_idx: int|None,
-        wer_col_or_kw_col: Literal["wer_human_kw" , "human_transcript_kw", "machine_transcript_kw_est", "machine_transcript_kw_from_time_align", "human_transcript_kw"],
+        wer_col_or_kw_col: Literal["wer_human", "wer_human_kw" , "human_transcript_kw", "machine_transcript_kw_est", "machine_transcript_kw_from_time_align", "human_transcript_kw"],
         special_metric: Literal["spearman_correlation", "mutual_information"],
 ) -> dict:
     microscopic = kw_idx is not None

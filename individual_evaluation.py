@@ -76,6 +76,18 @@ class Evaluator:
             shifting_attribute="name",
             output_path=self.save_at)
 
+    def calculate_stoi_corr(self):
+        with open("stoi_data/grid_bc_stoi.json") as f:
+            stoi_data: dict = json.load(f)
+
+        clean_grid_audios = [stoi_data[path] for path in self.df["audio_path"]]
+
+        self.df["stoi_score"] = clean_grid_audios
+
+        c = corr_or_mut(df=self.df, wer_col_or_kw_col="wer_human", col_name="stoi_score",
+                    special_metric="spearman_correlation", kw_idx=None)
+
+        print(c)
 
 indi_eval_folder = Path.cwd() / "individual_evaluations"
 
