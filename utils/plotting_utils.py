@@ -859,6 +859,89 @@ def boxplot_microscopic_special_metric_per_keyword(
         plt.savefig(output_path/f'{title.replace("\n", "")}.png')
     plt.close()
 
+def barplot_finetuning_progress(
+        df: pd.DataFrame,
+        y_axis_label: str = None,
+        col_label: str | None = None,
+        shifting_attribute: str = "model_type",
+        shifting_attribute_label = None,
+        output_path: Path = None, ):
+    """
+    Regular plot for unspecific columns to (line)plot for each SNR.
+    """
+
+    list_shifting_attribute: list = list(df[shifting_attribute].unique())
+
+    x_labels = get_x_labels(df["snr"].unique())
+
+    values_means: list = []
+    for attr in tqdm(list_shifting_attribute):
+        df_attr = df[df[shifting_attribute] == attr]
+        values_per_snr = []
+        for snr in np.sort(df_attr["snr"].unique()):
+
+            df_snr = df_attr[df_attr["snr"] == snr]
+            values_current_snr = []
+            for kw in range(3):
+
+                refs = df_snr["reference_kw"].apply(lambda x: x[kw])
+                trans = df_snr["machine_transcript_kw_est"].apply(lambda x: x[kw])
+                values_for_this_kw = (refs != trans).mean()
+                assert values_for_this_kw != np.nan
+                values_current_snr.append(values_for_this_kw.item())
+
+            values_per_snr.append(values_current_snr)
+        values_means.append(values_per_snr)
+
+    positions = range(len(x_labels))
+
+
+    data = np.array(values_means)  # shape (2, 12, 3)
+    n0, n1, n2 = data.shape
+    from matplotlib.colors import to_rgb
+
+    x = np.arange(n1)  # 12 groups along the x axis
+    width = 0.8 / n2  # 3 bars share each group's width
+    base_colors = kw_colors_short
+
+    def lighten(color, amount=0.55):
+        """Blend a color toward white."""
+        return tuple(c + amount * (1 - c) for c in to_rgb(color))
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for k in range(n2):
+        offset = (k - (n2 - 1) / 2) * width
+        # first element of dim 0: lighter shade, drawn behind, no legend entry
+        ax.bar(x + offset, data[0, :, k], width,
+               color=lighten(base_colors[k]), zorder=2)
+        # second element of dim 0: full color, drawn in front, shown in legend
+        ax.bar(x + offset, data[1, :, k], width,
+               color=base_colors[k], zorder=3,
+               label=grid_kw_labels[k] if n2==3 else "target wort")
+
+    #ax.set_xticks(x)
+    #ax.set_xticklabels([str(i) for i in range(n1)])
+    ax.set_ylabel("WER")
+    ax.legend(fontsize=8)
+    ax.grid(axis="y", alpha=0.3, zorder=0)
+    #plt.tight_layout()
+    #plt.show()
+
+
+    figure_title = f"Improvement in WER after finetuning between {str(list(df["name"].unique()))}"
+    plt.suptitle(wrap_text(figure_title))
+    plt.xticks(positions, x_labels)
+    plt.xlabel("SNR")
+    # plt.ylabel(f"microscopic {y_axis_label or col_label}")
+    plt.ylim(0)
+    plt.grid()
+    # plt.legend()
+    if output_path:
+        plt.savefig(output_path/f'{figure_title}.png')
+    plt.close()
+
+
 
 class PredictorPlots:
     labels = {

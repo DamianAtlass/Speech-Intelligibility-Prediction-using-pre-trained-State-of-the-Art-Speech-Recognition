@@ -107,12 +107,14 @@ def needlemann_wunsch(reference: list[str], transcript: list[str]):
 def wer_needleman_wunsch(references: list[str], transcripts: list[str]) -> float | int:
     """
 
-    references, list[str]: objects in references represent a sequence to be aligned. Example ["A nice house"]
-    transcripts, list[str]: objects in transcripts represent a sequence to be aligned with the reference. Example ["A nice mouse"]
+    references, list[str]: objects in references represent a sequence to be aligned. Example ["A nice house", "A cool boat"]
+    transcripts, list[str]: objects in transcripts represent a sequence to be aligned with the reference. Example ["A nice mouse", "A cool road"]
 
     Splits both at spaces. Doesn't normalize.
     :return:
     """
+    assert isinstance(references, list)
+    assert isinstance(transcripts, list)
     assert isinstance(references[0], str) if len(references) else True , "references needs to be list[str]"
     assert isinstance(transcripts[0], str) if len(transcripts) else True, "transcripts needs to be list[str]"
     references = [o.split() for o in references]
@@ -147,17 +149,12 @@ def wer_needleman_wunsch_per_sample(references: list[str], transcripts: list[str
         wers.append(wer)
     return wers
 
+def main():
+    refs = ["A nice house", "This is read"]
+    hypotheses = ["A nice mounse", "Miss is red"]
+
+    print(wer_needleman_wunsch(references=refs, transcripts=hypotheses))
+
 if __name__ == '__main__':
+    main()
 
-    ref = "grading four again".split()
-    hypothesis = "Been grading L four again".split()
-
-    print(f"wer (needleman-wunsch): {wer_needleman_wunsch(references=[ref], transcripts=[hypothesis])}")
-
-    ref_align, trans_align = _needlemann_wunsch(reference=ref, transcript=hypothesis)
-    print(ref_align)
-    print(trans_align)
-
-    print("--------------")
-    import werpy
-    print(f"wer (werpy, uses Levenshtein-Distanz): {werpy.wer(ref, hypothesis)}")
