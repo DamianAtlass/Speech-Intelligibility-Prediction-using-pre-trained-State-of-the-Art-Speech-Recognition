@@ -25,3 +25,4 @@ __pycache__/
 /prediction_results.xlsx
 /backups_inferences/
 /tests/ID1581.mp4
+/stoi_data/

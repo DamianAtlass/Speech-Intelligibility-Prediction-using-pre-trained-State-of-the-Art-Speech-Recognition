@@ -7,7 +7,7 @@ load_dotenv() # needs to be before 'import torch' to control what gpu to use (si
 import torch
 
 from utils.evaluate_utils import get_data
-from utils.dataset_utils import get_dataset, remove_bc_samples_from_grid_dataset, OUTDATED_create_grid_bc_without_duplicates, override_noised_dataset_as_files
+from utils.dataset_utils import get_dataset, remove_bc_samples_from_grid_dataset, override_noised_dataset_as_files, calculate_and_save_stoi_for_bc
 from utils.logging_utils import catch_time
 from utils.new_config_dataclass import load_config, DataSplitConfig
 from utils.logging_utils import catch_time
@@ -64,34 +64,25 @@ def run_once():
     override_noised_dataset_as_files(target_folder=grid_with_noise)
     remove_bc_samples_from_grid_dataset(source=grid_with_noise, dest="datasets/grid_with_noise_without_bc_sentences")
 
+    calculate_and_save_stoi_for_bc()
+
+
 def print_snr_count():
     from collections import Counter
 
-    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,noise=False, scaling=1.0))
+    print("datasets/grid_bc_unique_audios:")
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=Path("datasets/grid_bc_unique_audios"), start=0, end=1.,noise=False, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
-    dataset = get_dataset(
-        DataSplitConfig(dataset_type='avsec2_enhanced', path=None,
-                        start=0, end=1., noise=False, scaling=1.0))
+    print("avsec2_enhanced:")
+    dataset = get_dataset(DataSplitConfig(dataset_type='avsec2_enhanced', path=None,start=0, end=1., noise=False, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
-    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=500, noise=True, scaling=1.0))
+    print("default grid:")
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=1., noise=True, scaling=1.0))
     print(Counter(dataset["snr_db"]))
 
-    dataset = get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=500, noise=True, scaling=1.0))
-    print(Counter(dataset["snr_db"]))
 
 
 if __name__ == '__main__':
-    # dataset = get_dataset(
-    #     DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1.,
-    #                     noise=False, scaling=1.0))
-    # print(f"{len(dataset)=}")
-    # foo = list()
-    # for i, (s, r, snr, a) in enumerate(zip(dataset["speaker"], dataset["sentence"], dataset["snr_db"], dataset["audio_path"])):
-    #     if int(s) ==27 and r=='place red by a six please' and int(snr)==-8:
-    #         print(i,a)
-    #     foo.append((int(s), r, int(snr)))
-    # c = Counter(foo)
-
-    print_snr_count()
+    pass

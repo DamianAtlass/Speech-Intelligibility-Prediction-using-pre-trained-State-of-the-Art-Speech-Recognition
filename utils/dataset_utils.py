@@ -18,6 +18,8 @@ from utils.avsec_utils import get_avsec2_enhanced
 from utils.manipulate_audio import add_noise_transformation
 from utils.paths import GRID_FOLDER, BC_FOLDER, PROJECT_ROOT, AVSEC2_LTR
 from utils.new_config_dataclass import DatasetConfig, DataSplitConfig
+from utils.stoi_utils import calculate_stoi
+
 WANTED_SAMPLE_RATE = 16_000
 SNRS = [-14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, None]
 
@@ -320,3 +322,33 @@ def grid_bc_save_dataset_with_unique_audio_samples(dest: str = "datasets/grid_bc
     save_at.mkdir(exist_ok=True, parents=True)
 
     grid_bc_unique_samples.save_to_disk(save_at)
+
+def get_clean_grid_path_from_bc_path(bc_path) -> str:
+    """
+    Get the clean grid audio path derrived from the bc audio_path
+    Args:
+        path: bc audio path grid path from dataset["audio_path.
+    """
+    speaker = bc_path.split("/")[-1].split("_")[0][1:]
+
+    file_name = str(Path(bc_path).stem).split("_")[1]
+    clean_grid_path = PROJECT_ROOT / f"datasets/grid/downloaded_grid_files/audio/s{speaker}/s{speaker}/{file_name}.wav"
+    assert clean_grid_path.exists()
+    return str(clean_grid_path)
+
+def calculate_and_save_stoi_for_bc():
+    save_dir = PROJECT_ROOT/"stoi_data"
+    save_file = save_dir/"grid_bc_stoi.json"
+    assert not save_file.exists()
+
+    dataset = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1., noise=False, scaling=1.0))
+    save_dir.mkdir(exist_ok=True, parents=True)
+
+    results = {}
+    for noisy_path in tqdm(dataset["audio_path"]):
+        clean_path = get_clean_grid_path_from_bc_path(noisy_path)
+        results[noisy_path] = calculate_stoi(clean_path=clean_path, noisy_path=noisy_path)
+
+    assert len(dataset) == len(results.keys())
+    with open(save_file, "w", encoding="utf-8") as file:
+        json.dump(results, file, indent=4)

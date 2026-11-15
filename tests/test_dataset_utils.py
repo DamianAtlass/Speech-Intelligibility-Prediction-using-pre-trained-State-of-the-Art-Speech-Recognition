@@ -1,7 +1,8 @@
 from utils.new_config_dataclass import DataSplitConfig, DatasetConfig
-from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset, apply_filter, _get_dataset
+from utils.dataset_utils import apply_split, get_dataset_dict, get_dataset, apply_filter, _get_dataset, get_clean_grid_path_from_bc_path
 from datasets import Dataset, DatasetDict
 import pytest
+from pathlib import Path
 
 from utils.grid_utils import get_grid
 from utils.paths import TEST_GRID_FOLDER, TEST_BC_FOLDER, GRID_FOLDER, BC_FOLDER, PROJECT_ROOT
@@ -73,3 +74,14 @@ def test_apply_filter(filter, expected_len):
         if sample["listener"] not in allowed_listener:
             assert False
     assert len(dataset) == expected_len
+
+
+def test_get_clean_grid_path_from_bc_path():
+    bc = get_dataset(DataSplitConfig(dataset_type='grid_bc', path=None, start=0, end=1., noise=False, scaling=1.0))
+    grid_paths = set(
+        get_dataset(DataSplitConfig(dataset_type='grid', path=None, start=0, end=1., noise=False, scaling=1.0)
+                    )["audio_path"])
+
+    for path in bc["audio_path"]:
+        p = get_clean_grid_path_from_bc_path(path)
+        assert str(Path(p).relative_to(PROJECT_ROOT)) in grid_paths
