@@ -49,6 +49,8 @@ woo = {
                    "avsec2_enhanced":   "reference"}
 }
 
+laptev_alpha_value: float = 0.6
+alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
 
 def remove_nan(x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     is_nan = torch.isnan(x) | torch.isnan(y)
@@ -1608,6 +1610,27 @@ def get_data(
 
     df = read_data()
 
+    def pick_correct_token_values(
+            value_per_token: torch.Tensor,
+            kw_indexes: list[int | None],
+            aggr: Literal["mean", "min"],
+            words_to_token_idx: list[list[int]]
+    ) -> list:
+        result_array: list[float] = []
+
+        idx_list_or_none: list[None | list[int]] = [(None if i is None else words_to_token_idx[i]) for i in kw_indexes]
+        for i in idx_list_or_none:
+            if i is None:
+                result_array.append(torch.nan)
+            else:
+                if aggr == "mean":
+                    result_array.append(float(value_per_token[i].mean().item()))
+                elif aggr == "min":
+                    result_array.append(float(value_per_token[i].min().item()))
+                else:
+                    raise ValueError(f"Unknown aggregation {aggr}")
+        return result_array
+
     def eval_df():
 
         # for logprobs
@@ -1629,7 +1652,6 @@ def get_data(
         laptev_kw_est: list = []
         laptev_kw_from_time_align: list = []
 
-        alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
         no_transcript_counter = 0
 
         nan_posterior_counter = 0
@@ -1707,7 +1729,7 @@ def get_data(
 
                 #laptev
                 laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
-                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.7)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=laptev_alpha_value)
                 assert len(laptev_per_token) == num_tokens
                 laptev.append(float(laptev_per_token.min()))
 
@@ -1718,7 +1740,6 @@ def get_data(
                 del posteriors, posteriors_no_nan
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
-                ### merge if necessary
                 words: list[str] = dg.get_words(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
                 words_to_token_idx: list[list[int]] = dg.get_word_token_idx(decoded_tokens_without_timestamp_tokens, row["transcript_alignments"])
                 assert len(words) == len(words_to_token_idx)
@@ -1744,32 +1765,12 @@ def get_data(
                 machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
                 machine_transcript_kw_est.append(estimated_transcript_kw)
 
-                def pick_correct_token_values(
-                        value_per_token: torch.Tensor,
-                        kw_indexes: list[int|None],
-                        aggr: Literal["mean", "min"]
-                    )-> list:
-                    result_array: list[float] = []
-
-                    idx_list_or_none: list[None|list[int]] = [(None if i is None else words_to_token_idx[i]) for i in kw_indexes]
-                    for i in idx_list_or_none:
-                        if i is None:
-                            result_array.append(torch.nan)
-                        else:
-                            if aggr == "mean":
-                                result_array.append(float(value_per_token[i].mean()))
-                            elif aggr == "min":
-                                result_array.append(float(value_per_token[i].min()))
-                            else:
-                                raise ValueError(f"Unknown aggregation {aggr}")
-                    return result_array
-
-                #tmp_kw_laptev: list[float|np.nan] = []
 
                 tmp_kw_entropy: list[float|np.nan] = pick_correct_token_values(
                     value_per_token=entropies_per_token,
                     kw_indexes=estimated_transcript_kw_idx_per_word,
-                    aggr="mean")
+                    aggr="mean",
+                    words_to_token_idx=words_to_token_idx)
 
                 nan_kw_posterior_counter_est += torch.Tensor(tmp_kw_entropy).isnan().sum().item() #collect nan posteriors due to false timestamps
                 entropy_kw_est.append(tmp_kw_entropy)
@@ -1777,7 +1778,8 @@ def get_data(
                 tmp_kw_laptev: list[float | np.nan] = pick_correct_token_values(
                     value_per_token=laptev_per_token,
                     kw_indexes=estimated_transcript_kw_idx_per_word,
-                    aggr="mean")
+                    aggr="min",
+                    words_to_token_idx=words_to_token_idx)
                 laptev_kw_est.append(tmp_kw_laptev)
 
                 del tmp_kw_entropy, tmp_kw_laptev
@@ -1813,14 +1815,16 @@ def get_data(
                 tmp_kw_entropy: list[float | np.nan] = pick_correct_token_values(
                     value_per_token=entropies_per_token,
                     kw_indexes=kw_idx_from_time_align,
-                    aggr="mean")
+                    aggr="mean",
+                    words_to_token_idx=words_to_token_idx)
                 nan_kw_posterior_counter_from_time_align += torch.Tensor(tmp_kw_entropy).isnan().sum().item() #collect nan posteriors due to false timestamps
                 entropy_kw_from_time_align.append(tmp_kw_entropy)
 
                 tmp_kw_laptev: list[float | np.nan] = pick_correct_token_values(
                     value_per_token=laptev_per_token,
                     kw_indexes=kw_idx_from_time_align,
-                    aggr="mean")
+                    aggr="min",
+                    words_to_token_idx=words_to_token_idx)
                 laptev_kw_from_time_align.append(tmp_kw_laptev)
 
                 del tmp_kw_entropy, tmp_kw_laptev
@@ -1874,9 +1878,9 @@ def get_data(
         # for tad
         # for Laptev / Ginsburg confidence
         laptev: list = []
+        laptev_kw_est: list = []
         laptev_alpha: list[dict] = []
 
-        alpha_values = [0.3, 0.4, 0.5, 0.6, 0.7, .8, .9, .95, .99]
         no_transcript_counter = 0
 
         nan_posterior_counter = 0
@@ -1894,6 +1898,7 @@ def get_data(
                 normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
                 mean_temporal_distance.append(torch.nan)
                 laptev.append(torch.nan)
+                laptev_kw_est.append([None, None, None])
 
                 laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
 
@@ -1947,7 +1952,7 @@ def get_data(
 
                 # laptev
                 laptev_per_token = torch.full(size=(len(posteriors),), fill_value=torch.nan).to(device)
-                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=0.8)
+                laptev_per_token[~nan_mask] = MetricWrapper.laptev_ginsbrug_confidence(posteriors_no_nan, alpha=laptev_alpha_value)
                 assert len(laptev_per_token) == num_tokens
                 laptev.append(float(laptev_per_token.min()))
 
@@ -1960,10 +1965,9 @@ def get_data(
                 del posteriors, posteriors_no_nan
 
                 ## 1) get kw idx by: get_only_keywords_with_different_approaches
-                ### merge if necessary
                 words: list[str] = []
                 tokens_per_word = []
-                words_token_idx: list[list[int]] = []
+                words_to_token_idx: list[list[int]] = []
 
                 i=0
                 for word in row["transcript_alignments"]:
@@ -1971,11 +1975,11 @@ def get_data(
                     tokens_per_word.append(word["tokens"])
 
                     tokens = len(word["tokens"])
-                    words_token_idx.append(list(range(0 + i, tokens + i)))
+                    words_to_token_idx.append(list(range(0 + i, tokens + i)))
                     i += tokens
 
-                assert len(words) == len(words_token_idx)
-                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_token_idx])
+                assert len(words) == len(words_to_token_idx)
+                assert len(decoded_tokens_without_timestamp_tokens) == sum([len(o) for o in words_to_token_idx])
 
                 ### find "correct" kw position
                 words: list[str] = [o.lower().strip() for o in words]
@@ -1999,24 +2003,28 @@ def get_data(
                 machine_transcript_kw_est_idx.append(estimated_transcript_kw_idx_per_word)
                 machine_transcript_kw_est.append(estimated_transcript_kw)
 
-                tmp_kw_entropy: list[float | np.nan] = []
-                for idx in [(None if i is None else words_token_idx[i]) for i in
-                            estimated_transcript_kw_idx_per_word]:
-                    if idx is None:
-                        tmp_kw_entropy.append(torch.nan)
-                    else:
-                        tmp_e = float(entropies_per_token[idx].mean())
-                        tmp_kw_entropy.append(tmp_e)
-                        if math.isnan(tmp_e):
-                            nan_kw_posterior_counter_est += 1
+                tmp_kw_entropy: list[float | np.nan] = pick_correct_token_values(
+                    value_per_token=entropies_per_token,
+                    kw_indexes=estimated_transcript_kw_idx_per_word,
+                    aggr="mean",
+                    words_to_token_idx=words_to_token_idx)
 
+                nan_kw_posterior_counter_est += torch.Tensor(tmp_kw_entropy).isnan().sum().item()  # collect nan posteriors due to false timestamps
                 entropy_kw_est.append(tmp_kw_entropy)
 
-                del tmp_e, tmp_kw_entropy
+                tmp_kw_laptev: list[float | np.nan] = pick_correct_token_values(
+                    value_per_token=laptev_per_token,
+                    kw_indexes=estimated_transcript_kw_idx_per_word,
+                    aggr="min",
+                    words_to_token_idx=words_to_token_idx)
+                laptev_kw_est.append(tmp_kw_laptev)
+
+                del tmp_kw_entropy, tmp_kw_laptev
 
         df["macroscopic_entropy"] = macroscopic_entropy
         df["laptev"] = laptev
         df["laptev_alpha"] = laptev_alpha
+        df["laptev_kw_est"] = laptev_kw_est
         #df["machine_transcript_kw_est_idx"] = machine_transcript_kw_est_idx
         df["machine_transcript_kw_est"] = machine_transcript_kw_est
         df["entropy_kw_est"] = entropy_kw_est
