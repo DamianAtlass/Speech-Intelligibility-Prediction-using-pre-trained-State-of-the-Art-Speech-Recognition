@@ -420,7 +420,7 @@ def evaluate_individual_run(config: InferenceConfig,
                 "human_transcript_kw": group["human_transcript_kw"].iloc[0],
                 "wer_human_kw": group["wer_human_kw"].iloc[0],
                 "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
-                "entropy_kw_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
+                "entropy_kw_from_time_align_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
                 "mtd_var": wrapper(torch.var)(group["mtd"]),
             })
 
@@ -435,7 +435,7 @@ def evaluate_individual_run(config: InferenceConfig,
         dir_runs = dir_plots / "multiple_runs"
         dir_runs.mkdir(parents=False)
 
-        metrics = ["tad_kw_var", "entropy_kw_var", "mtd_var"]
+        metrics = ["tad_kw_var", "entropy_kw_from_time_align_var", "mtd_var"]
         CorrelationManager.calculate_and_save_correlations(
             df=grouped_df,
             metrics=metrics,
@@ -726,113 +726,114 @@ def evaluate_individual_avsec_run(config: InferenceConfig,
     #     shifting_attribute="alpha",
     #     output_path=latev_alpha_dir)
     #
-    # # GROUPED
-    # ## create grouped df
-    # def wrapper(func: Callable) -> Callable:
-    #     def inner(x) -> torch.Tensor | float:
-    #         x = torch.Tensor(x.tolist())
-    #         if len(x.shape) != 2:
-    #             # macroscopic
-    #             x = x[:, None]
-    #         assert len(x.shape) == 2
-    #         result: torch.Tensor = torch.stack([
-    #             func(col[~torch.isnan(col)])
-    #             for col in x.T
-    #         ])
-    #         assert result.shape == (3,) or result.shape == (1,)
-    #         if result.shape == (1,):
-    #             return result.item()
-    #         return result
-    #
-    #     return inner
-    #
-    # if config.runs_per_sample > 1:
-    #     if not config.extract_logprobs and config.word_timestamps: raise ValueError("Not supported.")
-    #     grouped_df = df_single_run.groupby("audio_path")
-    #
-    #     def compute_stats(group: pd.DataFrame):
-    #         return pd.Series({
-    #             "snr": group["snr"].iloc[0],
-    #             "reference_kw": group["reference_kw"].iloc[0],
-    #             "human_transcript_kw": group["human_transcript_kw"].iloc[0],
-    #             "wer_human_kw": group["wer_human_kw"].iloc[0],
-    #             "tad_kw_var": wrapper(torch.var)(group["tad_kw"]),
-    #             "entropy_kw_var": wrapper(torch.var)(group["entropy_kw_from_time_align"]),
-    #             "mtd_var": wrapper(torch.var)(group["mtd"]),
-    #         })
-    #
-    #     print("Creating the grouped dataframe...", end="")
-    #     with catch_time() as t:
-    #         grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
-    #
-    #     print(f"took: {t():.2f} s.")
-    #
-    #     ## plot stuff
-    #
-    #     dir_runs = dir_plots / "multiple_runs"
-    #     dir_runs.mkdir(parents=False)
-    #
-    #     metrics = ["tad_kw_var", "entropy_kw_var", "mtd_var"]
-    #     CorrelationManager.calculate_and_save_correlations(
-    #         df=grouped_df,
-    #         metrics=metrics,
-    #         save_dir=dir_runs)
-    #
-    #     for m in metrics:
-    #         out = dir_runs / m
-    #         out.mkdir(exist_ok=True, parents=True)
-    #         col_label = get_label(m)
-    #
-    #         if "kw" in m:
-    #             box_or_barplot_microscopic_x_to_snr(
-    #                 grouped_df,
-    #                 col_name=m,
-    #                 col_label=col_label,
-    #                 output_path=out)
-    #
-    #             boxplot_microscopic_special_metric_per_keyword(
-    #                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
-    #                 col_name=m,
-    #                 special_metric="spearman_correlation",
-    #                 col_compare_against_ref_kw="human_transcript_kw",
-    #                 multiple_runs=True,
-    #                 output_path=out)
-    #
-    #             boxplot_microscopic_special_metric_per_keyword(
-    #                 grouped_df[["reference_kw", m, "human_transcript_kw"]],
-    #                 col_name=m,
-    #                 special_metric="mutual_information",
-    #                 col_compare_against_ref_kw="human_transcript_kw",
-    #                 multiple_runs=True,
-    #                 output_path=out)
-    #         else:
-    #             grouped_df["model_type"] = config.model.model_type
-    #             barplot_x_to_snr(df=grouped_df[[m, "snr", "model_type"]],
-    #                              col_name=m,
-    #                              shifting_attribute_label="whisper",
-    #                              shifting_attribute="model_type",
-    #                              output_path=out)
-    #
-    #             # boxplot_corr_per_listener(
-    #             #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
-    #             #     col_name=m,
-    #             #     special_metric="spearman_correlation",
-    #             #     model=config.model.name,
-    #             #     model_type=config.model.model_type,
-    #             #     output_path=out)
-    #             #
-    #             # boxplot_corr_per_listener(
-    #             #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
-    #             #     col_name=m,
-    #             #     special_metric="mutual_information",
-    #             #     model=config.model.name,
-    #             #     model_type=config.model.model_type,
-    #             #     output_path=out)
+    # GROUPED
+    ## create grouped df
+    def wrapper(func: Callable) -> Callable:
+        def inner(x) -> torch.Tensor | float:
+            x = torch.Tensor(x.tolist())
+            if len(x.shape) != 2:
+                # macroscopic
+                x = x[:, None]
+            assert len(x.shape) == 2
+            result: torch.Tensor = torch.stack([
+                func(col[~torch.isnan(col)])
+                for col in x.T
+            ])
+            assert result.shape == (3,) or result.shape == (1,)
+            if result.shape == (1,):
+                return result.item()
+            return result
 
-        # build_predictors(
-        #     df=grouped_df,
-        #     metrics_list=[[k] for k in metrics],
-        #     output_path=dir_runs)
+        return inner
+
+    if config.runs_per_sample > 1:
+        if not config.extract_logprobs and config.word_timestamps: raise ValueError("Not supported.")
+        grouped_df = df_single_run.groupby("internal_sample_id")
+
+        def compute_stats(group: pd.DataFrame):
+
+            return pd.Series({
+                "snr": group["snr"].iloc[0],
+                "target_word": group["target_word"].iloc[0],
+                "human_transcript_kw": group["human_transcript_kw"].iloc[0],
+                "wer_human_kw": group["wer_human_kw"].iloc[0],
+                "entropy_kw_est_var": wrapper(torch.var)(group["entropy_kw_est"]),
+                "mtd_var": wrapper(torch.var)(group["mtd"]),
+            })
+
+        print("Creating the grouped dataframe...", end="")
+        with catch_time() as t:
+            grouped_df: pd.DataFrame = grouped_df.apply(compute_stats).reset_index()
+
+        print(f"took: {t():.2f} s.")
+
+        ## plot stuff
+
+        dir_runs = dir_plots / "multiple_runs"
+        dir_runs.mkdir(parents=False)
+
+        metrics = ["entropy_kw_est_var", "mtd_var"]
+        CorrelationManager.calculate_and_save_correlations(
+            df=grouped_df,
+            metrics=metrics,
+            save_dir=dir_runs)
+
+        # for m in metrics:
+        #     out = dir_runs / m
+        #     out.mkdir(exist_ok=True, parents=True)
+        #     col_label = get_label(m)
+        #
+        #     if "kw" in m:
+        #         box_or_barplot_microscopic_x_to_snr(
+        #             grouped_df,
+        #             col_name=m,
+        #             col_label=col_label,
+        #             output_path=out)
+        #
+        #         boxplot_microscopic_special_metric_per_keyword(
+        #             grouped_df[["reference_kw", m, "human_transcript_kw"]],
+        #             col_name=m,
+        #             special_metric="spearman_correlation",
+        #             col_compare_against_ref_kw="human_transcript_kw",
+        #             multiple_runs=True,
+        #             output_path=out)
+        #
+        #         boxplot_microscopic_special_metric_per_keyword(
+        #             grouped_df[["reference_kw", m, "human_transcript_kw"]],
+        #             col_name=m,
+        #             special_metric="mutual_information",
+        #             col_compare_against_ref_kw="human_transcript_kw",
+        #             multiple_runs=True,
+        #             output_path=out)
+        #     else:
+        #         grouped_df["model_type"] = config.model.model_type
+        #         barplot_x_to_snr(df=grouped_df[[m, "snr", "model_type"]],
+        #                          col_name=m,
+        #                          shifting_attribute_label="whisper",
+        #                          shifting_attribute="model_type",
+        #                          output_path=out)
+
+                # boxplot_corr_per_listener(
+                #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+                #     col_name=m,
+                #     special_metric="spearman_correlation",
+                #     model=config.model.name,
+                #     model_type=config.model.model_type,
+                #     output_path=out)
+                #
+                # boxplot_corr_per_listener(
+                #     grouped_df[[m, "wer_human_kw", "model_type", "listener"]],
+                #     col_name=m,
+                #     special_metric="mutual_information",
+                #     model=config.model.name,
+                #     model_type=config.model.model_type,
+                #     output_path=out)
+
+        build_predictors(
+            df=grouped_df,
+            metrics_list=[[k] for k in metrics],
+            output_path=dir_runs,
+            is_avsec=True)
 
     # # dumping of summary should be the last action to symbolize that all went well on a short look
     # with open(file_name_summary, 'w') as f:
@@ -1881,13 +1882,13 @@ def get_data(
             if not transcript_exists:
                 no_transcript_counter += 1
                 macroscopic_entropy.append(torch.nan)
-                machine_transcript_kw_est_idx.append([None, None, None])
-                machine_transcript_kw_est.append([None, None, None])
-                entropy_kw_est.append([torch.nan, torch.nan, torch.nan])
-                normalized_decoded_tokens_without_timestamps_list.append([None, None, None])
+                machine_transcript_kw_est_idx.append([torch.nan])
+                machine_transcript_kw_est.append([torch.nan])
+                entropy_kw_est.append([torch.nan])
+                normalized_decoded_tokens_without_timestamps_list.append([None])
                 mean_temporal_distance.append(torch.nan)
                 laptev.append(torch.nan)
-                laptev_kw_est.append([None, None, None])
+                laptev_kw_est.append([torch.nan])
 
                 laptev_alpha.append({k: {"min": torch.nan, "mean": torch.nan} for k in alpha_values})
 

@@ -40,9 +40,10 @@ labels_dict_long = {
     "laptev_kw_from_time_align": "Laptev Ginsburg Confidence (per keyword)",
     "laptev_alpha": "Laptev Ginsburg Confidence",
     "dispersion_kw": "Dispersion",
-    "tad_kw_var": "varience of the TAD",
-    "entropy_kw_var": "varience of the entropy",
-    "mtd_var": "varience of the MTD",
+    "tad_kw_var": "variance of the TAD",
+    "entropy_kw_from_time_align_var": "variance of the entropy",
+    "entropy_kw_est_var": "variance of the entropy",
+    "mtd_var": "variance of the MTD",
 }
 
 labels_dict_short = {
@@ -63,7 +64,8 @@ labels_dict_short = {
     "laptev_kw_from_time_align": "Lapt.-Gins.-Confidence",
     "laptev_alpha": "Laptev-Ginsburg-Confidence",
     "tad_kw_var": "var. of TAD",
-    "entropy_kw_var": "var. of entropy",
+    "entropy_kw_from_time_align_var": "var. of entropy",
+    "entropy_kw_est_var": "var. of entropy",
     "dispersion_kw": "Dispersion",
     "mtd_var": "var. of the MTD",
 }
