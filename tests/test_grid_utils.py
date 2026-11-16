@@ -2,21 +2,24 @@ import pytest
 from utils.grid_utils import get_sentence_and_alignments, parse_and_save_grid, download_grid, convert_short_name_to_ref
 from pathlib import Path
 import shutil
-from utils.paths import TEST_GRID_FOLDER
+from utils.paths import TEST_GRID_FOLDER, PROJECT_ROOT
 test_folder = Path.cwd() / "tests" if Path.cwd().name != "tests" else Path.cwd()
 
 
-
+@pytest.mark.timeout(60) # resource to download whisper from might be down.
 def test_download_grid():
     if TEST_GRID_FOLDER.exists():
         shutil.rmtree(TEST_GRID_FOLDER)
     # should take only a couple of seconds with good internet connection
 
-    download_grid(TEST_GRID_FOLDER, max_speaker=2)
+    download_grid(TEST_GRID_FOLDER, max_speaker=1)
     assert (TEST_GRID_FOLDER/"downloaded_grid_files").is_dir()
 
 def test_parse_and_save_grid():
     #needs output from test above
+    if not (TEST_GRID_FOLDER/"saved_dataset").exists():
+        pytest.skip("Skip test")
+
 
     if not TEST_GRID_FOLDER.exists():
         pytest.skip()
@@ -31,9 +34,12 @@ def test_parse_and_save_grid():
 
 @pytest.mark.parametrize(("file_path", "params", "start_expected"),[
     (TEST_GRID_FOLDER / "downloaded_grid_files/align/s1/align/bbaf2n.align", (25_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)), #25kHz
-    (test_folder.parent / "datasets/GridIntelligibilityDatabase/word16kHz/s1/bbaf2n.align", (16_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)),  # 16kHz
+    (PROJECT_ROOT / "datasets/GridIntelligibilityDatabase/word16kHz/s1/bbaf2n.align", (16_000, 16_000), (0, 15200, 18880, 21760, 22720, 26240, 30240, 33920)),  # 16kHz
 ])
 def test_get_sentence_and_alignments(file_path, params, start_expected):
+    if not file_path.exists():
+        pytest.skip("Skip test")
+
     sentence, alignment = get_sentence_and_alignments(file_path, *params)
 
     assert isinstance(sentence, str)

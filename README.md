@@ -56,6 +56,7 @@ It is required to set up a .env file, the .env_template can be used as a templat
 ### Required data
 
 Clean grid is downloaded automatically if used. Data regarding the GridIntelligibilityDatabase need to be moved into /project_root/datasets like this:
+Update: resource to download whisper from might be down
 ```bash
 cd /project_root/datasets
 mkdir GridIntelligibilityDatabase && cd GridIntelligibilityDatabase
