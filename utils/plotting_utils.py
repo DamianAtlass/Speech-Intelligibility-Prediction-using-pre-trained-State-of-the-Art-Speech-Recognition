@@ -958,7 +958,7 @@ def heatmap(
     x_labels = get_x_labels(df["snr"].unique())
     positions = range(0, len(x_labels))
 
-    snr_positions = {snr: pos for pos, snr in enumerate(df["snr"].unique())}
+    snr_positions = {snr: pos for pos, snr in enumerate(sorted(df["snr"].unique()))}
 
     df["snr_pos"] = df["snr"].map(snr_positions)
 
@@ -1001,8 +1001,8 @@ def heatmap(
         ax.set_ylabel(col_label)
         ax.set_title(f"{"Correct" if correct else "Incorrect"} word ({y_label}))")
 
-        plt.grid(axis="x", alpha=0.3)
-        plt.tight_layout()
+        ax.grid(axis="x", alpha=0.3)
+        #plt.tight_layout()
 
     for i in range(3):
         df_copy = df.copy()
