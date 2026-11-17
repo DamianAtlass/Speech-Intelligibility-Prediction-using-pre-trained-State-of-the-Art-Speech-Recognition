@@ -45,7 +45,7 @@ def parse_and_save_grid_bc(grid_bc_folder: Path = Path.cwd() / "datasets" / "Gri
     project_root = Path.cwd().parent if Path.cwd().name == "tests" else Path.cwd()
 
     counter_noise = 0
-    for BC2007_noiseLevel in tqdm(sorted(BC2007.iterdir())):
+    for BC2007_noiseLevel in tqdm(sorted(BC2007.iterdir()), smoothing=0):
         if counter_noise == max_noise_folders:
             break
         listener_counter = 0

@@ -70,7 +70,7 @@ def get_dataset(split: DataSplitConfig) -> Dataset:
 def apply_filter(dataset: Dataset, filter_items: dict) -> Dataset:
     indices = []
     for k,v in filter_items.items():
-        for i, sentence in tqdm(enumerate(dataset[k])):
+        for i, sentence in tqdm(enumerate(dataset[k]), smoothing=0):
             if sentence in v:
                 indices.append(i)
 
@@ -136,7 +136,7 @@ def create_manifest(manifest_path: Path, dataset: Dataset) -> Path:
     assert str(manifest_path).endswith(".jsonl")
     logger.info(f"Create manifest for {manifest_path.name}...")
     records = []
-    for sample in tqdm(dataset):
+    for sample in tqdm(dataset, smoothing=0):
 
         record = {
             "audio_filepath": str(PROJECT_ROOT/sample["audio_path"]),
@@ -193,7 +193,7 @@ def override_noised_dataset_as_files(target_folder: str = "datasets/grid_with_no
         assert path_list[1] not in ["grid", "GridIntelligibilityDatabase"], "Don't override the original data!"
 
     print("Apply noise and save individual files...")
-    for sample in tqdm(dataset):
+    for sample in tqdm(dataset, smoothing=0):
         audio_path = Path(sample["audio_path"])
         validate_path(audio_path)
         audio_array = sample["audio"]["array"] # noise is applied automatically with a transformation, see dataset_utils
@@ -243,7 +243,7 @@ def OUTDATED_create_grid_bc_without_duplicates() -> None:
     seen = set()
     indices = []
 
-    for i, sentence in tqdm(enumerate(dataset["sentence"])):
+    for i, sentence in tqdm(enumerate(dataset["sentence"]), smoothing=0):
         if sentence not in seen:
             seen.add(sentence)
             indices.append(i)
@@ -311,7 +311,7 @@ def grid_bc_save_dataset_with_unique_audio_samples(dest: str = "datasets/grid_bc
     grid_bc_unique_samples = grid_bc.filter(function=filter_fn)
 
     # check if audios are really unique
-    audio_tuples = [tuple([o["speaker"], o["snr_db"], o["sentence"]]) for o in tqdm(grid_bc_unique_samples)]
+    audio_tuples = [tuple([o["speaker"], o["snr_db"], o["sentence"]]) for o in tqdm(grid_bc_unique_samples, smoothing=0)]
     assert len(audio_tuples) == len(set(audio_tuples)), "audios appear multiple times!"
 
     grid_bc_unique_samples = even_out_snrs(grid_bc_unique_samples)
@@ -345,7 +345,7 @@ def calculate_and_save_stoi_for_bc():
     save_dir.mkdir(exist_ok=True, parents=True)
 
     results = {}
-    for noisy_path in tqdm(dataset["audio_path"]):
+    for noisy_path in tqdm(dataset["audio_path"], smoothing=0):
         clean_path = get_clean_grid_path_from_bc_path(noisy_path)
         results[noisy_path] = calculate_stoi(clean_path=clean_path, noisy_path=noisy_path)
 

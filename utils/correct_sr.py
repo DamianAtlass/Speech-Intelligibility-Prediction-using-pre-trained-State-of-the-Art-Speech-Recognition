@@ -61,7 +61,7 @@ def main():
             if file_or_dir.is_dir():
                 if (file_or_dir / "data").is_dir():
                     data_folder = file_or_dir / "data"
-                    for json_path in tqdm(data_folder.iterdir()):
+                    for json_path in tqdm(data_folder.iterdir(), smoothing=0):
                         correct_file(json_path)
 
 

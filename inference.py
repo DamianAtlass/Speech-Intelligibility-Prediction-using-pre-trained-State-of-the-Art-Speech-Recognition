@@ -139,7 +139,7 @@ def inference_loop_whisper(config: InferenceConfig, model: Any, dataset: Dataset
     exception_log: list[int] = []
     with torch.inference_mode():
         num_total_transciptions = len(dataset) * config.runs_per_sample
-        with tqdm(total=num_total_transciptions) as pbar:
+        with tqdm(total=num_total_transciptions, smoothing=0) as pbar:
             counter = 0
             for idx_sample, sample in enumerate(dataset):
                 for run in range(config.runs_per_sample):
@@ -433,7 +433,7 @@ def inference_parekeet(config: InferenceConfig, model: EncDecCTCModelBPE, datase
         counter = 0
 
         print("enter parakeet inference")
-        with tqdm(total=len(dataset)) as pbar:
+        with tqdm(total=len(dataset), smoothing=0) as pbar:
             prev = 0
             for i in range(ceil(len(dataset) / batch_size)):
                 start_idx = i * batch_size

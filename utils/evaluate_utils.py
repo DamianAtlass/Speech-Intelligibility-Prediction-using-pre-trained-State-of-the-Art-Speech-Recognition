@@ -1876,7 +1876,7 @@ def get_data(
         nan_posterior_counter = 0
         nan_kw_posterior_counter_est = 0
 
-        for index, row in tqdm(df.iterrows(), total=len(df)):
+        for index, row in tqdm(df.iterrows(), total=len(df), smoothing=0):
 
             transcript_exists = row["machine_transcript"] != ""
             if not transcript_exists:

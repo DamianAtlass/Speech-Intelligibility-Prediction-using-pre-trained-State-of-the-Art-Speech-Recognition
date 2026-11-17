@@ -291,7 +291,7 @@ def plot_wer_to_snr(
     x_labels = get_x_labels(df["snr"].unique())
     #plot machine values
     machine_values: list = []
-    for attr in tqdm(list_shifting_attribute):
+    for attr in tqdm(list_shifting_attribute, smoothing=0):
         df_attr = df[df[shifting_attribute] == attr]
         mv_temp = []
         for snr in np.sort(df_attr["snr"].unique()):
@@ -350,7 +350,7 @@ def plot_x_to_snr(df: pd.DataFrame,
     x_labels = get_x_labels(df["snr"].unique())
 
     values: list = []
-    for attr in tqdm(list_shifting_attribute):
+    for attr in tqdm(list_shifting_attribute, smoothing=0):
         df_attr = df[df[shifting_attribute] == attr]
         values_per_df = []
         for snr in np.sort(df_attr["snr"].unique()):
@@ -402,7 +402,7 @@ def plot_microscopic_x_to_snr(df: pd.DataFrame,
     x_labels = get_x_labels(df["snr"].unique())
 
     values_means: list = []
-    for attr in tqdm(list_shifting_attribute):
+    for attr in tqdm(list_shifting_attribute, smoothing=0):
         df_attr = df[df[shifting_attribute] == attr]
         values_per_snr = []
         for snr in np.sort(df_attr["snr"].unique()):
@@ -601,7 +601,7 @@ def barplot_x_to_snr(
         "mean": [],
         "std": [],
     }
-    for attr in tqdm(list_shifting_attribute):
+    for attr in tqdm(list_shifting_attribute, smoothing=0):
         df_attr = df[df[shifting_attribute] == attr]
         mean_values_per_df = []
         std_values_per_df = []
@@ -805,7 +805,7 @@ def boxplot_microscopic_special_metric_per_keyword(
 
     values_per_kw_label = []
 
-    for kw_idx in tqdm(range(3)):
+    for kw_idx in tqdm(range(3), smoothing=0):
         value_array_per_kw = []
 
         #values_per_kw_label.append(corr_or_mut(special_metric, df, kw_idx))
@@ -877,7 +877,7 @@ def barplot_finetuning_progress(
     x_labels = get_x_labels(df["snr"].unique())
 
     values_means: list = []
-    for attr in tqdm(list_shifting_attribute):
+    for attr in tqdm(list_shifting_attribute, smoothing=0):
         df_attr = df[df[shifting_attribute] == attr]
         values_per_snr = []
         for snr in np.sort(df_attr["snr"].unique()):

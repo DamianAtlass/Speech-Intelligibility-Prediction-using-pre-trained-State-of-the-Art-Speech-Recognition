@@ -34,7 +34,7 @@ def parse_and_save_avsec2_enhanced(
 
     with open(AVSEC2_LTR/"avse2_responses.csv", "r") as f: #
         data = csv.DictReader(f)
-        for i, row in enumerate(tqdm(data)):
+        for i, row in enumerate(tqdm(data, smoothing=0)):
             if i == max_samples:
                 break
             sample_id = row["sample_ID"]

@@ -42,7 +42,7 @@ def compare_transcripts():
     array_list = []
     loaded_list = []
 
-    for i, sample in tqdm(enumerate(dataset.select(range(100))), total=100):
+    for i, sample in tqdm(enumerate(dataset.select(range(100))), total=100, smoothing=0):
         ref = sample["sentence"]
         audio_array = sample["audio"]["array"]
 
@@ -82,7 +82,7 @@ def find_weird_file():
     model = whisper.load_model("tiny", device=device)
 
 
-    for sample in tqdm(dataset):
+    for sample in tqdm(dataset, smoothing=0):
         audio = sample["audio"]["array"]
 
 
