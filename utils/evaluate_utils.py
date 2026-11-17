@@ -197,7 +197,7 @@ def evaluate_individual_run(config: InferenceConfig,
         shutil.rmtree(dir_plots)
     dir_plots.mkdir(parents=False, exist_ok=False)
 
-    for m in tqdm(metrics):
+    for m in tqdm(metrics, smoothing=0):
         plot_metrics(data=[df_single_run[m]],
                      x_label=[config.model.model_type],
                      output_path=dir_plots)
@@ -355,7 +355,7 @@ def evaluate_individual_run(config: InferenceConfig,
 
         # average detected kw position
         idx_list = [[], [], []]
-        for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
+        for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run), smoothing=0):
             indexes = row["machine_transcript_kw_from_time_align_idx"]
             for i, kw_idx in enumerate([1,3,4]):
                 if indexes[i] is not None:
@@ -690,7 +690,7 @@ def evaluate_individual_avsec_run(config: InferenceConfig,
     #
     #     # average detected kw position
     #     idx_list = [[], [], []]
-    #     for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run)):
+    #     for _, row in tqdm(df_single_run.iterrows(), total=len(df_single_run), smoothing=0):
     #         indexes = row["machine_transcript_kw_from_time_align_idx"]
     #         for i, kw_idx in enumerate([1, 3, 4]):
     #             if indexes[i] is not None:
@@ -1449,7 +1449,7 @@ def get_data(
         internal_sample_id = []
 
         # read files
-        for counter, file in enumerate(tqdm(data_path.iterdir(), total=len(list(data_path.iterdir())))):
+        for counter, file in enumerate(tqdm(data_path.iterdir(), total=len(list(data_path.iterdir())), smoothing=0)):
             if counter == 500:
                 pass
 
@@ -1649,7 +1649,7 @@ def get_data(
         nan_kw_posterior_counter_from_time_align = 0
 
 
-        for index, row in tqdm(df.iterrows(), total=len(df)):
+        for index, row in tqdm(df.iterrows(), total=len(df), smoothing=0):
 
             transcript_exists = row["machine_transcript"] != ""
             if not transcript_exists:
