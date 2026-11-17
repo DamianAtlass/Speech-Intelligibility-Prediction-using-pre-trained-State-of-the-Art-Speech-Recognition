@@ -956,65 +956,61 @@ def heatmap(
 
     # Create evenly spaced x-axis positions
     x_labels = get_x_labels(df["snr"].unique())
-    positions = range(len(x_labels))
+    positions = range(0, len(x_labels))
 
-    snr_positions = {snr: pos for pos, snr in enumerate(x_labels)}
+    snr_positions = {snr: pos for pos, snr in enumerate(df["snr"].unique())}
 
-    df_plot = df.copy()
-    df_plot["snr_pos"] = df_plot["snr"].map(snr_positions)
+    df["snr_pos"] = df["snr"].map(snr_positions)
 
     # Define metric bins
     y_bins = 30
-
-    fig, ax = plt.subplots(figsize=(7, 7))
-
-    # Incorrectly recognized
-    incorrect = df_plot[df_plot["correctly_recognized"] == False]
-
-    ax.hist2d(
-        incorrect["snr_pos"],
-        incorrect[col_label],
-        bins=[
-            np.arange(-0.5, len(x_labels) +1  + 0.5, 1),
+    x_bins = [
+            np.arange(-0.5, len(x_labels) + 0.5, 1),
             y_bins
-        ],
-        cmap="Reds",
-        alpha=1
+        ]
+
+    fig, axs = plt.subplots(
+        2, 3,
+        figsize=(15, 10),
+        layout="constrained"
     )
+    def make_subplot(
+            ax,
+            df: pd.DataFrame,
+            y_label: str,
+            correct: bool):
 
-    ax.set_xticklabels(x_labels)
 
-    ax.set_xlabel("SNR")
-    ax.set_ylabel(col_label)
-    ax.set_title(f"Distribution of {col_label} by SNR")
+        # Incorrectly recognized
+        df = df[~df[col_label].isna()]
+        in_correct = df[df["correctly_recognized"] == correct]
+        ax.set_xticks(positions)
 
-    plt.grid(axis="x", alpha=0.3)
-    plt.tight_layout()
-    plt.show()
-    fig, ax = plt.subplots(figsize=(7, 7))
+        ax.hist2d(
+            x=in_correct["snr_pos"],
+            y=in_correct[col_label],
+            bins=x_bins,
+            cmap="Greens" if correct else "Reds",
+            alpha=1,
+            cmin=0,
+        )
 
-    ax.set_xticks(positions)
-    # Correctly recognized
-    correct = df_plot[df_plot["correctly_recognized"] == True]
+        ax.set_xticklabels(x_labels)
 
-    ax.hist2d(
-        correct["snr_pos"],
-        correct[col_label],
-        bins=[
-            np.arange(-0.5, len(x_labels) +1 + 0.5, 1),
-            y_bins
-        ],
-        cmap="Greens",
-        alpha=1
-    )
-    ax.set_xticklabels(x_labels)
+        ax.set_xlabel("SNR")
+        ax.set_ylabel(col_label)
+        ax.set_title(f"{"Correct" if correct else "Incorrect"} word ({y_label}))")
 
-    ax.set_xlabel("SNR")
-    ax.set_ylabel(col_label)
-    ax.set_title(f"Distribution of {col_label} by SNR")
+        plt.grid(axis="x", alpha=0.3)
+        plt.tight_layout()
 
-    plt.grid(axis="x", alpha=0.3)
-    plt.tight_layout()
+    for i in range(3):
+        df_copy = df.copy()
+        df_copy[col_label] = df_copy[col_label].apply(lambda x: x[i])
+        df_copy["correctly_recognized"] = df_copy["correctly_recognized"].apply(lambda x: x[i])
+        make_subplot(axs[0,i], df_copy, correct=False, y_label=grid_kw_labels[i])
+
+        make_subplot(axs[1,i], df_copy, correct=True, y_label=grid_kw_labels[i])
     plt.show()
 
 

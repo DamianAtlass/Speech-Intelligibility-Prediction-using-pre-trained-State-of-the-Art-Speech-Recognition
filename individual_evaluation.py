@@ -88,7 +88,8 @@ class Evaluator:
                     special_metric="spearman_correlation", kw_idx=None)
 
         print(c)
-    def foo(self, metric_column: str):
+
+    def plot_metric_distribution(self, metric_column: str):
         def kw_recognized(x):
             return [t == r for t,r in zip(x["kw_tmp"], x["human_transcript_kw"])]
         kw_column = "machine_transcript_kw_est" if "kw_est" in metric_column else "machine_transcript_kw_from_time_align"
@@ -96,9 +97,6 @@ class Evaluator:
         self.df["kw_tmp"] = self.df[kw_column]
         self.df["correctly_recognized"] = self.df[["kw_tmp", "human_transcript_kw"]].apply(kw_recognized, axis=1)
         self.df.drop(("kw_tmp"), axis=1)
-
-        self.df["correctly_recognized"] = self.df["correctly_recognized"].apply(lambda x: x[0])
-        self.df[metric_column] = self.df[metric_column].apply(lambda x: x[0])
 
         heatmap(self.df, col_label=metric_column)
 
@@ -151,7 +149,7 @@ def compare_graphs():
          "restricted_vocab": False, },
     ]
     e = Evaluator(runs, save_at="wip")
-    e.foo(metric_column="entropy_kw_est")
+    e.plot_metric_distribution(metric_column="entropy_kw_est")
 
     if False:
         plot_x_to_snr(df=df,
