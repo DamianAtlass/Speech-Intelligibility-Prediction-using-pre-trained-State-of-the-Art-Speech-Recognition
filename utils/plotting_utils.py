@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import seaborn
 import torch
 from matplotlib import pyplot as plt
 from scipy import stats as stats
@@ -925,7 +926,7 @@ def barplot_finetuning_progress(
     #ax.set_xticks(x)
     #ax.set_xticklabels([str(i) for i in range(n1)])
     ax.set_ylabel("WER")
-    ax.legend(fontsize=8)
+    ax.legend()
     ax.grid(axis="y", alpha=0.3, zorder=0)
     #plt.tight_layout()
     #plt.show()
@@ -943,6 +944,78 @@ def barplot_finetuning_progress(
         plt.savefig(output_path/f'{figure_title}.png')
     plt.close()
 
+def heatmap(
+        df: pd.DataFrame,
+        y_axis_label: str = None,
+        col_label: str | None = None,
+        shifting_attribute: str = "model_type",
+        shifting_attribute_label = None,
+        output_path: Path = None, ):
+
+    df = df[~df[col_label].isna()]
+
+    # Create evenly spaced x-axis positions
+    x_labels = get_x_labels(df["snr"].unique())
+    positions = range(len(x_labels))
+
+    snr_positions = {snr: pos for pos, snr in enumerate(x_labels)}
+
+    df_plot = df.copy()
+    df_plot["snr_pos"] = df_plot["snr"].map(snr_positions)
+
+    # Define metric bins
+    y_bins = 30
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # Incorrectly recognized
+    incorrect = df_plot[df_plot["correctly_recognized"] == False]
+
+    ax.hist2d(
+        incorrect["snr_pos"],
+        incorrect[col_label],
+        bins=[
+            np.arange(-0.5, len(x_labels) +1  + 0.5, 1),
+            y_bins
+        ],
+        cmap="Reds",
+        alpha=1
+    )
+
+    ax.set_xticklabels(x_labels)
+
+    ax.set_xlabel("SNR")
+    ax.set_ylabel(col_label)
+    ax.set_title(f"Distribution of {col_label} by SNR")
+
+    plt.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    ax.set_xticks(positions)
+    # Correctly recognized
+    correct = df_plot[df_plot["correctly_recognized"] == True]
+
+    ax.hist2d(
+        correct["snr_pos"],
+        correct[col_label],
+        bins=[
+            np.arange(-0.5, len(x_labels) +1 + 0.5, 1),
+            y_bins
+        ],
+        cmap="Greens",
+        alpha=1
+    )
+    ax.set_xticklabels(x_labels)
+
+    ax.set_xlabel("SNR")
+    ax.set_ylabel(col_label)
+    ax.set_title(f"Distribution of {col_label} by SNR")
+
+    plt.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    plt.show()
 
 
 class PredictorPlots:

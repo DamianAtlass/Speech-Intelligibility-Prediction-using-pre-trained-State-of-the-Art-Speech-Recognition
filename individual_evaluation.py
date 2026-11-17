@@ -3,7 +3,7 @@ from pathlib import Path
 from utils.paths import PROJECT_ROOT
 from utils.new_config_dataclass import load_config
 from utils.evaluate_utils import get_data, PredictionManager, get_results_dir, get_inference_type, CorrelationManager, corr_or_mut, evaluate_transcripts
-from utils.plotting_utils import plot_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr, barplot_finetuning_progress
+from utils.plotting_utils import plot_wer_to_snr, boxplot_corr_per_listener, plot_x_to_snr, barplot_finetuning_progress, heatmap
 import torch
 import pandas as pd
 import json
@@ -14,7 +14,7 @@ def merge_dataset_from_multiple_runs(runs: list[dict]):
     device = torch.device('cpu')
 
     # step 1: collect data
-    df = None
+    df: pd.DataFrame = None
     for run in runs:
         config = load_config((PROJECT_ROOT / run["path"]) / "config.yaml")
         with catch_time() as t:
@@ -88,23 +88,70 @@ class Evaluator:
                     special_metric="spearman_correlation", kw_idx=None)
 
         print(c)
+    def foo(self, metric_column: str):
+        def kw_recognized(x):
+            return [t == r for t,r in zip(x["kw_tmp"], x["human_transcript_kw"])]
+        kw_column = "machine_transcript_kw_est" if "kw_est" in metric_column else "machine_transcript_kw_from_time_align"
+
+        self.df["kw_tmp"] = self.df[kw_column]
+        self.df["correctly_recognized"] = self.df[["kw_tmp", "human_transcript_kw"]].apply(kw_recognized, axis=1)
+        self.df.drop(("kw_tmp"), axis=1)
+
+        self.df["correctly_recognized"] = self.df["correctly_recognized"].apply(lambda x: x[0])
+        self.df[metric_column] = self.df[metric_column].apply(lambda x: x[0])
+
+        heatmap(self.df, col_label=metric_column)
+
+
+
+
 
 indi_eval_folder = Path.cwd() / "individual_evaluations"
 
 
 def compare_graphs():
+    if False:
+        runs = [
+            {"name": "parakeet default",
+             "path": "inferences/delete_me_parakeet",
+             "restricted_vocab": False,},
+            {"name": "parakeet fine-tuned",
+             "path": "inferences/grid_bc_ctc-1.1b_v4",
+             "restricted_vocab": False, },
+        ]
+        e = Evaluator(runs, save_at="wip")
+        e.plot_wer()
+
+        e.plot_training_progress()
+
+        runs = [
+            {"name": "whisper default",
+             "path": "inferences/dummy_bc_base_default",
+             "restricted_vocab": False, },
+            {"name": "whisper fine-tuned",
+             "path": "inferences/grid_bc_turbo_v4",
+             "restricted_vocab": False, },
+        ]
+        e = Evaluator(runs, save_at="wip")
+        e.plot_wer()
+
+        e.plot_training_progress()
+
+        runs = [
+            {"name": "whisper fine-tuned bc",
+             "path": "inferences/grid_bc_turbo_v4",
+             "restricted_vocab": False,},
+        ]
+        e = Evaluator(runs, save_at="wip")
+        e.calculate_stoi_corr()
 
     runs = [
-        {"name": "parakeet default",
-         "path": "inferences/delete_me_parakeet",
-         "restricted_vocab": False,},
-        {"name": "parakeet fine-tuned",
-         "path": "inferences/grid_bc_ctc-1.1b_v4",
+        {"name": "whisper fine-tuned bc",
+         "path": "inferences/grid_bc_turbo_v4",
          "restricted_vocab": False, },
     ]
     e = Evaluator(runs, save_at="wip")
-    #e.plot_wer()
-    e.plot_training_progress()
+    e.foo(metric_column="entropy_kw_est")
 
     if False:
         plot_x_to_snr(df=df,
@@ -123,10 +170,16 @@ def generate_predictor_summary():
 
 def generate_correlation_summary():
     paths = [
-        "inferences/delete_me/",
+        #grid
+        "inferences/grid_bc_turbo_v4",
+        "inferences/grid_bc_temp0.25_turbo_v4",
+        #avsec
+        "inferences/avsec_parakeet_defaut",
+        #"inferences/avsec_turbo_default",
     ]
     configs = [load_config(Path(p) / "config.yaml") for p in paths]
     CorrelationManager.compare_correlations(configs)
 
 if __name__ == '__main__':
     compare_graphs()
+    #generate_correlation_summary()
