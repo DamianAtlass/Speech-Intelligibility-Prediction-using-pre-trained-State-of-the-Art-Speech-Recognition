@@ -205,14 +205,25 @@ def inference_whisper(model,
         forced_alignment_options=forced_alignment_options,
         fa_avsec_id=fa_avsec_id)
 
-    if config.extract_logprobs:
+    logprob_file_path = config.output_path / "logprobs" / f"{file_name}.pt"
+    result_data_file_path = config.output_path / "data" / f"{file_name}.json"
+
+    # some avsec samples are already transcribed, bc they appear multiple times in the dataset
+    if not logprob_file_path.exists():
+        result: dict = sip_whisper.transcribe(**options)
+    else:
+        with open(result_data_file_path) as f:
+            result = json.load(f)
+            result = result["prediction_result"]
+
+
+    if config.extract_logprobs and not logprob_file_path.exists():
         extracted_logprobs = result.pop("extracted_logprobs")
         tokens = [x for s in result["segments"] for x in s["tokens"]]
         assert len(tokens) == (
             0 if extracted_logprobs is None else extracted_logprobs.shape[0]), "Missmatch of logprob and token length"
 
         if extracted_logprobs is not None:
-            logprob_file_path = get_non_existent_path(config.output_path / "logprobs" / f"{file_name}.pt")
             if logprob_file_path.exists(): raise FileExistsError
             logger.info(f"Save logprobs to {logprob_file_path}")
             torch.save(extracted_logprobs, logprob_file_path)
@@ -228,8 +239,7 @@ def inference_whisper(model,
     if config.runs_per_sample > 1:
         sample.update({"varrying_transcription_options": {"run": run}})
 
-    result_data_file_path = get_non_existent_path(config.output_path / "data" / f"{file_name}.json")
-    result_data = save_result(sample.copy(), result, result_data_file_path, counter, True)
+    result_data = save_result(sample.copy(), result, get_non_existent_path(result_data_file_path), counter, True)
 
     return result_data
 
