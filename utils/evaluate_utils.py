@@ -1882,8 +1882,8 @@ def get_data(
             if not transcript_exists:
                 no_transcript_counter += 1
                 macroscopic_entropy.append(torch.nan)
-                machine_transcript_kw_est_idx.append([torch.nan])
-                machine_transcript_kw_est.append([torch.nan])
+                machine_transcript_kw_est_idx.append([None])
+                machine_transcript_kw_est.append([None])
                 entropy_kw_est.append([torch.nan])
                 normalized_decoded_tokens_without_timestamps_list.append([None])
                 mean_temporal_distance.append(torch.nan)
@@ -2133,6 +2133,7 @@ class ResultManager:
         is_corr = issubclass(obj_class, CorrelationManager)
         workbook = xlsxwriter.Workbook('correlation_results.xlsx' if is_corr else "prediction_results.xlsx")
         worksheet = workbook.add_worksheet()
+        worksheet.set_column(0, 12, 20)
         voc = ["full vocab", "restricted vocab"]
 
         row_global = 0

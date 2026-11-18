@@ -106,7 +106,7 @@ def main():
     logger.info(f"Tasked finished!")
     if isinstance(config, InferenceConfig):
         logger.info("Evalute run.")
-        evaluate_run(path=config.output_path)
+        evaluate_run(path=config.output_path, device=device)
 
 
 if __name__ == '__main__':

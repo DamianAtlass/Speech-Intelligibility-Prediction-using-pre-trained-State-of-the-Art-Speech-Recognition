@@ -88,4 +88,8 @@ def evaluate_run(path: Path, device: torch.device | None = None):
 
 
 if __name__ == '__main__':
-    evaluate_run(Path("inferences/avsec_parakeet"))
+    paths = [
+        "inferences/turbo_bc_fa_fixed_v4",
+    ]
+    for p in paths:
+        evaluate_run(Path(p), select_device())
