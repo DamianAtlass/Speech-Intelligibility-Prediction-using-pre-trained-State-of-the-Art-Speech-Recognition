@@ -195,8 +195,6 @@ def inference_whisper(model,
     # results will not be equal (therefore not deterministic) if temperature=!0.0, bc of stochastic sampling
     #  https://github.com/openai/whisper/discussions/81
 
-    result: dict = sip_whisper.transcribe(**options)
-
     file_name = create_filename(
         dataset_type=config.data.test_split.dataset_type,
         sample=sample,
